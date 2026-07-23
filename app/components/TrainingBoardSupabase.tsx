@@ -20,7 +20,6 @@ type MenuRow = {
   content: string;
   location: Location;
   start_time: string | null;
-  end_time: string | null;
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
@@ -69,7 +68,6 @@ export default function TrainingBoardSupabase({
   const [showNewForm, setShowNewForm] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
-  const [newEndTime, setNewEndTime] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
@@ -92,7 +90,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, location, start_time, end_time, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
+        "id, date, title, content, location, start_time, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
       )
       .eq("location", activeLocation)
       .order("date", { ascending: false });
@@ -135,7 +133,6 @@ export default function TrainingBoardSupabase({
         content: newContent,
         location: activeLocation,
         start_time: newStartTime || null,
-        end_time: newEndTime || null,
         created_by: profile.id,
       })
       .select("id")
@@ -147,7 +144,6 @@ export default function TrainingBoardSupabase({
     }
     setNewDate("");
     setNewStartTime("");
-    setNewEndTime("");
     setNewTitle("");
     setNewContent("");
     setShowNewForm(false);
@@ -252,26 +248,15 @@ export default function TrainingBoardSupabase({
                 className="rounded border border-neutral-300 px-2 py-1 text-xs"
                 required
               />
-              <div className="flex gap-2">
-                <label className="flex flex-1 flex-col text-[10px] text-neutral-500">
-                  開始時刻
-                  <input
-                    type="time"
-                    value={newStartTime}
-                    onChange={(e) => setNewStartTime(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1 text-xs"
-                  />
-                </label>
-                <label className="flex flex-1 flex-col text-[10px] text-neutral-500">
-                  終了時刻
-                  <input
-                    type="time"
-                    value={newEndTime}
-                    onChange={(e) => setNewEndTime(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1 text-xs"
-                  />
-                </label>
-              </div>
+              <label className="flex flex-col text-[10px] text-neutral-500">
+                開始時刻
+                <input
+                  type="time"
+                  value={newStartTime}
+                  onChange={(e) => setNewStartTime(e.target.value)}
+                  className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                />
+              </label>
               <input
                 type="text"
                 placeholder="タイトル（例：通常練習）"
@@ -334,10 +319,7 @@ export default function TrainingBoardSupabase({
               <section className="rounded border border-neutral-200 p-4">
                 <div className="mb-1 text-xs text-neutral-400">
                   {locationLabel[selected.location]}・{selected.date}
-                  {selected.start_time &&
-                    `・${selected.start_time.slice(0, 5)}〜${
-                      selected.end_time ? selected.end_time.slice(0, 5) : ""
-                    }`}
+                  {selected.start_time && `・${selected.start_time.slice(0, 5)}〜`}
                   ・作成者: {selected.creator?.display_name ?? "不明"}
                 </div>
                 <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
