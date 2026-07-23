@@ -191,6 +191,25 @@ export default function TrainingBoardSupabase({
     comments.filter((c) => c.parent_id === id);
   const reportOpen = selected ? isReportOpen(selected) : false;
 
+  // 前日・当日・翌日のメニューのみを上部のカードに表示する
+  const toDateStr = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const nearbyRange = [
+    toDateStr(yesterday),
+    toDateStr(today),
+    toDateStr(tomorrow),
+  ];
+  const nearbyMenus = menus.filter((m) => nearbyRange.includes(m.date));
+
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur">
@@ -295,7 +314,7 @@ export default function TrainingBoardSupabase({
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
             <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
-              {menus.map((m) => (
+              {nearbyMenus.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => setSelectedId(m.id)}
@@ -312,9 +331,9 @@ export default function TrainingBoardSupabase({
                   <span>{m.title}</span>
                 </button>
               ))}
-              {menus.length === 0 && (
+              {nearbyMenus.length === 0 && (
                 <p className="text-xs text-neutral-400">
-                  {locationLabel[activeLocation]}にはまだメニューがありません。
+                  前日〜翌日の{locationLabel[activeLocation]}のメニューはありません。下のカレンダーから他の日を選べます。
                 </p>
               )}
             </div>
@@ -416,6 +435,18 @@ export default function TrainingBoardSupabase({
             上のメニューを選択してください。
           </p>
         )}
+
+        {/* すべてのメニューを見るカレンダー */}
+        <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
+          <h3 className="text-xs font-semibold text-neutral-500">
+            カレンダーからメニューを探す
+          </h3>
+          <MenuCalendar
+            menus={menus}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </section>
       </div>
     </div>
   );
@@ -526,5 +557,99 @@ function ReportThread({
         </button>
       )}
     </li>
+  );
+}
+
+function toDateKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function MenuCalendar({
+  menus,
+  selectedId,
+  onSelect,
+}: {
+  menus: MenuRow[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [cursor, setCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  const menusByDate = new Map<string, MenuRow[]>();
+  for (const m of menus) {
+    const list = menusByDate.get(m.date) ?? [];
+    list.push(m);
+    menusByDate.set(m.date, list);
+  }
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay(); // 0=日
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+
+  const todayKey = toDateKey(new Date());
+
+  return (
+    <div className="rounded-lg border border-neutral-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          onClick={() => setCursor(new Date(year, month - 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＜
+        </button>
+        <span className="text-sm font-semibold">
+          {year}年{month + 1}月
+        </span>
+        <button
+          onClick={() => setCursor(new Date(year, month + 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＞
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400">
+        {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
+          <div key={w}>{w}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} />;
+          const key = toDateKey(date);
+          const dayMenus = menusByDate.get(key) ?? [];
+          const hasMenu = dayMenus.length > 0;
+          const isToday = key === todayKey;
+          const isSelected = dayMenus.some((m) => m.id === selectedId);
+          return (
+            <button
+              key={i}
+              disabled={!hasMenu}
+              onClick={() => hasMenu && onSelect(dayMenus[0].id)}
+              className={`flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
+                isSelected
+                  ? "bg-blue-600 font-semibold text-white"
+                  : hasMenu
+                  ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
+                  : "text-neutral-300"
+              } ${isToday && !isSelected ? "ring-1 ring-neutral-400" : ""}`}
+            >
+              {date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
