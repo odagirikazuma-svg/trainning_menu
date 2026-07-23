@@ -114,3 +114,9 @@ create policy "comments_insert_same_team" on comments
 -- ログイン済みユーザーなら誰でもteamsを閲覧可能にする
 create policy "teams_select_authenticated" on teams
   for select using (auth.role() = 'authenticated');
+
+-- ============================================
+-- 追加: 拠点（多摩・大塚）
+-- ============================================
+alter table menus add column if not exists location text not null default 'tama'
+  check (location in ('tama', 'otsuka'));

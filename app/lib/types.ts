@@ -1,5 +1,14 @@
 export type Role = "leader" | "vice_leader" | "captain" | "coach" | "member";
 
+export type Location = "tama" | "otsuka";
+
+export const locationLabel: Record<Location, string> = {
+  tama: "多摩",
+  otsuka: "大塚",
+};
+
+export const locations: Location[] = ["tama", "otsuka"];
+
 export type Comment = {
   id: string;
   authorName: string;

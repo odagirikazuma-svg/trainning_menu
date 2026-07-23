@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { canCreateMenu, roleLabel } from "../lib/types";
+import { canCreateMenu, Location, locationLabel, locations, roleLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type MenuRow = {
@@ -10,6 +10,7 @@ type MenuRow = {
   date: string;
   title: string;
   content: string;
+  location: Location;
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
@@ -41,6 +42,7 @@ export default function TrainingBoardSupabase({
   signOut: () => void;
 }) {
   const supabase = createClient();
+  const [activeLocation, setActiveLocation] = useState<Location>("tama");
   const [menus, setMenus] = useState<MenuRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -55,8 +57,9 @@ export default function TrainingBoardSupabase({
 
   useEffect(() => {
     loadMenus();
+    setSelectedId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeLocation]);
 
   useEffect(() => {
     if (selectedId) loadComments(selectedId);
@@ -68,8 +71,9 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
+        "id, date, title, content, location, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
       )
+      .eq("location", activeLocation)
       .order("date", { ascending: false });
 
     if (error) {
@@ -77,7 +81,7 @@ export default function TrainingBoardSupabase({
     } else {
       const rows = (data ?? []) as unknown as MenuRow[];
       setMenus(rows);
-      if (rows.length > 0 && !selectedId) setSelectedId(rows[0].id);
+      if (rows.length > 0) setSelectedId(rows[0].id);
     }
     setLoadingMenus(false);
   }
@@ -108,6 +112,7 @@ export default function TrainingBoardSupabase({
         date: newDate,
         title: newTitle,
         content: newContent,
+        location: activeLocation,
         created_by: profile.id,
       })
       .select("id")
@@ -160,6 +165,23 @@ export default function TrainingBoardSupabase({
         </div>
       </header>
 
+      {/* 拠点タブ */}
+      <div className="flex gap-2 border-b border-neutral-200">
+        {locations.map((loc) => (
+          <button
+            key={loc}
+            onClick={() => setActiveLocation(loc)}
+            className={`px-4 py-2 text-sm font-medium transition ${
+              activeLocation === loc
+                ? "border-b-2 border-blue-600 text-blue-700"
+                : "text-neutral-400 hover:text-neutral-600"
+            }`}
+          >
+            {locationLabel[loc]}
+          </button>
+        ))}
+      </div>
+
       {errorMsg && (
         <p className="rounded bg-red-50 p-2 text-xs text-red-600">
           {errorMsg}
@@ -173,7 +195,9 @@ export default function TrainingBoardSupabase({
               onClick={() => setShowNewForm((v) => !v)}
               className="rounded bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-700"
             >
-              {showNewForm ? "キャンセル" : "＋ 新しいメニューを作成"}
+              {showNewForm
+                ? "キャンセル"
+                : `＋ ${locationLabel[activeLocation]}のメニューを作成`}
             </button>
           )}
 
@@ -209,7 +233,7 @@ export default function TrainingBoardSupabase({
                 type="submit"
                 className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
               >
-                投稿する
+                {locationLabel[activeLocation]}に投稿する
               </button>
             </form>
           )}
@@ -235,7 +259,7 @@ export default function TrainingBoardSupabase({
               ))}
               {menus.length === 0 && (
                 <li className="text-xs text-neutral-400">
-                  まだメニューがありません。
+                  {locationLabel[activeLocation]}にはまだメニューがありません。
                 </li>
               )}
             </ul>
@@ -247,7 +271,7 @@ export default function TrainingBoardSupabase({
             <>
               <section className="rounded border border-neutral-200 p-4">
                 <div className="mb-1 text-xs text-neutral-400">
-                  {selected.date}・作成者:{" "}
+                  {locationLabel[selected.location]}・{selected.date}・作成者:{" "}
                   {selected.creator?.display_name ?? "不明"}
                 </div>
                 <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
