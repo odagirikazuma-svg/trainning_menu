@@ -1,4 +1,4 @@
-export type Role = "captain" | "vice_captain" | "coach" | "member";
+export type Role = "leader" | "vice_leader" | "captain" | "coach" | "member";
 
 export type Comment = {
   id: string;
@@ -19,12 +19,14 @@ export type TrainingMenu = {
 };
 
 export const roleLabel: Record<Role, string> = {
+  leader: "リーダー",
+  vice_leader: "副リーダー",
   captain: "キャプテン",
-  vice_captain: "副キャプテン",
   coach: "コーチ",
   member: "部員",
 };
 
 // メニューを作成できる権限を持つロール
+// キャプテンはリーダーと同じ権限に加え、将来的に追加の権限を持つ想定
 export const canCreateMenu = (role: Role) =>
-  role === "captain" || role === "vice_captain";
+  role === "leader" || role === "vice_leader" || role === "captain";
