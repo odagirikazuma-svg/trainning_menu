@@ -140,3 +140,9 @@ alter table comments add column if not exists parent_id uuid references comments
 -- ============================================
 alter table comments drop constraint if exists comments_kind_check;
 alter table comments add constraint comments_kind_check check (kind in ('opinion', 'report', 'absent'));
+
+-- ============================================
+-- 追加: 部員の所属拠点、メニューの全体練習フラグ
+-- ============================================
+alter table profiles add column if not exists home_location text check (home_location in ('tama', 'otsuka'));
+alter table menus add column if not exists is_joint boolean not null default false;

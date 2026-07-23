@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/client";
-import { Role, roleLabel } from "../lib/types";
+import { Location, Role, roleLabel } from "../lib/types";
 
 export type Profile = {
   id: string;
   team_id: string;
   display_name: string;
   role: Role;
+  home_location: Location | null;
 };
 
 export default function AuthGate({
@@ -53,7 +54,7 @@ export default function AuthGate({
     if (!session) return;
     const { data: existing, error: existingError } = await supabase
       .from("profiles")
-      .select("id, team_id, display_name, role")
+      .select("id, team_id, display_name, role, home_location")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -94,7 +95,7 @@ export default function AuthGate({
         display_name: session.user.email?.split("@")[0] ?? "名無し",
         role: "member",
       })
-      .select("id, team_id, display_name, role")
+      .select("id, team_id, display_name, role, home_location")
       .single();
 
     if (error) {

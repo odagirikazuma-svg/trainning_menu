@@ -20,6 +20,7 @@ type MenuRow = {
   content: string;
   location: Location;
   start_time: string | null;
+  is_joint: boolean;
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
@@ -75,26 +76,43 @@ export default function TrainingBoardSupabase({
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAlternative, setAbsentAlternative] = useState("");
+  const [newIsJoint, setNewIsJoint] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [totalMembers, setTotalMembers] = useState<number | null>(null);
+  const [memberCounts, setMemberCounts] = useState<{
+    tama: number;
+    otsuka: number;
+    all: number;
+  }>({ tama: 0, otsuka: 0, all: 0 });
   const [submissionMap, setSubmissionMap] = useState<
     Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
   >({});
+  // 「もう一方の拠点」で全体練習として作成されたメニュー（日付→メニュー情報）
+  const [jointElsewhere, setJointElsewhere] = useState<
+    Map<string, { menuId: string; location: Location }>
+  >(new Map());
+  const [jointNoticeDate, setJointNoticeDate] = useState<string | null>(null);
 
   useEffect(() => {
-    // 練習に参加しうる部員総数（コーチは提出対象に含めない）
+    // 練習に参加しうる部員を、コーチを除いて拠点ごとに集計する
     supabase
       .from("profiles")
-      .select("id", { count: "exact", head: true })
+      .select("home_location")
       .eq("team_id", profile.team_id)
       .neq("role", "coach")
-      .then(({ count }) => setTotalMembers(count ?? null));
+      .then(({ data }) => {
+        const rows = (data ?? []) as { home_location: Location | null }[];
+        const tama = rows.filter((r) => r.home_location === "tama").length;
+        const otsuka = rows.filter((r) => r.home_location === "otsuka").length;
+        setMemberCounts({ tama, otsuka, all: rows.length });
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     loadMenus();
+    loadJointElsewhere();
     setSelectedId(null);
+    setJointNoticeDate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocation]);
 
@@ -108,7 +126,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, location, start_time, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
+        "id, date, title, content, location, start_time, is_joint, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
       )
       .eq("location", activeLocation)
       .order("date", { ascending: false });
@@ -122,6 +140,27 @@ export default function TrainingBoardSupabase({
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
     setLoadingMenus(false);
+  }
+
+  // もう一方の拠点で「全体練習」として作成されたメニューを取得する
+  async function loadJointElsewhere() {
+    const otherLocation = locations.find((l) => l !== activeLocation)!;
+    const { data, error } = await supabase
+      .from("menus")
+      .select("id, date")
+      .eq("team_id", profile.team_id)
+      .eq("location", otherLocation)
+      .eq("is_joint", true);
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    const map = new Map<string, { menuId: string; location: Location }>();
+    for (const row of (data ?? []) as { id: string; date: string }[]) {
+      map.set(row.date, { menuId: row.id, location: otherLocation });
+    }
+    setJointElsewhere(map);
   }
 
   // メニューごとに「実施報告」「未実施報告」を提出した部員（重複なし）を集計する
@@ -189,6 +228,7 @@ export default function TrainingBoardSupabase({
         content: newContent,
         location: activeLocation,
         start_time: newStartTime || null,
+        is_joint: newIsJoint,
         created_by: profile.id,
       })
       .select("id")
@@ -202,6 +242,7 @@ export default function TrainingBoardSupabase({
     setNewStartTime("");
     setNewTitle("");
     setNewContent("");
+    setNewIsJoint(false);
     setShowNewForm(false);
     await loadMenus();
     if (data) setSelectedId(data.id);
@@ -264,6 +305,21 @@ export default function TrainingBoardSupabase({
   const reportSubmittedCount = selectedSubmission
     ? selectedSubmission.reportAuthors.size
     : 0;
+  const selectedMemberTotal = selected
+    ? selected.is_joint
+      ? memberCounts.all
+      : memberCounts[selected.location]
+    : 0;
+
+  function selectMenu(id: string) {
+    setJointNoticeDate(null);
+    setSelectedId(id);
+  }
+
+  function selectJointDate(date: string) {
+    setSelectedId(null);
+    setJointNoticeDate(date);
+  }
 
   // 前日・当日・翌日のメニューのみを上部のカードに表示する
   const toDateStr = (d: Date) => {
@@ -375,6 +431,15 @@ export default function TrainingBoardSupabase({
                 className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 required
               />
+              <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={newIsJoint}
+                  onChange={(e) => setNewIsJoint(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                全体練習にする（もう一方の拠点はこの練習に合流）
+              </label>
               <button
                 type="submit"
                 className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
@@ -391,7 +456,7 @@ export default function TrainingBoardSupabase({
               {nearbyMenus.map((m) => (
                 <button
                   key={m.id}
-                  onClick={() => setSelectedId(m.id)}
+                  onClick={() => selectMenu(m.id)}
                   className={`flex shrink-0 flex-col rounded-lg border px-3 py-2 text-left text-xs ${
                     m.id === selectedId
                       ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
@@ -405,6 +470,27 @@ export default function TrainingBoardSupabase({
                   <span>{m.title}</span>
                 </button>
               ))}
+              {nearbyRange
+                .filter(
+                  (d) =>
+                    !menus.some((m) => m.date === d) && jointElsewhere.has(d)
+                )
+                .map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => selectJointDate(d)}
+                    className={`flex shrink-0 flex-col rounded-lg border px-3 py-2 text-left text-xs ${
+                      jointNoticeDate === d
+                        ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
+                        : "border-purple-200 bg-purple-50 text-purple-600"
+                    }`}
+                  >
+                    <span className="text-[11px] text-purple-400">{d}</span>
+                    <span>
+                      全体練習（{locationLabel[jointElsewhere.get(d)!.location]}）
+                    </span>
+                  </button>
+                ))}
               {nearbyMenus.length === 0 && (
                 <p className="text-xs text-neutral-400">
                   前日〜翌日の{locationLabel[activeLocation]}のメニューはありません。下のカレンダーから他の日を選べます。
@@ -414,7 +500,27 @@ export default function TrainingBoardSupabase({
           )}
         </div>
 
-        {selected ? (
+        {jointNoticeDate ? (
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+            <p className="mb-2">
+              {jointNoticeDate}は
+              {locationLabel[jointElsewhere.get(jointNoticeDate)!.location]}
+              で全体練習です。参加・不参加の報告は
+              {locationLabel[jointElsewhere.get(jointNoticeDate)!.location]}
+              のページで行ってください。
+            </p>
+            <button
+              onClick={() => {
+                const loc = jointElsewhere.get(jointNoticeDate)!.location;
+                setActiveLocation(loc);
+              }}
+              className="rounded-lg bg-purple-600 px-4 py-2 text-xs font-medium text-white active:bg-purple-700"
+            >
+              {locationLabel[jointElsewhere.get(jointNoticeDate)!.location]}
+              のページを開く
+            </button>
+          </div>
+        ) : selected ? (
           <>
             <section className="rounded-lg border border-neutral-200 p-4">
               <div className="mb-1 text-xs text-neutral-400">
@@ -467,9 +573,7 @@ export default function TrainingBoardSupabase({
                   実施報告
                 </h3>
                 <span className="text-[11px] text-neutral-400">
-                  {totalMembers !== null
-                    ? `${reportSubmittedCount}人 / ${totalMembers}人 提出済み`
-                    : `${reportSubmittedCount}人提出済み`}
+                  {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
                 </span>
               </div>
               <ul className="flex flex-col gap-3">
@@ -578,9 +682,11 @@ export default function TrainingBoardSupabase({
           <MenuCalendar
             menus={menus}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={selectMenu}
             submissionMap={submissionMap}
-            totalMembers={totalMembers}
+            memberCounts={memberCounts}
+            jointElsewhere={jointElsewhere}
+            onSelectJoint={selectJointDate}
           />
         </section>
       </div>
@@ -708,7 +814,9 @@ function MenuCalendar({
   selectedId,
   onSelect,
   submissionMap,
-  totalMembers,
+  memberCounts,
+  jointElsewhere,
+  onSelectJoint,
 }: {
   menus: MenuRow[];
   selectedId: string | null;
@@ -717,7 +825,9 @@ function MenuCalendar({
     string,
     { reportAuthors: Set<string>; respondedAuthors: Set<string> }
   >;
-  totalMembers: number | null;
+  memberCounts: { tama: number; otsuka: number; all: number };
+  jointElsewhere: Map<string, { menuId: string; location: Location }>;
+  onSelectJoint: (date: string) => void;
 }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -743,13 +853,13 @@ function MenuCalendar({
 
   const todayKey = toDateKey(new Date());
 
-  // その日のメニューのうち、全部員が実施報告or未実施報告を提出しきっていないか判定
+  // その日のメニューのうち、対象部員が実施報告or未実施報告を提出しきっていないか判定
   // （過去の日付のみ対象。今日・未来はまだ提出期間中なので対象外）
   function isIncomplete(dayMenus: MenuRow[]): boolean {
-    if (totalMembers === null) return false;
     return dayMenus.some((m) => {
+      const total = m.is_joint ? memberCounts.all : memberCounts[m.location];
       const respondedCount = submissionMap[m.id]?.respondedAuthors.size ?? 0;
-      return respondedCount < totalMembers;
+      return respondedCount < total;
     });
   }
 
@@ -783,6 +893,7 @@ function MenuCalendar({
           const key = toDateKey(date);
           const dayMenus = menusByDate.get(key) ?? [];
           const hasMenu = dayMenus.length > 0;
+          const jointInfo = !hasMenu ? jointElsewhere.get(key) : undefined;
           const isToday = key === todayKey;
           const isPast = key < todayKey;
           const isSelected = dayMenus.some((m) => m.id === selectedId);
@@ -790,13 +901,18 @@ function MenuCalendar({
           return (
             <button
               key={i}
-              disabled={!hasMenu}
-              onClick={() => hasMenu && onSelect(dayMenus[0].id)}
+              disabled={!hasMenu && !jointInfo}
+              onClick={() => {
+                if (hasMenu) onSelect(dayMenus[0].id);
+                else if (jointInfo) onSelectJoint(key);
+              }}
               className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
                 isSelected
                   ? "bg-blue-600 font-semibold text-white"
                   : hasMenu
                   ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
+                  : jointInfo
+                  ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
                   : "text-neutral-300"
               } ${isToday && !isSelected ? "ring-1 ring-neutral-400" : ""}`}
             >
@@ -808,9 +924,15 @@ function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex items-center gap-1 text-[10px] text-neutral-400">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-        未提出の部員がいる日
+      <p className="mt-2 flex items-center gap-3 text-[10px] text-neutral-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+          未提出の部員がいる日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded bg-purple-50" />
+          全体練習（別拠点）
+        </span>
       </p>
     </div>
   );
