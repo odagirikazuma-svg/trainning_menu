@@ -134,3 +134,9 @@ alter table comments add column if not exists kind text not null default 'opinio
 -- 追加: コメントの返信スレッド機能（実施報告への振り返りコメント用）
 -- ============================================
 alter table comments add column if not exists parent_id uuid references comments(id) on delete cascade;
+
+-- ============================================
+-- 追加: 未実施報告（授業・通院等で参加できなかった場合の報告）
+-- ============================================
+alter table comments drop constraint if exists comments_kind_check;
+alter table comments add constraint comments_kind_check check (kind in ('opinion', 'report', 'absent'));

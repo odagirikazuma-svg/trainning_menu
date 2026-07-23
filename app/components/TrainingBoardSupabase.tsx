@@ -73,7 +73,24 @@ export default function TrainingBoardSupabase({
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
   const [reportText, setReportText] = useState("");
+  const [absentReason, setAbsentReason] = useState("");
+  const [absentAlternative, setAbsentAlternative] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [totalMembers, setTotalMembers] = useState<number | null>(null);
+  const [submissionMap, setSubmissionMap] = useState<
+    Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
+  >({});
+
+  useEffect(() => {
+    // 練習に参加しうる部員総数（コーチは提出対象に含めない）
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", profile.team_id)
+      .neq("role", "coach")
+      .then(({ count }) => setTotalMembers(count ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     loadMenus();
@@ -102,8 +119,46 @@ export default function TrainingBoardSupabase({
       const rows = (data ?? []) as unknown as MenuRow[];
       setMenus(rows);
       if (rows.length > 0) setSelectedId(rows[0].id);
+      await loadSubmissionSummary(rows.map((r) => r.id));
     }
     setLoadingMenus(false);
+  }
+
+  // メニューごとに「実施報告」「未実施報告」を提出した部員（重複なし）を集計する
+  async function loadSubmissionSummary(menuIds: string[]) {
+    if (menuIds.length === 0) {
+      setSubmissionMap({});
+      return;
+    }
+    const { data, error } = await supabase
+      .from("comments")
+      .select("menu_id, author_id, kind")
+      .in("menu_id", menuIds)
+      .in("kind", ["report", "absent"]);
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+
+    const map: Record<
+      string,
+      { reportAuthors: Set<string>; respondedAuthors: Set<string> }
+    > = {};
+    for (const row of (data ?? []) as {
+      menu_id: string;
+      author_id: string;
+      kind: CommentKind;
+    }[]) {
+      if (!map[row.menu_id]) {
+        map[row.menu_id] = { reportAuthors: new Set(), respondedAuthors: new Set() };
+      }
+      map[row.menu_id].respondedAuthors.add(row.author_id);
+      if (row.kind === "report") {
+        map[row.menu_id].reportAuthors.add(row.author_id);
+      }
+    }
+    setSubmissionMap(map);
   }
 
   async function loadComments(menuId: string) {
@@ -170,6 +225,9 @@ export default function TrainingBoardSupabase({
       return;
     }
     await loadComments(selectedId);
+    if (kind === "report" || kind === "absent") {
+      await loadSubmissionSummary(menus.map((m) => m.id));
+    }
   }
 
   async function handleAddComment(e: React.FormEvent) {
@@ -184,12 +242,28 @@ export default function TrainingBoardSupabase({
     setReportText("");
   }
 
+  async function handleAddAbsent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!absentReason.trim() || !absentAlternative.trim()) return;
+    const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${absentAlternative.trim()}`;
+    await submitComment("absent", combined);
+    setAbsentReason("");
+    setAbsentAlternative("");
+  }
+
   const selected = menus.find((m) => m.id === selectedId) ?? null;
   const opinions = comments.filter((c) => c.kind === "opinion" && !c.parent_id);
   const reports = comments.filter((c) => c.kind === "report" && !c.parent_id);
+  const absentReports = comments.filter(
+    (c) => c.kind === "absent" && !c.parent_id
+  );
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
   const reportOpen = selected ? isReportOpen(selected) : false;
+  const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
+  const reportSubmittedCount = selectedSubmission
+    ? selectedSubmission.reportAuthors.size
+    : 0;
 
   // 前日・当日・翌日のメニューのみを上部のカードに表示する
   const toDateStr = (d: Date) => {
@@ -388,9 +462,16 @@ export default function TrainingBoardSupabase({
 
             {/* 実施報告 */}
             <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
-              <h3 className="text-xs font-semibold text-neutral-500">
-                実施報告
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-neutral-500">
+                  実施報告
+                </h3>
+                <span className="text-[11px] text-neutral-400">
+                  {totalMembers !== null
+                    ? `${reportSubmittedCount}人 / ${totalMembers}人 提出済み`
+                    : `${reportSubmittedCount}人提出済み`}
+                </span>
+              </div>
               <ul className="flex flex-col gap-3">
                 {reports.length === 0 && (
                   <li className="text-xs text-neutral-400">
@@ -429,6 +510,59 @@ export default function TrainingBoardSupabase({
                 </p>
               )}
             </section>
+
+            {/* 未実施報告 */}
+            <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
+              <h3 className="text-xs font-semibold text-neutral-500">
+                未実施報告（授業・通院などで参加できなかった場合）
+              </h3>
+              <ul className="flex flex-col gap-2">
+                {absentReports.length === 0 && (
+                  <li className="text-xs text-neutral-400">
+                    まだ未実施報告はありません。
+                  </li>
+                )}
+                {absentReports.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-lg border border-neutral-300 bg-neutral-100 p-3"
+                  >
+                    <CommentMeta c={c} />
+                    <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                      {c.text}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
+                <label className="flex flex-col text-[11px] text-neutral-500">
+                  未実施の理由
+                  <input
+                    type="text"
+                    value={absentReason}
+                    onChange={(e) => setAbsentReason(e.target.value)}
+                    placeholder="例：授業のため参加できず"
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col text-[11px] text-neutral-500">
+                  代替メニュー
+                  <textarea
+                    value={absentAlternative}
+                    onChange={(e) => setAbsentAlternative(e.target.value)}
+                    placeholder="例：自宅で腹筋・腕立てを各3セット実施"
+                    rows={2}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700"
+                >
+                  未実施報告を提出する
+                </button>
+              </form>
+            </section>
           </>
         ) : (
           <p className="text-xs text-neutral-400">
@@ -445,6 +579,8 @@ export default function TrainingBoardSupabase({
             menus={menus}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            submissionMap={submissionMap}
+            totalMembers={totalMembers}
           />
         </section>
       </div>
@@ -571,10 +707,17 @@ function MenuCalendar({
   menus,
   selectedId,
   onSelect,
+  submissionMap,
+  totalMembers,
 }: {
   menus: MenuRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  submissionMap: Record<
+    string,
+    { reportAuthors: Set<string>; respondedAuthors: Set<string> }
+  >;
+  totalMembers: number | null;
 }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -599,6 +742,16 @@ function MenuCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   const todayKey = toDateKey(new Date());
+
+  // その日のメニューのうち、全部員が実施報告or未実施報告を提出しきっていないか判定
+  // （過去の日付のみ対象。今日・未来はまだ提出期間中なので対象外）
+  function isIncomplete(dayMenus: MenuRow[]): boolean {
+    if (totalMembers === null) return false;
+    return dayMenus.some((m) => {
+      const respondedCount = submissionMap[m.id]?.respondedAuthors.size ?? 0;
+      return respondedCount < totalMembers;
+    });
+  }
 
   return (
     <div className="rounded-lg border border-neutral-200 p-3">
@@ -631,13 +784,15 @@ function MenuCalendar({
           const dayMenus = menusByDate.get(key) ?? [];
           const hasMenu = dayMenus.length > 0;
           const isToday = key === todayKey;
+          const isPast = key < todayKey;
           const isSelected = dayMenus.some((m) => m.id === selectedId);
+          const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
           return (
             <button
               key={i}
               disabled={!hasMenu}
               onClick={() => hasMenu && onSelect(dayMenus[0].id)}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
                 isSelected
                   ? "bg-blue-600 font-semibold text-white"
                   : hasMenu
@@ -646,10 +801,17 @@ function MenuCalendar({
               } ${isToday && !isSelected ? "ring-1 ring-neutral-400" : ""}`}
             >
               {date.getDate()}
+              {incomplete && (
+                <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+              )}
             </button>
           );
         })}
       </div>
+      <p className="mt-2 flex items-center gap-1 text-[10px] text-neutral-400">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+        未提出の部員がいる日
+      </p>
     </div>
   );
 }
