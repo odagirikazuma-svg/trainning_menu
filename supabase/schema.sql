@@ -129,3 +129,8 @@ alter table menus add column if not exists end_time time;
 
 alter table comments add column if not exists kind text not null default 'opinion'
   check (kind in ('opinion', 'report'));
+
+-- ============================================
+-- 追加: コメントの返信スレッド機能（実施報告への振り返りコメント用）
+-- ============================================
+alter table comments add column if not exists parent_id uuid references comments(id) on delete cascade;

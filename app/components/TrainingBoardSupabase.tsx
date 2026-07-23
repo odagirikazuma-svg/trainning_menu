@@ -29,6 +29,7 @@ type CommentRow = {
   id: string;
   text: string;
   kind: CommentKind;
+  parent_id: string | null;
   created_at: string;
   author_id: string;
   author: { display_name: string; role: Profile["role"] } | null;
@@ -109,7 +110,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("comments")
       .select(
-        "id, text, kind, created_at, author_id, author:profiles!comments_author_id_fkey(display_name, role)"
+        "id, text, kind, parent_id, created_at, author_id, author:profiles!comments_author_id_fkey(display_name, role)"
       )
       .eq("menu_id", menuId)
       .order("created_at", { ascending: true });
@@ -151,12 +152,17 @@ export default function TrainingBoardSupabase({
     if (data) setSelectedId(data.id);
   }
 
-  async function submitComment(kind: CommentKind, text: string) {
+  async function submitComment(
+    kind: CommentKind,
+    text: string,
+    parentId: string | null = null
+  ) {
     if (!selectedId || !text.trim()) return;
     const { error } = await supabase.from("comments").insert({
       menu_id: selectedId,
       author_id: profile.id,
       kind,
+      parent_id: parentId,
       text: text.trim(),
     });
     if (error) {
@@ -179,21 +185,23 @@ export default function TrainingBoardSupabase({
   }
 
   const selected = menus.find((m) => m.id === selectedId) ?? null;
-  const opinions = comments.filter((c) => c.kind === "opinion");
-  const reports = comments.filter((c) => c.kind === "report");
+  const opinions = comments.filter((c) => c.kind === "opinion" && !c.parent_id);
+  const reports = comments.filter((c) => c.kind === "report" && !c.parent_id);
+  const repliesOf = (id: string) =>
+    comments.filter((c) => c.parent_id === id);
   const reportOpen = selected ? isReportOpen(selected) : false;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 p-4 text-sm text-neutral-900 sm:p-6">
-      <header className="flex flex-col gap-3 border-b border-neutral-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-bold sm:text-xl">練習メニュー掲示板</h1>
-        <div className="flex items-center gap-3 text-xs text-neutral-500">
-          <span>
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur">
+        <h1 className="text-base font-bold sm:text-lg">練習メニュー掲示板</h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+          <span className="hidden sm:inline">
             {profile.display_name}（{roleLabel[profile.role]}）
           </span>
           <button
             onClick={signOut}
-            className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-100"
+            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
           >
             ログアウト
           </button>
@@ -201,15 +209,15 @@ export default function TrainingBoardSupabase({
       </header>
 
       {/* 拠点タブ */}
-      <div className="flex gap-2 border-b border-neutral-200">
+      <div className="sticky top-[49px] z-10 flex border-b border-neutral-200 bg-white">
         {locations.map((loc) => (
           <button
             key={loc}
             onClick={() => setActiveLocation(loc)}
-            className={`px-4 py-2 text-sm font-medium transition ${
+            className={`flex-1 py-3 text-sm font-medium transition ${
               activeLocation === loc
                 ? "border-b-2 border-blue-600 text-blue-700"
-                : "text-neutral-400 hover:text-neutral-600"
+                : "text-neutral-400"
             }`}
           >
             {locationLabel[loc]}
@@ -217,18 +225,19 @@ export default function TrainingBoardSupabase({
         ))}
       </div>
 
-      {errorMsg && (
-        <p className="rounded bg-red-50 p-2 text-xs text-red-600">
-          {errorMsg}
-        </p>
-      )}
+      <div className="flex flex-col gap-4 p-3 sm:p-4">
+        {errorMsg && (
+          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+            {errorMsg}
+          </p>
+        )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[240px_1fr]">
-        <aside className="flex flex-col gap-2">
+        {/* メニュー一覧（横スクロール、スマホ向け） */}
+        <div className="flex flex-col gap-2">
           {canCreateMenu(profile.role) && (
             <button
               onClick={() => setShowNewForm((v) => !v)}
-              className="rounded bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-700"
+              className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white active:bg-neutral-700"
             >
               {showNewForm
                 ? "キャンセル"
@@ -239,22 +248,22 @@ export default function TrainingBoardSupabase({
           {showNewForm && canCreateMenu(profile.role) && (
             <form
               onSubmit={handleCreateMenu}
-              className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-3"
+              className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
             >
               <input
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 required
               />
-              <label className="flex flex-col text-[10px] text-neutral-500">
+              <label className="flex flex-col text-[11px] text-neutral-500">
                 開始時刻
                 <input
                   type="time"
                   value={newStartTime}
                   onChange={(e) => setNewStartTime(e.target.value)}
-                  className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                  className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 />
               </label>
               <input
@@ -262,7 +271,7 @@ export default function TrainingBoardSupabase({
                 placeholder="タイトル（例：通常練習）"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 required
               />
               <textarea
@@ -270,12 +279,12 @@ export default function TrainingBoardSupabase({
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
                 rows={4}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 required
               />
               <button
                 type="submit"
-                className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+                className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
               >
                 {locationLabel[activeLocation]}に投稿する
               </button>
@@ -285,158 +294,237 @@ export default function TrainingBoardSupabase({
           {loadingMenus ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
               {menus.map((m) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => setSelectedId(m.id)}
-                    className={`w-full rounded px-3 py-2 text-left text-xs transition ${
-                      m.id === selectedId
-                        ? "bg-blue-50 font-semibold text-blue-700"
-                        : "hover:bg-neutral-100"
-                    }`}
-                  >
-                    <div className="text-[11px] text-neutral-400">
-                      {m.date}
-                      {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
-                    </div>
-                    <div>{m.title}</div>
-                  </button>
-                </li>
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedId(m.id)}
+                  className={`flex shrink-0 flex-col rounded-lg border px-3 py-2 text-left text-xs ${
+                    m.id === selectedId
+                      ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
+                      : "border-neutral-200 bg-white text-neutral-600"
+                  }`}
+                >
+                  <span className="text-[11px] text-neutral-400">
+                    {m.date}
+                    {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
+                  </span>
+                  <span>{m.title}</span>
+                </button>
               ))}
               {menus.length === 0 && (
-                <li className="text-xs text-neutral-400">
+                <p className="text-xs text-neutral-400">
                   {locationLabel[activeLocation]}にはまだメニューがありません。
-                </li>
-              )}
-            </ul>
-          )}
-        </aside>
-
-        <main className="flex flex-col gap-6">
-          {selected ? (
-            <>
-              <section className="rounded border border-neutral-200 p-4">
-                <div className="mb-1 text-xs text-neutral-400">
-                  {locationLabel[selected.location]}・{selected.date}
-                  {selected.start_time && `・${selected.start_time.slice(0, 5)}〜`}
-                  ・作成者: {selected.creator?.display_name ?? "不明"}
-                </div>
-                <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
-                <p className="whitespace-pre-wrap text-neutral-800">
-                  {selected.content}
                 </p>
-              </section>
+              )}
+            </div>
+          )}
+        </div>
 
-              {/* 意見・コメント */}
-              <section className="flex flex-col gap-3">
-                <h3 className="text-xs font-semibold text-neutral-500">
-                  意見・コメント
-                </h3>
-                <ul className="flex flex-col gap-2">
-                  {opinions.length === 0 && (
-                    <li className="text-xs text-neutral-400">
-                      まだコメントはありません。
-                    </li>
-                  )}
-                  {opinions.map((c) => (
-                    <CommentItem key={c.id} c={c} />
-                  ))}
-                </ul>
-                <form onSubmit={handleAddComment} className="flex flex-col gap-2">
+        {selected ? (
+          <>
+            <section className="rounded-lg border border-neutral-200 p-4">
+              <div className="mb-1 text-xs text-neutral-400">
+                {locationLabel[selected.location]}・{selected.date}
+                {selected.start_time && `・${selected.start_time.slice(0, 5)}〜`}
+                ・作成者: {selected.creator?.display_name ?? "不明"}
+              </div>
+              <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
+              <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                {selected.content}
+              </p>
+            </section>
+
+            {/* 意見・コメント */}
+            <section className="flex flex-col gap-3">
+              <h3 className="text-xs font-semibold text-neutral-500">
+                意見・コメント
+              </h3>
+              <ul className="flex flex-col gap-2">
+                {opinions.length === 0 && (
+                  <li className="text-xs text-neutral-400">
+                    まだコメントはありません。
+                  </li>
+                )}
+                {opinions.map((c) => (
+                  <CommentItem key={c.id} c={c} />
+                ))}
+              </ul>
+              <form onSubmit={handleAddComment} className="flex flex-col gap-2">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="意見・コメントを入力"
+                  rows={3}
+                  className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="self-start rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700"
+                >
+                  コメントする
+                </button>
+              </form>
+            </section>
+
+            {/* 実施報告 */}
+            <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
+              <h3 className="text-xs font-semibold text-neutral-500">
+                実施報告
+              </h3>
+              <ul className="flex flex-col gap-3">
+                {reports.length === 0 && (
+                  <li className="text-xs text-neutral-400">
+                    まだ実施報告はありません。
+                  </li>
+                )}
+                {reports.map((r) => (
+                  <ReportThread
+                    key={r.id}
+                    report={r}
+                    replies={repliesOf(r.id)}
+                    onReply={(text) => submitComment("opinion", text, r.id)}
+                  />
+                ))}
+              </ul>
+
+              {reportOpen ? (
+                <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="意見・コメントを入力"
+                    value={reportText}
+                    onChange={(e) => setReportText(e.target.value)}
+                    placeholder="今日の練習を振り返って、感想や気づきを書いてください"
                     rows={3}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                   />
                   <button
                     type="submit"
-                    className="self-start rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+                    className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700"
                   >
-                    コメントする
+                    実施報告を提出する
                   </button>
                 </form>
-              </section>
-
-              {/* 実施報告 */}
-              <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
-                <h3 className="text-xs font-semibold text-neutral-500">
-                  実施報告
-                </h3>
-                <ul className="flex flex-col gap-2">
-                  {reports.length === 0 && (
-                    <li className="text-xs text-neutral-400">
-                      まだ実施報告はありません。
-                    </li>
-                  )}
-                  {reports.map((c) => (
-                    <CommentItem key={c.id} c={c} />
-                  ))}
-                </ul>
-
-                {reportOpen ? (
-                  <form onSubmit={handleAddReport} className="flex flex-col gap-2">
-                    <textarea
-                      value={reportText}
-                      onChange={(e) => setReportText(e.target.value)}
-                      placeholder="今日の練習を振り返って、感想や気づきを書いてください"
-                      rows={3}
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-                    />
-                    <button
-                      type="submit"
-                      className="self-start rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
-                    >
-                      実施報告を提出する
-                    </button>
-                  </form>
-                ) : (
-                  <p className="rounded bg-amber-50 p-2 text-xs text-amber-700">
-                    まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
-                  </p>
-                )}
-              </section>
-            </>
-          ) : (
-            <p className="text-xs text-neutral-400">
-              左のメニューを選択してください。
-            </p>
-          )}
-        </main>
+              ) : (
+                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-700">
+                  まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
+                </p>
+              )}
+            </section>
+          </>
+        ) : (
+          <p className="text-xs text-neutral-400">
+            上のメニューを選択してください。
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
 function CommentItem({ c }: { c: CommentRow }) {
-  const isReport = c.kind === "report";
   return (
-    <li
-      className={`rounded border p-3 ${
-        isReport
-          ? "border-emerald-200 bg-emerald-50"
-          : "border-neutral-200 bg-white"
-      }`}
-    >
-      <div className="mb-1 flex items-center gap-2 text-[11px] text-neutral-400">
-        <span
-          className={`rounded px-1.5 py-0.5 font-medium ${
-            isReport
-              ? "bg-emerald-600 text-white"
-              : "bg-neutral-100 text-neutral-600"
-          }`}
-        >
-          {commentKindLabel[c.kind]}
+    <li className="rounded-lg border border-neutral-200 bg-white p-3">
+      <CommentMeta c={c} />
+      <p className="whitespace-pre-wrap text-sm text-neutral-800">{c.text}</p>
+    </li>
+  );
+}
+
+function CommentMeta({ c }: { c: CommentRow }) {
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-400">
+      <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
+        {c.author ? roleLabel[c.author.role] : "?"}
+      </span>
+      <span>{c.author?.display_name ?? "不明"}</span>
+      <span>{formatDateTime(c.created_at)}</span>
+    </div>
+  );
+}
+
+function ReportThread({
+  report,
+  replies,
+  onReply,
+}: {
+  report: CommentRow;
+  replies: CommentRow[];
+  onReply: (text: string) => Promise<void>;
+}) {
+  const [replyText, setReplyText] = useState("");
+  const [showReplyForm, setShowReplyForm] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!replyText.trim()) return;
+    await onReply(replyText);
+    setReplyText("");
+    setShowReplyForm(false);
+  }
+
+  return (
+    <li className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-400">
+        <span className="rounded bg-emerald-600 px-1.5 py-0.5 font-medium text-white">
+          {commentKindLabel[report.kind]}
         </span>
         <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
-          {c.author ? roleLabel[c.author.role] : "?"}
+          {report.author ? roleLabel[report.author.role] : "?"}
         </span>
-        <span>{c.author?.display_name ?? "不明"}</span>
-        <span>{formatDateTime(c.created_at)}</span>
+        <span>{report.author?.display_name ?? "不明"}</span>
+        <span>{formatDateTime(report.created_at)}</span>
       </div>
-      <p className="whitespace-pre-wrap text-neutral-800">{c.text}</p>
+      <p className="whitespace-pre-wrap text-sm text-neutral-800">
+        {report.text}
+      </p>
+
+      {replies.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2 border-l-2 border-emerald-200 pl-3">
+          {replies.map((r) => (
+            <li key={r.id} className="rounded-lg bg-white p-2.5">
+              <CommentMeta c={r} />
+              <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                {r.text}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showReplyForm ? (
+        <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-2">
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder="この報告にコメントする"
+            rows={2}
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white active:bg-neutral-700"
+            >
+              送信
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowReplyForm(false)}
+              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs text-neutral-600"
+            >
+              閉じる
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShowReplyForm(true)}
+          className="mt-2 text-xs font-medium text-emerald-700 active:text-emerald-900"
+        >
+          ＋ コメントする
+        </button>
+      )}
     </li>
   );
 }
