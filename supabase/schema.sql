@@ -120,3 +120,12 @@ create policy "teams_select_authenticated" on teams
 -- ============================================
 alter table menus add column if not exists location text not null default 'tama'
   check (location in ('tama', 'otsuka'));
+
+-- ============================================
+-- 追加: 練習の開始・終了時刻、コメントの種別（意見/報告）
+-- ============================================
+alter table menus add column if not exists start_time time;
+alter table menus add column if not exists end_time time;
+
+alter table comments add column if not exists kind text not null default 'opinion'
+  check (kind in ('opinion', 'report'));

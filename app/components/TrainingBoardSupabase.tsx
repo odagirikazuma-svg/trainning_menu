@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { canCreateMenu, Location, locationLabel, locations, roleLabel } from "../lib/types";
+import {
+  canCreateMenu,
+  CommentKind,
+  commentKindLabel,
+  Location,
+  locationLabel,
+  locations,
+  roleLabel,
+} from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type MenuRow = {
@@ -11,6 +19,8 @@ type MenuRow = {
   title: string;
   content: string;
   location: Location;
+  start_time: string | null;
+  end_time: string | null;
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
@@ -19,6 +29,7 @@ type MenuRow = {
 type CommentRow = {
   id: string;
   text: string;
+  kind: CommentKind;
   created_at: string;
   author_id: string;
   author: { display_name: string; role: Profile["role"] } | null;
@@ -32,6 +43,13 @@ function formatDateTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// メニューの開始時刻を過ぎているか判定（開始時刻未設定の場合は常に報告可能）
+function isReportOpen(menu: MenuRow): boolean {
+  if (!menu.start_time) return true;
+  const threshold = new Date(`${menu.date}T${menu.start_time}`);
+  return new Date() >= threshold;
 }
 
 export default function TrainingBoardSupabase({
@@ -50,9 +68,12 @@ export default function TrainingBoardSupabase({
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [newDate, setNewDate] = useState("");
+  const [newStartTime, setNewStartTime] = useState("");
+  const [newEndTime, setNewEndTime] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [reportText, setReportText] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,7 +92,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, location, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
+        "id, date, title, content, location, start_time, end_time, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
       )
       .eq("location", activeLocation)
       .order("date", { ascending: false });
@@ -90,7 +111,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("comments")
       .select(
-        "id, text, created_at, author_id, author:profiles!comments_author_id_fkey(display_name, role)"
+        "id, text, kind, created_at, author_id, author:profiles!comments_author_id_fkey(display_name, role)"
       )
       .eq("menu_id", menuId)
       .order("created_at", { ascending: true });
@@ -113,6 +134,8 @@ export default function TrainingBoardSupabase({
         title: newTitle,
         content: newContent,
         location: activeLocation,
+        start_time: newStartTime || null,
+        end_time: newEndTime || null,
         created_by: profile.id,
       })
       .select("id")
@@ -123,6 +146,8 @@ export default function TrainingBoardSupabase({
       return;
     }
     setNewDate("");
+    setNewStartTime("");
+    setNewEndTime("");
     setNewTitle("");
     setNewContent("");
     setShowNewForm(false);
@@ -130,23 +155,37 @@ export default function TrainingBoardSupabase({
     if (data) setSelectedId(data.id);
   }
 
-  async function handleAddComment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedId || !commentText.trim()) return;
+  async function submitComment(kind: CommentKind, text: string) {
+    if (!selectedId || !text.trim()) return;
     const { error } = await supabase.from("comments").insert({
       menu_id: selectedId,
       author_id: profile.id,
-      text: commentText.trim(),
+      kind,
+      text: text.trim(),
     });
     if (error) {
       setErrorMsg(error.message);
       return;
     }
-    setCommentText("");
     await loadComments(selectedId);
   }
 
+  async function handleAddComment(e: React.FormEvent) {
+    e.preventDefault();
+    await submitComment("opinion", commentText);
+    setCommentText("");
+  }
+
+  async function handleAddReport(e: React.FormEvent) {
+    e.preventDefault();
+    await submitComment("report", reportText);
+    setReportText("");
+  }
+
   const selected = menus.find((m) => m.id === selectedId) ?? null;
+  const opinions = comments.filter((c) => c.kind === "opinion");
+  const reports = comments.filter((c) => c.kind === "report");
+  const reportOpen = selected ? isReportOpen(selected) : false;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 p-4 text-sm text-neutral-900 sm:p-6">
@@ -213,6 +252,26 @@ export default function TrainingBoardSupabase({
                 className="rounded border border-neutral-300 px-2 py-1 text-xs"
                 required
               />
+              <div className="flex gap-2">
+                <label className="flex flex-1 flex-col text-[10px] text-neutral-500">
+                  開始時刻
+                  <input
+                    type="time"
+                    value={newStartTime}
+                    onChange={(e) => setNewStartTime(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                  />
+                </label>
+                <label className="flex flex-1 flex-col text-[10px] text-neutral-500">
+                  終了時刻
+                  <input
+                    type="time"
+                    value={newEndTime}
+                    onChange={(e) => setNewEndTime(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                  />
+                </label>
+              </div>
               <input
                 type="text"
                 placeholder="タイトル（例：通常練習）"
@@ -252,7 +311,10 @@ export default function TrainingBoardSupabase({
                         : "hover:bg-neutral-100"
                     }`}
                   >
-                    <div className="text-[11px] text-neutral-400">{m.date}</div>
+                    <div className="text-[11px] text-neutral-400">
+                      {m.date}
+                      {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
+                    </div>
                     <div>{m.title}</div>
                   </button>
                 </li>
@@ -266,13 +328,17 @@ export default function TrainingBoardSupabase({
           )}
         </aside>
 
-        <main className="flex flex-col gap-4">
+        <main className="flex flex-col gap-6">
           {selected ? (
             <>
               <section className="rounded border border-neutral-200 p-4">
                 <div className="mb-1 text-xs text-neutral-400">
-                  {locationLabel[selected.location]}・{selected.date}・作成者:{" "}
-                  {selected.creator?.display_name ?? "不明"}
+                  {locationLabel[selected.location]}・{selected.date}
+                  {selected.start_time &&
+                    `・${selected.start_time.slice(0, 5)}〜${
+                      selected.end_time ? selected.end_time.slice(0, 5) : ""
+                    }`}
+                  ・作成者: {selected.creator?.display_name ?? "不明"}
                 </div>
                 <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
                 <p className="whitespace-pre-wrap text-neutral-800">
@@ -280,40 +346,26 @@ export default function TrainingBoardSupabase({
                 </p>
               </section>
 
+              {/* 意見・コメント */}
               <section className="flex flex-col gap-3">
                 <h3 className="text-xs font-semibold text-neutral-500">
-                  コメント
+                  意見・コメント
                 </h3>
                 <ul className="flex flex-col gap-2">
-                  {comments.length === 0 && (
+                  {opinions.length === 0 && (
                     <li className="text-xs text-neutral-400">
                       まだコメントはありません。
                     </li>
                   )}
-                  {comments.map((c) => (
-                    <li
-                      key={c.id}
-                      className="rounded border border-neutral-200 bg-white p-3"
-                    >
-                      <div className="mb-1 flex items-center gap-2 text-[11px] text-neutral-400">
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
-                          {c.author ? roleLabel[c.author.role] : "?"}
-                        </span>
-                        <span>{c.author?.display_name ?? "不明"}</span>
-                        <span>{formatDateTime(c.created_at)}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-neutral-800">
-                        {c.text}
-                      </p>
-                    </li>
+                  {opinions.map((c) => (
+                    <CommentItem key={c.id} c={c} />
                   ))}
                 </ul>
-
                 <form onSubmit={handleAddComment} className="flex flex-col gap-2">
                   <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="コメントを入力"
+                    placeholder="意見・コメントを入力"
                     rows={3}
                     className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
                   />
@@ -325,6 +377,45 @@ export default function TrainingBoardSupabase({
                   </button>
                 </form>
               </section>
+
+              {/* 実施報告 */}
+              <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
+                <h3 className="text-xs font-semibold text-neutral-500">
+                  実施報告
+                </h3>
+                <ul className="flex flex-col gap-2">
+                  {reports.length === 0 && (
+                    <li className="text-xs text-neutral-400">
+                      まだ実施報告はありません。
+                    </li>
+                  )}
+                  {reports.map((c) => (
+                    <CommentItem key={c.id} c={c} />
+                  ))}
+                </ul>
+
+                {reportOpen ? (
+                  <form onSubmit={handleAddReport} className="flex flex-col gap-2">
+                    <textarea
+                      value={reportText}
+                      onChange={(e) => setReportText(e.target.value)}
+                      placeholder="今日の練習を振り返って、感想や気づきを書いてください"
+                      rows={3}
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="self-start rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+                    >
+                      実施報告を提出する
+                    </button>
+                  </form>
+                ) : (
+                  <p className="rounded bg-amber-50 p-2 text-xs text-amber-700">
+                    まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
+                  </p>
+                )}
+              </section>
             </>
           ) : (
             <p className="text-xs text-neutral-400">
@@ -334,5 +425,36 @@ export default function TrainingBoardSupabase({
         </main>
       </div>
     </div>
+  );
+}
+
+function CommentItem({ c }: { c: CommentRow }) {
+  const isReport = c.kind === "report";
+  return (
+    <li
+      className={`rounded border p-3 ${
+        isReport
+          ? "border-emerald-200 bg-emerald-50"
+          : "border-neutral-200 bg-white"
+      }`}
+    >
+      <div className="mb-1 flex items-center gap-2 text-[11px] text-neutral-400">
+        <span
+          className={`rounded px-1.5 py-0.5 font-medium ${
+            isReport
+              ? "bg-emerald-600 text-white"
+              : "bg-neutral-100 text-neutral-600"
+          }`}
+        >
+          {commentKindLabel[c.kind]}
+        </span>
+        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
+          {c.author ? roleLabel[c.author.role] : "?"}
+        </span>
+        <span>{c.author?.display_name ?? "不明"}</span>
+        <span>{formatDateTime(c.created_at)}</span>
+      </div>
+      <p className="whitespace-pre-wrap text-neutral-800">{c.text}</p>
+    </li>
   );
 }

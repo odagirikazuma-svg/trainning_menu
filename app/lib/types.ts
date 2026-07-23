@@ -2,6 +2,13 @@ export type Role = "leader" | "vice_leader" | "captain" | "coach" | "member";
 
 export type Location = "tama" | "otsuka";
 
+export type CommentKind = "opinion" | "report";
+
+export const commentKindLabel: Record<CommentKind, string> = {
+  opinion: "意見",
+  report: "実施報告",
+};
+
 export const locationLabel: Record<Location, string> = {
   tama: "多摩",
   otsuka: "大塚",
