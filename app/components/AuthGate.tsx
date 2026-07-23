@@ -51,11 +51,16 @@ export default function AuthGate({
 
   async function loadOrCreateProfile() {
     if (!session) return;
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("profiles")
       .select("id, team_id, display_name, role")
       .eq("id", session.user.id)
       .maybeSingle();
+
+    if (existingError) {
+      setErrorMsg(`プロフィール取得エラー: ${existingError.message}`);
+      return;
+    }
 
     if (existing) {
       setProfile(existing as Profile);
@@ -63,11 +68,16 @@ export default function AuthGate({
     }
 
     // 初回ログイン時：デフォルトチームに部員として自動参加
-    const { data: team } = await supabase
+    const { data: team, error: teamError } = await supabase
       .from("teams")
       .select("id")
       .limit(1)
       .maybeSingle();
+
+    if (teamError) {
+      setErrorMsg(`チーム取得エラー: ${teamError.message}`);
+      return;
+    }
 
     if (!team) {
       setErrorMsg(

@@ -109,3 +109,8 @@ create policy "comments_insert_same_team" on comments
       )
     )
   );
+
+-- 修正: 新規ユーザーが初回参加時にteamsを閲覧できるよう、
+-- ログイン済みユーザーなら誰でもteamsを閲覧可能にする
+create policy "teams_select_authenticated" on teams
+  for select using (auth.role() = 'authenticated');
