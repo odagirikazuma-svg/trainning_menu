@@ -50,6 +50,12 @@ function formatDateTime(iso: string) {
   });
 }
 
+// "YYYY-MM-DD" -> "●月●日"
+function formatMonthDay(dateStr: string) {
+  const [, m, d] = dateStr.split("-");
+  return `${Number(m)}月${Number(d)}日`;
+}
+
 // メニューの開始時刻を過ぎているか判定（開始時刻未設定の場合は常に報告可能）
 function isReportOpen(menu: MenuRow): boolean {
   if (!menu.start_time) return true;
@@ -149,7 +155,14 @@ export default function TrainingBoardSupabase({
     } else {
       const rows = (data ?? []) as unknown as MenuRow[];
       setMenus(rows);
-      if (rows.length > 0) setSelectedId(rows[0].id);
+
+      // デフォルトは「今日」の中で最も開始時刻が早いメニュー。無ければ未選択（プレースホルダー表示）
+      const todayStr = toDateKey(new Date());
+      const todaysMenus = rows
+        .filter((m) => m.date === todayStr)
+        .sort((a, b) => (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99"));
+      setSelectedId(todaysMenus.length > 0 ? todaysMenus[0].id : null);
+
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
     setLoadingMenus(false);
@@ -379,6 +392,25 @@ export default function TrainingBoardSupabase({
   }
 
   const selected = menus.find((m) => m.id === selectedId) ?? null;
+  const chronoMenus = [...menus].sort((a, b) => {
+    const aKey = `${a.date}T${a.start_time ?? "00:00"}`;
+    const bKey = `${b.date}T${b.start_time ?? "00:00"}`;
+    return aKey.localeCompare(bKey);
+  });
+  const chronoIndex = selectedId
+    ? chronoMenus.findIndex((m) => m.id === selectedId)
+    : -1;
+  const hasPrevMenu = chronoIndex > 0;
+  const hasNextMenu =
+    chronoIndex >= 0 && chronoIndex < chronoMenus.length - 1;
+
+  function goPrevMenu() {
+    if (hasPrevMenu) selectMenu(chronoMenus[chronoIndex - 1].id);
+  }
+  function goNextMenu() {
+    if (hasNextMenu) selectMenu(chronoMenus[chronoIndex + 1].id);
+  }
+
   const opinions = comments.filter((c) => c.kind === "opinion" && !c.parent_id);
   const reports = comments.filter((c) => c.kind === "report" && !c.parent_id);
   const absentReports = comments.filter(
@@ -632,53 +664,70 @@ export default function TrainingBoardSupabase({
           {loadingMenus ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {nearbyMenus.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => selectMenu(m.id)}
-                  className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                    m.id === selectedId
-                      ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
-                      : "border-neutral-200 bg-white text-neutral-600"
-                  }`}
+            (() => {
+              const jointPhantomDates = nearbyRange.filter(
+                (d) =>
+                  !menus.some((m) => m.date === d) && jointElsewhere.has(d)
+              );
+              const totalCount = nearbyMenus.length + jointPhantomDates.length;
+              const many = totalCount > 3;
+              return (
+                <div
+                  className={
+                    many
+                      ? "-mx-3 flex gap-2 overflow-x-auto px-3 pb-1"
+                      : "grid grid-cols-3 gap-2"
+                  }
                 >
-                  <span className="truncate text-[10px] text-neutral-400">
-                    {m.date.slice(5)}
-                    {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
-                  </span>
-                  <span className="truncate">{m.title}</span>
-                </button>
-              ))}
-              {nearbyRange
-                .filter(
-                  (d) =>
-                    !menus.some((m) => m.date === d) && jointElsewhere.has(d)
-                )
-                .map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => selectJointDate(d)}
-                    className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                      jointNoticeDate === d
-                        ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
-                        : "border-purple-200 bg-purple-50 text-purple-600"
-                    }`}
-                  >
-                    <span className="truncate text-[10px] text-purple-400">
-                      {d.slice(5)}
-                    </span>
-                    <span className="truncate">
-                      全体練習（{locationLabel[jointElsewhere.get(d)!.location]}）
-                    </span>
-                  </button>
-                ))}
-              {nearbyMenus.length === 0 && (
-                <p className="col-span-3 text-xs text-neutral-400">
-                  前日〜翌日の{locationLabel[activeLocation]}のメニューはありません。下のカレンダーから他の日を選べます。
-                </p>
-              )}
-            </div>
+                  {nearbyMenus.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => selectMenu(m.id)}
+                      className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                        many ? "w-28 shrink-0" : ""
+                      } ${
+                        m.id === selectedId
+                          ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
+                          : "border-neutral-200 bg-white text-neutral-600"
+                      }`}
+                    >
+                      <span className="truncate text-[10px] text-neutral-400">
+                        {m.date.slice(5)}
+                        {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
+                      </span>
+                      <span className="truncate">{m.title}</span>
+                    </button>
+                  ))}
+                  {jointPhantomDates.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => selectJointDate(d)}
+                      className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                        many ? "w-28 shrink-0" : ""
+                      } ${
+                        jointNoticeDate === d
+                          ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
+                          : "border-purple-200 bg-purple-50 text-purple-600"
+                      }`}
+                    >
+                      <span className="truncate text-[10px] text-purple-400">
+                        {d.slice(5)}
+                      </span>
+                      <span className="truncate">
+                        全体練習（
+                        {locationLabel[jointElsewhere.get(d)!.location]}）
+                      </span>
+                    </button>
+                  ))}
+                  {totalCount === 0 && (
+                    <p className="col-span-3 text-xs text-neutral-400">
+                      前日〜翌日の{locationLabel[activeLocation]}
+                      のメニューはありません。下のカレンダーから他の日を選べます。
+                    </p>
+                  )}
+                </div>
+              );
+            })()
           )}
         </div>
 
@@ -704,12 +753,18 @@ export default function TrainingBoardSupabase({
           </div>
         ) : selected?.is_off ? (
           <section className="rounded-lg border border-neutral-300 bg-neutral-100 p-4">
+            <MenuNavBar
+              hasPrev={hasPrevMenu}
+              hasNext={hasNextMenu}
+              onPrev={goPrevMenu}
+              onNext={goNextMenu}
+            />
             <div className="mb-2 text-xs text-neutral-500">
               {locationLabel[selected.location]}・{selected.date}
               ・作成者: {selected.creator?.display_name ?? "不明"}
             </div>
             <p className="mb-3 text-base font-bold text-neutral-700">
-              本日はオフです
+              {formatMonthDay(selected.date)}はオフです
             </p>
             {canCreateMenu(profile.role) && (
               <button
@@ -723,6 +778,12 @@ export default function TrainingBoardSupabase({
         ) : selected ? (
           <>
             <section className="rounded-lg border border-neutral-200 p-4">
+              <MenuNavBar
+                hasPrev={hasPrevMenu}
+                hasNext={hasNextMenu}
+                onPrev={goPrevMenu}
+                onNext={goNextMenu}
+              />
               {editingMenu ? (
                 <form onSubmit={handleUpdateMenu} className="flex flex-col gap-2">
                   <input
@@ -940,8 +1001,9 @@ export default function TrainingBoardSupabase({
             </section>
           </>
         ) : (
-          <p className="text-xs text-neutral-400">
-            上のメニューを選択してください。
+          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-400">
+            {formatMonthDay(toDateKey(new Date()))}
+            のメニューはまだ作成されていません
           </p>
         )}
 
@@ -1264,6 +1326,38 @@ function TimeSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function MenuNavBar({
+  hasPrev,
+  hasNext,
+  onPrev,
+  onNext,
+}: {
+  hasPrev: boolean;
+  hasNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  if (!hasPrev && !hasNext) return null;
+  return (
+    <div className="mb-2 flex items-center justify-between">
+      <button
+        onClick={onPrev}
+        disabled={!hasPrev}
+        className="rounded px-2 py-1 text-sm text-neutral-500 disabled:opacity-0 active:bg-neutral-100"
+      >
+        ◀
+      </button>
+      <button
+        onClick={onNext}
+        disabled={!hasNext}
+        className="rounded px-2 py-1 text-sm text-neutral-500 disabled:opacity-0 active:bg-neutral-100"
+      >
+        ▶
+      </button>
     </div>
   );
 }
