@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
-  canCreateMenu,
   currentGrade,
   Location,
   locationLabel,
@@ -101,7 +100,6 @@ export default function MyPage({
   const [showMatchForm, setShowMatchForm] = useState(false);
   const [newMatchName, setNewMatchName] = useState("");
   const [newMatchDate, setNewMatchDate] = useState("");
-  const [newMatchForAll, setNewMatchForAll] = useState(false);
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [todayLogText, setTodayLogText] = useState("");
@@ -223,7 +221,7 @@ export default function MyPage({
       .from("matches")
       .select("id, name, date, member_id")
       .eq("team_id", profile.team_id)
-      .or(`member_id.eq.${profile.id},member_id.is.null`)
+      .eq("member_id", profile.id)
       .gte("date", todayStr)
       .order("date", { ascending: true })
       .limit(1)
@@ -245,7 +243,7 @@ export default function MyPage({
       name: newMatchName.trim(),
       date: newMatchDate,
       created_by: profile.id,
-      member_id: newMatchForAll ? null : profile.id,
+      member_id: profile.id,
     });
     if (error) {
       setErrorMsg(error.message);
@@ -253,7 +251,6 @@ export default function MyPage({
     }
     setNewMatchName("");
     setNewMatchDate("");
-    setNewMatchForAll(false);
     setShowMatchForm(false);
     await loadNextMatch();
   }
@@ -466,17 +463,6 @@ export default function MyPage({
                 className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
                 required
               />
-              {canCreateMenu(profile.role) && (
-                <label className="flex items-center gap-2 text-xs text-neutral-600">
-                  <input
-                    type="checkbox"
-                    checked={newMatchForAll}
-                    onChange={(e) => setNewMatchForAll(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  部員全員向けの試合として登録する（チェックなしは自分だけ）
-                </label>
-              )}
               <button
                 type="submit"
                 className="rounded-lg bg-red-600 py-2 text-sm font-medium text-white active:bg-red-700"
