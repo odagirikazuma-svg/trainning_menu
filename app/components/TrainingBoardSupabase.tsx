@@ -1079,6 +1079,10 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
                   実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
+              ) : myAbsent ? (
+                <p className="rounded-lg bg-neutral-100 p-3 text-xs text-neutral-600">
+                  未実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
+                </p>
               ) : reportOpen ? (
                 <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
@@ -1132,6 +1136,10 @@ export default function TrainingBoardSupabase({
               {myAbsent ? (
                 <p className="rounded-lg bg-neutral-100 p-3 text-xs text-neutral-600">
                   未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
+                </p>
+              ) : myReport ? (
+                <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
+                  実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
               ) : (
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
