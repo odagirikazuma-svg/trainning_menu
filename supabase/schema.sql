@@ -185,3 +185,8 @@ create policy "menus_insert_captain_only" on menus
       where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
     )
   );
+
+-- ============================================
+-- 追加: 部員の学年
+-- ============================================
+alter table profiles add column if not exists grade text;

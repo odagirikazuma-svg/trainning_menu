@@ -37,8 +37,8 @@ export type TrainingMenu = {
 
 export const roleLabel: Record<Role, string> = {
   leader: "リーダー",
-  vice_leader: "副リーダー",
-  captain: "キャプテン",
+  vice_leader: "副主将",
+  captain: "主将",
   coach: "コーチ",
   member: "部員",
 };
