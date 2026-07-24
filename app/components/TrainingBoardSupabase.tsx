@@ -851,27 +851,14 @@ export default function TrainingBoardSupabase({
                 </form>
               ) : (
                 <>
-                  <div className="mb-1 flex items-start justify-between gap-2 text-xs text-neutral-400">
-                    <span>
-                      {locationLabel[selected.location]}・{selected.date}
-                      {selected.start_time &&
-                        `・${selected.start_time.slice(0, 5)}〜`}
-                      ・作成者: {selected.creator?.display_name ?? "不明"}
-                      {selected.editor && (
-                        <>
-                          （編集: {selected.editor.display_name}）
-                        </>
-                      )}
-                    </span>
-                    {canCreateMenu(profile.role) &&
-                      !isReportOpen(selected) && (
-                        <button
-                          onClick={() => startEditingMenu(selected)}
-                          className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-600 active:bg-neutral-100"
-                        >
-                          編集する
-                        </button>
-                      )}
+                  <div className="mb-1 text-xs text-neutral-400">
+                    {locationLabel[selected.location]}・{selected.date}
+                    {selected.start_time &&
+                      `・${selected.start_time.slice(0, 5)}〜`}
+                    ・作成者: {selected.creator?.display_name ?? "不明"}
+                    {selected.editor && (
+                      <>（編集: {selected.editor.display_name}）</>
+                    )}
                   </div>
                   <h2 className="mb-2 text-base font-bold">
                     {selected.title}
@@ -879,6 +866,17 @@ export default function TrainingBoardSupabase({
                   <p className="whitespace-pre-wrap text-sm text-neutral-800">
                     {selected.content}
                   </p>
+                  {canCreateMenu(profile.role) &&
+                    !isReportOpen(selected) && (
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={() => startEditingMenu(selected)}
+                          className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-600 active:bg-neutral-100"
+                        >
+                          編集する
+                        </button>
+                      </div>
+                    )}
                 </>
               )}
             </section>
@@ -976,15 +974,13 @@ export default function TrainingBoardSupabase({
                   </li>
                 )}
                 {absentReports.map((c) => (
-                  <li
+                  <ReportThread
                     key={c.id}
-                    className="rounded-lg border border-neutral-300 bg-neutral-100 p-3"
-                  >
-                    <CommentMeta c={c} />
-                    <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                      {c.text}
-                    </p>
-                  </li>
+                    report={c}
+                    replies={repliesOf(c.id)}
+                    onReply={(text) => submitComment("opinion", text, c.id)}
+                    tone="neutral"
+                  />
                 ))}
               </ul>
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
@@ -1077,10 +1073,12 @@ function ReportThread({
   report,
   replies,
   onReply,
+  tone = "emerald",
 }: {
   report: CommentRow;
   replies: CommentRow[];
   onReply: (text: string) => Promise<void>;
+  tone?: "emerald" | "neutral";
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -1093,10 +1091,27 @@ function ReportThread({
     setShowReplyForm(false);
   }
 
+  const colors =
+    tone === "emerald"
+      ? {
+          border: "border-emerald-200",
+          bg: "bg-emerald-50",
+          tag: "bg-emerald-600 text-white",
+          replyBorder: "border-emerald-200",
+          link: "text-emerald-700 active:text-emerald-900",
+        }
+      : {
+          border: "border-neutral-300",
+          bg: "bg-neutral-100",
+          tag: "bg-neutral-600 text-white",
+          replyBorder: "border-neutral-300",
+          link: "text-neutral-700 active:text-neutral-900",
+        };
+
   return (
-    <li className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+    <li className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
       <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-400">
-        <span className="rounded bg-emerald-600 px-1.5 py-0.5 font-medium text-white">
+        <span className={`rounded px-1.5 py-0.5 font-medium ${colors.tag}`}>
           {commentKindLabel[report.kind]}
         </span>
         <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
@@ -1110,7 +1125,7 @@ function ReportThread({
       </p>
 
       {replies.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2 border-l-2 border-emerald-200 pl-3">
+        <ul className={`mt-3 flex flex-col gap-2 border-l-2 ${colors.replyBorder} pl-3`}>
           {replies.map((r) => (
             <li key={r.id} className="rounded-lg bg-white p-2.5">
               <CommentMeta c={r} />
@@ -1151,7 +1166,7 @@ function ReportThread({
       ) : (
         <button
           onClick={() => setShowReplyForm(true)}
-          className="mt-2 text-xs font-medium text-emerald-700 active:text-emerald-900"
+          className={`mt-2 text-xs font-medium ${colors.link}`}
         >
           ＋ コメントする
         </button>
