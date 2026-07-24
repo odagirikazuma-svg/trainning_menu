@@ -540,22 +540,22 @@ export default function TrainingBoardSupabase({
           {loadingMenus ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
-            <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+            <div className="grid grid-cols-3 gap-2">
               {nearbyMenus.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => selectMenu(m.id)}
-                  className={`flex shrink-0 flex-col rounded-lg border px-3 py-2 text-left text-xs ${
+                  className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
                     m.id === selectedId
                       ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
                       : "border-neutral-200 bg-white text-neutral-600"
                   }`}
                 >
-                  <span className="text-[11px] text-neutral-400">
-                    {m.date}
+                  <span className="truncate text-[10px] text-neutral-400">
+                    {m.date.slice(5)}
                     {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
                   </span>
-                  <span>{m.title}</span>
+                  <span className="truncate">{m.title}</span>
                 </button>
               ))}
               {nearbyRange
@@ -567,20 +567,22 @@ export default function TrainingBoardSupabase({
                   <button
                     key={d}
                     onClick={() => selectJointDate(d)}
-                    className={`flex shrink-0 flex-col rounded-lg border px-3 py-2 text-left text-xs ${
+                    className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
                       jointNoticeDate === d
                         ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
                         : "border-purple-200 bg-purple-50 text-purple-600"
                     }`}
                   >
-                    <span className="text-[11px] text-purple-400">{d}</span>
-                    <span>
+                    <span className="truncate text-[10px] text-purple-400">
+                      {d.slice(5)}
+                    </span>
+                    <span className="truncate">
                       全体練習（{locationLabel[jointElsewhere.get(d)!.location]}）
                     </span>
                   </button>
                 ))}
               {nearbyMenus.length === 0 && (
-                <p className="text-xs text-neutral-400">
+                <p className="col-span-3 text-xs text-neutral-400">
                   前日〜翌日の{locationLabel[activeLocation]}のメニューはありません。下のカレンダーから他の日を選べます。
                 </p>
               )}
