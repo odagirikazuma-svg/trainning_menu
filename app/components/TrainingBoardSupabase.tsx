@@ -457,7 +457,7 @@ export default function TrainingBoardSupabase({
     toDateStr(today),
     toDateStr(tomorrow),
   ];
-  const nearbyMenus = menus.filter((m) => nearbyRange.includes(m.date));
+  const nearbyMenus = chronoMenus.filter((m) => nearbyRange.includes(m.date));
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -665,64 +665,92 @@ export default function TrainingBoardSupabase({
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
             (() => {
-              const jointPhantomDates = nearbyRange.filter(
-                (d) =>
-                  !menus.some((m) => m.date === d) && jointElsewhere.has(d)
+              type Card =
+                | { kind: "menu"; sortKey: string; menu: MenuRow }
+                | { kind: "joint"; sortKey: string; date: string };
+
+              const menuCards: Card[] = nearbyMenus.map((m) => ({
+                kind: "menu",
+                sortKey: `${m.date}T${m.start_time ?? "00:00"}`,
+                menu: m,
+              }));
+              const jointCards: Card[] = nearbyRange
+                .filter(
+                  (d) =>
+                    !menus.some((m) => m.date === d) && jointElsewhere.has(d)
+                )
+                .map((d) => ({
+                  kind: "joint",
+                  sortKey: `${d}T00:00`,
+                  date: d,
+                }));
+              const cards = [...menuCards, ...jointCards].sort((a, b) =>
+                a.sortKey.localeCompare(b.sortKey)
               );
-              const totalCount = nearbyMenus.length + jointPhantomDates.length;
-              const many = totalCount > 3;
+              const many = cards.length > 3;
+
               return (
-                <div
-                  className={
-                    many
-                      ? "-mx-3 flex gap-2 overflow-x-auto px-3 pb-1"
-                      : "grid grid-cols-3 gap-2"
-                  }
-                >
-                  {nearbyMenus.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => selectMenu(m.id)}
-                      className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                        many ? "w-28 shrink-0" : ""
-                      } ${
-                        m.id === selectedId
-                          ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
-                          : "border-neutral-200 bg-white text-neutral-600"
-                      }`}
-                    >
-                      <span className="truncate text-[10px] text-neutral-400">
-                        {m.date.slice(5)}
-                        {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
-                      </span>
-                      <span className="truncate">{m.title}</span>
-                    </button>
-                  ))}
-                  {jointPhantomDates.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => selectJointDate(d)}
-                      className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                        many ? "w-28 shrink-0" : ""
-                      } ${
-                        jointNoticeDate === d
-                          ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
-                          : "border-purple-200 bg-purple-50 text-purple-600"
-                      }`}
-                    >
-                      <span className="truncate text-[10px] text-purple-400">
-                        {d.slice(5)}
-                      </span>
-                      <span className="truncate">
-                        全体練習（
-                        {locationLabel[jointElsewhere.get(d)!.location]}）
-                      </span>
-                    </button>
-                  ))}
-                  {totalCount === 0 && (
-                    <p className="col-span-3 text-xs text-neutral-400">
-                      前日〜翌日の{locationLabel[activeLocation]}
-                      のメニューはありません。下のカレンダーから他の日を選べます。
+                <div className="flex flex-col gap-1">
+                  <div
+                    className={
+                      many
+                        ? "-mx-3 flex gap-2 overflow-x-auto px-3 pb-1"
+                        : "grid grid-cols-3 gap-2"
+                    }
+                  >
+                    {cards.map((c) =>
+                      c.kind === "menu" ? (
+                        <button
+                          key={c.menu.id}
+                          onClick={() => selectMenu(c.menu.id)}
+                          className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                            many ? "w-28 shrink-0" : ""
+                          } ${
+                            c.menu.id === selectedId
+                              ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
+                              : "border-neutral-200 bg-white text-neutral-600"
+                          }`}
+                        >
+                          <span className="truncate text-[10px] text-neutral-400">
+                            {c.menu.date.slice(5)}
+                            {c.menu.start_time
+                              ? ` ${c.menu.start_time.slice(0, 5)}〜`
+                              : ""}
+                          </span>
+                          <span className="truncate">{c.menu.title}</span>
+                        </button>
+                      ) : (
+                        <button
+                          key={c.date}
+                          onClick={() => selectJointDate(c.date)}
+                          className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                            many ? "w-28 shrink-0" : ""
+                          } ${
+                            jointNoticeDate === c.date
+                              ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
+                              : "border-purple-200 bg-purple-50 text-purple-600"
+                          }`}
+                        >
+                          <span className="truncate text-[10px] text-purple-400">
+                            {c.date.slice(5)}
+                          </span>
+                          <span className="truncate">
+                            全体練習（
+                            {locationLabel[jointElsewhere.get(c.date)!.location]}）
+                          </span>
+                        </button>
+                      )
+                    )}
+                    {cards.length === 0 && (
+                      <p className="col-span-3 text-xs text-neutral-400">
+                        前日〜翌日の{locationLabel[activeLocation]}
+                        のメニューはありません。下のカレンダーから他の日を選べます。
+                      </p>
+                    )}
+                  </div>
+                  {many && (
+                    <p className="text-[10px] text-neutral-400">
+                      ← 横にスワイプ／スクロールできます →
                     </p>
                   )}
                 </div>
