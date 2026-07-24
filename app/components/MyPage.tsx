@@ -323,13 +323,20 @@ export default function MyPage({
   async function loadRecentLogs() {
     setLoadingRecentLogs(true);
 
+    // 「今日を含めて3日間」のうち、今日以外＝昨日・おとといの範囲を対象にする
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const rangeStart = toDateKey(twoDaysAgo);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const rangeEnd = toDateKey(yesterday);
+
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
       .select("id, date, content, type")
       .eq("author_id", profile.id)
-      .lt("date", todayStr)
-      .order("date", { ascending: false })
-      .limit(5);
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
 
     if (logError) {
       setErrorMsg(logError.message);
@@ -367,7 +374,9 @@ export default function MyPage({
       menu: { date: string } | null;
     }[];
     const absentRecords: RecentRecord[] = absentRows
-      .filter((r) => r.menu && r.menu.date < todayStr)
+      .filter(
+        (r) => r.menu && r.menu.date >= rangeStart && r.menu.date <= rangeEnd
+      )
       .map((r) => ({
         id: r.id,
         date: r.menu!.date,
@@ -376,9 +385,9 @@ export default function MyPage({
         isAlternative: true,
       }));
 
-    const merged = [...logRecords, ...absentRecords]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 3);
+    const merged = [...logRecords, ...absentRecords].sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
 
     setRecentLogs(merged);
     setLoadingRecentLogs(false);
