@@ -500,7 +500,7 @@ export default function TrainingBoardSupabase({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
         <h1 className="text-base font-bold sm:text-lg">マット練習掲示板</h1>
         <div className="flex items-center gap-2 text-[11px] text-neutral-500">
           <span className="hidden sm:inline">
@@ -532,7 +532,7 @@ export default function TrainingBoardSupabase({
         ))}
       </div>
 
-      <div className="flex flex-col gap-4 p-3 sm:p-4">
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-50 p-2 text-xs text-red-600">
             {errorMsg}
