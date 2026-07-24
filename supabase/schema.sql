@@ -146,3 +146,17 @@ alter table comments add constraint comments_kind_check check (kind in ('opinion
 -- ============================================
 alter table profiles add column if not exists home_location text check (home_location in ('tama', 'otsuka'));
 alter table menus add column if not exists is_joint boolean not null default false;
+
+-- ============================================
+-- 追加: メニューの編集履歴（誰がいつ編集したか）、更新権限
+-- ============================================
+alter table menus add column if not exists last_edited_by uuid references profiles(id);
+alter table menus add column if not exists last_edited_at timestamptz;
+
+create policy "menus_update_leader_coach" on menus
+  for update using (
+    team_id in (
+      select team_id from profiles
+      where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+    )
+  );

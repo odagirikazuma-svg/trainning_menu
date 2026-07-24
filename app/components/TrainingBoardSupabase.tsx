@@ -24,6 +24,9 @@ type MenuRow = {
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+  editor: { display_name: string } | null;
 };
 
 type CommentRow = {
@@ -68,6 +71,7 @@ export default function TrainingBoardSupabase({
   const [loadingMenus, setLoadingMenus] = useState(true);
 
   const [showNewForm, setShowNewForm] = useState(false);
+  const [confirmingNew, setConfirmingNew] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
   const [newTitle, setNewTitle] = useState("");
@@ -77,6 +81,11 @@ export default function TrainingBoardSupabase({
   const [absentReason, setAbsentReason] = useState("");
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [newIsJoint, setNewIsJoint] = useState(false);
+  const [editingMenu, setEditingMenu] = useState(false);
+  const [editDate, setEditDate] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberCounts, setMemberCounts] = useState<{
     tama: number;
@@ -126,7 +135,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, location, start_time, is_joint, created_at, created_by, creator:profiles!menus_created_by_fkey(display_name)"
+        "id, date, title, content, location, start_time, is_joint, created_at, created_by, last_edited_by, last_edited_at, creator:profiles!menus_created_by_fkey(display_name), editor:profiles!menus_last_edited_by_fkey(display_name)"
       )
       .eq("location", activeLocation)
       .order("date", { ascending: false });
@@ -244,8 +253,41 @@ export default function TrainingBoardSupabase({
     setNewContent("");
     setNewIsJoint(false);
     setShowNewForm(false);
+    setConfirmingNew(false);
     await loadMenus();
     if (data) setSelectedId(data.id);
+  }
+
+  function startEditingMenu(m: MenuRow) {
+    setEditDate(m.date);
+    setEditStartTime(m.start_time ?? "");
+    setEditTitle(m.title);
+    setEditContent(m.content);
+    setEditingMenu(true);
+  }
+
+  async function handleUpdateMenu(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedId || !editDate || !editTitle || !editContent) return;
+    const { error } = await supabase
+      .from("menus")
+      .update({
+        date: editDate,
+        start_time: editStartTime || null,
+        title: editTitle,
+        content: editContent,
+        last_edited_by: profile.id,
+        last_edited_at: new Date().toISOString(),
+      })
+      .eq("id", selectedId);
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    setEditingMenu(false);
+    await loadMenus();
+    setSelectedId(selectedId);
   }
 
   async function submitComment(
@@ -313,6 +355,7 @@ export default function TrainingBoardSupabase({
 
   function selectMenu(id: string) {
     setJointNoticeDate(null);
+    setEditingMenu(false);
     setSelectedId(id);
   }
 
@@ -385,7 +428,10 @@ export default function TrainingBoardSupabase({
         <div className="flex flex-col gap-2">
           {canCreateMenu(profile.role) && (
             <button
-              onClick={() => setShowNewForm((v) => !v)}
+              onClick={() => {
+                setShowNewForm((v) => !v);
+                setConfirmingNew(false);
+              }}
               className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white active:bg-neutral-700"
             >
               {showNewForm
@@ -399,53 +445,95 @@ export default function TrainingBoardSupabase({
               onSubmit={handleCreateMenu}
               className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
             >
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                required
-              />
-              <label className="flex flex-col text-[11px] text-neutral-500">
-                開始時刻
-                <input
-                  type="time"
-                  value={newStartTime}
-                  onChange={(e) => setNewStartTime(e.target.value)}
-                  className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                />
-              </label>
-              <input
-                type="text"
-                placeholder="タイトル（例：通常練習）"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                required
-              />
-              <textarea
-                placeholder="メニュー詳細（自由記述）"
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                rows={4}
-                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                required
-              />
-              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  checked={newIsJoint}
-                  onChange={(e) => setNewIsJoint(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                全体練習にする（もう一方の拠点はこの練習に合流）
-              </label>
-              <button
-                type="submit"
-                className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
-              >
-                {locationLabel[activeLocation]}に投稿する
-              </button>
+              {confirmingNew ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+                  <p className="text-xs font-semibold text-blue-700">
+                    以下の内容で投稿します。よろしいですか？
+                  </p>
+                  <p>
+                    {locationLabel[activeLocation]}・{newDate}
+                    {newStartTime && ` ${newStartTime}〜`}
+                    {newIsJoint && "・全体練習"}
+                  </p>
+                  <p className="font-bold">{newTitle}</p>
+                  <p className="whitespace-pre-wrap text-neutral-800">
+                    {newContent}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <label className="flex flex-col text-[11px] text-neutral-500">
+                    開始時刻
+                    <input
+                      type="time"
+                      step={600}
+                      value={newStartTime}
+                      onChange={(e) => setNewStartTime(e.target.value)}
+                      className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="タイトル（例：通常練習）"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <textarea
+                    placeholder="メニュー詳細（自由記述）"
+                    value={newContent}
+                    onChange={(e) => setNewContent(e.target.value)}
+                    rows={4}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <label className="flex items-center gap-2 text-sm text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={newIsJoint}
+                      onChange={(e) => setNewIsJoint(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    全体練習にする（もう一方の拠点はこの練習に合流）
+                  </label>
+                </>
+              )}
+
+              {confirmingNew ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingNew(false)}
+                    className="flex-1 rounded-lg border border-neutral-300 py-2.5 text-sm text-neutral-600"
+                  >
+                    戻って修正
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white active:bg-blue-700"
+                  >
+                    この内容で投稿する
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newDate && newTitle && newContent) setConfirmingNew(true);
+                  }}
+                  className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
+                >
+                  確認する
+                </button>
+              )}
             </form>
           )}
 
@@ -523,15 +611,88 @@ export default function TrainingBoardSupabase({
         ) : selected ? (
           <>
             <section className="rounded-lg border border-neutral-200 p-4">
-              <div className="mb-1 text-xs text-neutral-400">
-                {locationLabel[selected.location]}・{selected.date}
-                {selected.start_time && `・${selected.start_time.slice(0, 5)}〜`}
-                ・作成者: {selected.creator?.display_name ?? "不明"}
-              </div>
-              <h2 className="mb-2 text-base font-bold">{selected.title}</h2>
-              <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                {selected.content}
-              </p>
+              {editingMenu ? (
+                <form onSubmit={handleUpdateMenu} className="flex flex-col gap-2">
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <label className="flex flex-col text-[11px] text-neutral-500">
+                    開始時刻
+                    <input
+                      type="time"
+                      step={600}
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                      className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    rows={4}
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMenu(false)}
+                      className="flex-1 rounded-lg border border-neutral-300 py-2.5 text-sm text-neutral-600"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white active:bg-blue-700"
+                    >
+                      保存する
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="mb-1 flex items-start justify-between gap-2 text-xs text-neutral-400">
+                    <span>
+                      {locationLabel[selected.location]}・{selected.date}
+                      {selected.start_time &&
+                        `・${selected.start_time.slice(0, 5)}〜`}
+                      ・作成者: {selected.creator?.display_name ?? "不明"}
+                      {selected.editor && (
+                        <>
+                          （編集: {selected.editor.display_name}）
+                        </>
+                      )}
+                    </span>
+                    {(canCreateMenu(profile.role) ||
+                      profile.role === "coach") &&
+                      !isReportOpen(selected) && (
+                        <button
+                          onClick={() => startEditingMenu(selected)}
+                          className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-600 active:bg-neutral-100"
+                        >
+                          編集する
+                        </button>
+                      )}
+                  </div>
+                  <h2 className="mb-2 text-base font-bold">
+                    {selected.title}
+                  </h2>
+                  <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                    {selected.content}
+                  </p>
+                </>
+              )}
             </section>
 
             {/* 意見・コメント */}
@@ -645,7 +806,7 @@ export default function TrainingBoardSupabase({
                     type="text"
                     value={absentReason}
                     onChange={(e) => setAbsentReason(e.target.value)}
-                    placeholder="例：授業のため参加できず"
+                    placeholder="例：授業・病院・出稽古など"
                     className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                   />
                 </label>
@@ -654,8 +815,10 @@ export default function TrainingBoardSupabase({
                   <textarea
                     value={absentAlternative}
                     onChange={(e) => setAbsentAlternative(e.target.value)}
-                    placeholder="例：自宅で腹筋・腕立てを各3セット実施"
-                    rows={2}
+                    placeholder={
+                      "例：\n〇スナッチ\n　50㎏×7、6、5\n　60kg×4、3\n　70kg×1、1\n〇BP\n　100kg ×10、8、6\n　80kg×7、5\n〇荷重懸垂\n　20kg×10、7、5\n　10kg×8、5\n　0㎏×13\n〇DL\n　120kg×13、10、9\n　140kg×6、5、3"
+                    }
+                    rows={8}
                     className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                   />
                 </label>
