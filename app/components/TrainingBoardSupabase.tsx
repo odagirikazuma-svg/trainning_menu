@@ -759,7 +759,7 @@ export default function TrainingBoardSupabase({
           )}
         </div>
 
-        {jointNoticeDate ? (
+        {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
             <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
             <p className="mb-2">
@@ -771,8 +771,10 @@ export default function TrainingBoardSupabase({
             </p>
             <button
               onClick={() => {
-                const loc = jointElsewhere.get(jointNoticeDate)!.location;
-                setActiveLocation(loc);
+                const loc = jointElsewhere.get(jointNoticeDate)?.location;
+                setJointNoticeDate(null);
+                setSelectedId(null);
+                if (loc) setActiveLocation(loc);
               }}
               className="rounded-lg bg-purple-600 px-4 py-2 text-xs font-medium text-white active:bg-purple-700"
             >
