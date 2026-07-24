@@ -116,6 +116,9 @@ export default function MyPage({
   const [todayLogType, setTodayLogType] = useState<TrainingType>("weight");
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
+  const [todayAbsentRecords, setTodayAbsentRecords] = useState<RecentRecord[]>(
+    []
+  );
 
   const [recentLogs, setRecentLogs] = useState<RecentRecord[]>([]);
   const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
@@ -137,6 +140,7 @@ export default function MyPage({
     else setLoadingTodo(false);
     loadNextMatch();
     loadTodayLog();
+    loadTodayAbsent();
     loadRecentLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -318,6 +322,38 @@ export default function MyPage({
       setTodayLogType(row.type);
     }
     setLoadingLog(false);
+  }
+
+  // 今日提出済みの未実施報告(代替メニュー)を取得する
+  async function loadTodayAbsent() {
+    const { data, error } = await supabase
+      .from("comments")
+      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null);
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+
+    const rows = (data ?? []) as unknown as {
+      id: string;
+      text: string;
+      alt_type: TrainingType;
+      menu: { date: string } | null;
+    }[];
+    const todayRecords: RecentRecord[] = rows
+      .filter((r) => r.menu && r.menu.date === todayStr)
+      .map((r) => ({
+        id: r.id,
+        date: r.menu!.date,
+        content: r.text,
+        type: r.alt_type,
+        isAlternative: true,
+      }));
+    setTodayAbsentRecords(todayRecords);
   }
 
   async function loadRecentLogs() {
@@ -659,6 +695,27 @@ export default function MyPage({
           <h2 className="text-sm font-semibold text-neutral-700">
             本日のトレーニングメニュー
           </h2>
+
+          {todayAbsentRecords.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-lg border border-neutral-200 bg-neutral-50 p-3"
+            >
+              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
+                />
+                {trainingTypeLabel[r.type]}
+                <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                  未実施報告の代替メニュー
+                </span>
+              </div>
+              <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                {r.content}
+              </p>
+            </div>
+          ))}
+
           {loadingLog ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
