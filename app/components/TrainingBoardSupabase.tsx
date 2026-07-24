@@ -94,6 +94,9 @@ export default function TrainingBoardSupabase({
   const [commentText, setCommentText] = useState("");
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
+  const [absentAltType, setAbsentAltType] = useState<
+    "running" | "weight" | "other"
+  >("running");
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
@@ -432,9 +435,16 @@ export default function TrainingBoardSupabase({
   async function handleAddAbsent(e: React.FormEvent) {
     e.preventDefault();
     if (!absentReason.trim() || !absentAlternative.trim()) return;
-    const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${absentAlternative.trim()}`;
+    const altTypeLabel =
+      absentAltType === "running"
+        ? "ランニング"
+        : absentAltType === "weight"
+        ? "ウェイト"
+        : "その他";
+    const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
     await submitComment("absent", combined);
     setAbsentReason("");
+    setAbsentAltType("running");
     setAbsentAlternative("");
   }
 
@@ -989,6 +999,22 @@ export default function TrainingBoardSupabase({
                 </label>
                 <label className="flex flex-col text-[11px] text-neutral-500">
                   代替メニュー
+                  <select
+                    value={absentAltType}
+                    onChange={(e) =>
+                      setAbsentAltType(
+                        e.target.value as "running" | "weight" | "other"
+                      )
+                    }
+                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                  >
+                    <option value="running">ランニング</option>
+                    <option value="weight">ウェイト</option>
+                    <option value="other">その他</option>
+                  </select>
+                </label>
+                <label className="flex flex-col text-[11px] text-neutral-500">
+                  詳細
                   <textarea
                     value={absentAlternative}
                     onChange={(e) => setAbsentAlternative(e.target.value)}
