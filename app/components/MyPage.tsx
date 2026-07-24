@@ -37,6 +37,14 @@ type WeightLogRow = {
   type: TrainingType;
 };
 
+type RecentRecord = {
+  id: string;
+  date: string;
+  content: string;
+  type: TrainingType;
+  isAlternative: boolean; // 未実施報告の代替メニューかどうか
+};
+
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -109,7 +117,7 @@ export default function MyPage({
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
 
-  const [recentLogs, setRecentLogs] = useState<WeightLogRow[]>([]);
+  const [recentLogs, setRecentLogs] = useState<RecentRecord[]>([]);
   const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
 
   // カレンダー用
@@ -314,19 +322,65 @@ export default function MyPage({
 
   async function loadRecentLogs() {
     setLoadingRecentLogs(true);
-    const { data, error } = await supabase
+
+    const { data: logData, error: logError } = await supabase
       .from("weight_logs")
       .select("id, date, content, type")
       .eq("author_id", profile.id)
       .lt("date", todayStr)
       .order("date", { ascending: false })
-      .limit(3);
+      .limit(5);
 
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setRecentLogs((data ?? []) as WeightLogRow[]);
+    if (logError) {
+      setErrorMsg(logError.message);
+      setLoadingRecentLogs(false);
+      return;
     }
+
+    const { data: absentData, error: absentError } = await supabase
+      .from("comments")
+      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null);
+
+    if (absentError) {
+      setErrorMsg(absentError.message);
+      setLoadingRecentLogs(false);
+      return;
+    }
+
+    const logRecords: RecentRecord[] = (
+      (logData ?? []) as WeightLogRow[]
+    ).map((l) => ({
+      id: l.id,
+      date: l.date,
+      content: l.content,
+      type: l.type,
+      isAlternative: false,
+    }));
+
+    const absentRows = (absentData ?? []) as unknown as {
+      id: string;
+      text: string;
+      alt_type: TrainingType;
+      menu: { date: string } | null;
+    }[];
+    const absentRecords: RecentRecord[] = absentRows
+      .filter((r) => r.menu && r.menu.date < todayStr)
+      .map((r) => ({
+        id: r.id,
+        date: r.menu!.date,
+        content: r.text,
+        type: r.alt_type,
+        isAlternative: true,
+      }));
+
+    const merged = [...logRecords, ...absentRecords]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 3);
+
+    setRecentLogs(merged);
     setLoadingRecentLogs(false);
   }
 
@@ -661,6 +715,11 @@ export default function MyPage({
                       className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
                     />
                     {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
+                    {log.isAlternative && (
+                      <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                        代替メニュー
+                      </span>
+                    )}
                   </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
                     {log.content || "(記録なし)"}
