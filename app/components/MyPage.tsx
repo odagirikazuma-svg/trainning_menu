@@ -100,6 +100,8 @@ export default function MyPage({
   const [showMatchForm, setShowMatchForm] = useState(false);
   const [newMatchName, setNewMatchName] = useState("");
   const [newMatchDate, setNewMatchDate] = useState("");
+  const [editingMatch, setEditingMatch] = useState(false);
+  const [editMatchDate, setEditMatchDate] = useState("");
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [todayLogText, setTodayLogText] = useState("");
@@ -252,6 +254,41 @@ export default function MyPage({
     setNewMatchName("");
     setNewMatchDate("");
     setShowMatchForm(false);
+    await loadNextMatch();
+  }
+
+  function startEditingMatch() {
+    if (!nextMatch) return;
+    setEditMatchDate(nextMatch.date);
+    setEditingMatch(true);
+  }
+
+  async function handleUpdateMatchDate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nextMatch || !editMatchDate) return;
+    const { error } = await supabase
+      .from("matches")
+      .update({ date: editMatchDate })
+      .eq("id", nextMatch.id);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    setEditingMatch(false);
+    await loadNextMatch();
+  }
+
+  async function handleDeleteMatch() {
+    if (!nextMatch) return;
+    const { error } = await supabase
+      .from("matches")
+      .delete()
+      .eq("id", nextMatch.id);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    setEditingMatch(false);
     await loadNextMatch();
   }
 
@@ -422,7 +459,7 @@ export default function MyPage({
           {loadingMatch ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : nextMatch ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+            <div className="relative rounded-lg border border-red-200 bg-red-50 p-4 text-center">
               <p className="text-xs text-red-600">次の試合【{nextMatch.name}】まで</p>
               <p className="text-3xl font-bold text-red-700">
                 あと{matchDays}日
@@ -430,6 +467,50 @@ export default function MyPage({
               <p className="text-[11px] text-red-500">
                 {formatMonthDay(nextMatch.date)}
               </p>
+
+              {editingMatch ? (
+                <form
+                  onSubmit={handleUpdateMatchDate}
+                  className="mt-3 flex flex-col items-center gap-2"
+                >
+                  <input
+                    type="date"
+                    value={editMatchDate}
+                    onChange={(e) => setEditMatchDate(e.target.value)}
+                    className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm"
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
+                    >
+                      日付を更新
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteMatch}
+                      className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 active:bg-red-100"
+                    >
+                      削除する
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingMatch(false)}
+                      className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                    >
+                      閉じる
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  onClick={startEditingMatch}
+                  className="absolute bottom-2 right-2 rounded border border-red-200 bg-white px-2 py-1 text-[10px] text-red-500 active:bg-red-100"
+                >
+                  編集
+                </button>
+              )}
             </div>
           ) : (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-400">

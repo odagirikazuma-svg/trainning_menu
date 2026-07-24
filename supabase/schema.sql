@@ -307,3 +307,9 @@ create policy "matches_delete" on matches
       )
     )
   );
+
+-- ============================================
+-- 追加: 自分の試合の日付を更新できるようにする
+-- ============================================
+create policy "matches_update_self" on matches
+  for update using (member_id = auth.uid());
