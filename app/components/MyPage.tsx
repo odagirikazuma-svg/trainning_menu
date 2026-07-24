@@ -45,6 +45,12 @@ type RecentRecord = {
   isAlternative: boolean; // 未実施報告の代替メニューかどうか
 };
 
+type WeightMaxRow = {
+  bench: number | null;
+  squat: number | null;
+  deadlift: number | null;
+};
+
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -123,6 +129,17 @@ export default function MyPage({
   const [recentLogs, setRecentLogs] = useState<RecentRecord[]>([]);
   const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
 
+  const [weightMax, setWeightMax] = useState<WeightMaxRow>({
+    bench: null,
+    squat: null,
+    deadlift: null,
+  });
+  const [benchInput, setBenchInput] = useState("");
+  const [squatInput, setSquatInput] = useState("");
+  const [deadliftInput, setDeadliftInput] = useState("");
+  const [loadingMax, setLoadingMax] = useState(true);
+  const [savingMax, setSavingMax] = useState(false);
+
   // カレンダー用
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
@@ -142,6 +159,7 @@ export default function MyPage({
     loadTodayLog();
     loadTodayAbsent();
     loadRecentLogs();
+    loadWeightMax();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -456,6 +474,53 @@ export default function MyPage({
     setSavingLog(false);
   }
 
+  async function loadWeightMax() {
+    setLoadingMax(true);
+    const { data, error } = await supabase
+      .from("weight_maxes")
+      .select("bench, squat, deadlift")
+      .eq("author_id", profile.id)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else if (data) {
+      const row = data as WeightMaxRow;
+      setWeightMax(row);
+      setBenchInput(row.bench != null ? String(row.bench) : "");
+      setSquatInput(row.squat != null ? String(row.squat) : "");
+      setDeadliftInput(row.deadlift != null ? String(row.deadlift) : "");
+    }
+    setLoadingMax(false);
+  }
+
+  async function handleSaveWeightMax() {
+    setSavingMax(true);
+    const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
+    const payload = {
+      team_id: profile.team_id,
+      author_id: profile.id,
+      bench: toNum(benchInput),
+      squat: toNum(squatInput),
+      deadlift: toNum(deadliftInput),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("weight_maxes")
+      .upsert(payload, { onConflict: "author_id" });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setWeightMax({
+        bench: payload.bench,
+        squat: payload.squat,
+        deadlift: payload.deadlift,
+      });
+    }
+    setSavingMax(false);
+  }
+
   async function loadCalendarData() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
@@ -538,10 +603,10 @@ export default function MyPage({
             掲示板に戻る
           </button>
           <button
-            onClick={signOut}
+            onClick={() => router.push("/team")}
             className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
           >
-            ログアウト
+            チームページ
           </button>
         </div>
       </header>
@@ -796,6 +861,65 @@ export default function MyPage({
           )}
         </section>
 
+        {/* ウェイトMAX（自己ベスト） */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            ウェイトMAX（自己ベスト）
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            チームページの一覧に反映されます。
+          </p>
+          {loadingMax ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  ベンチプレス(kg)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={benchInput}
+                    onChange={(e) => setBenchInput(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  スクワット(kg)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={squatInput}
+                    onChange={(e) => setSquatInput(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  デッドリフト(kg)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={deadliftInput}
+                    onChange={(e) => setDeadliftInput(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <button
+                onClick={handleSaveWeightMax}
+                disabled={savingMax}
+                className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+              >
+                {weightMax.bench == null &&
+                weightMax.squat == null &&
+                weightMax.deadlift == null
+                  ? "登録する"
+                  : "更新する"}
+              </button>
+            </div>
+          )}
+        </section>
+
         {/* トレーニングカレンダー */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
@@ -824,6 +948,16 @@ export default function MyPage({
             準備中です。
           </p>
         </section>
+
+        {/* ログアウト（一番下に配置） */}
+        <div className="border-t border-neutral-200 pt-4">
+          <button
+            onClick={signOut}
+            className="w-full rounded-lg border border-neutral-300 py-3 text-sm font-medium text-neutral-600 active:bg-neutral-100"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
     </div>
   );

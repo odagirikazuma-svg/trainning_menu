@@ -1,0 +1,511 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "../lib/supabase/client";
+import {
+  currentGrade,
+  Location,
+  locationLabel,
+  locations,
+  Role,
+  roleLabel,
+} from "../lib/types";
+import type { Profile } from "./AuthGate";
+
+type MemberRow = {
+  id: string;
+  display_name: string;
+  role: Role;
+  home_location: Location | null;
+  entry_year: number | null;
+};
+
+type MatchRow = {
+  id: string;
+  name: string;
+  date: string;
+  member_id: string | null;
+};
+
+type MonthMenuRow = {
+  id: string;
+  date: string;
+  location: Location;
+  is_off: boolean;
+  is_joint: boolean;
+};
+
+type WeightMaxRow = {
+  author_id: string;
+  bench: number | null;
+  squat: number | null;
+  deadlift: number | null;
+};
+
+const locationDotColor: Record<Location, string> = {
+  tama: "bg-blue-500",
+  otsuka: "bg-orange-500",
+};
+
+function toDateKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// "YYYY-MM-DD" -> "7月24日"
+function formatMonthDay(dateStr: string) {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+export default function TeamPage({
+  profile,
+  signOut,
+}: {
+  profile: Profile;
+  signOut: () => void;
+}) {
+  const supabase = createClient();
+  const router = useRouter();
+  const todayStr = toDateKey(new Date());
+
+  const [teamName, setTeamName] = useState<string | null>(null);
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+  const [showPastMatches, setShowPastMatches] = useState(false);
+
+  const [calendarCursor, setCalendarCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [monthMenus, setMonthMenus] = useState<MonthMenuRow[]>([]);
+  const [loadingMonthMenus, setLoadingMonthMenus] = useState(true);
+
+  const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
+  const [loadingMaxes, setLoadingMaxes] = useState(true);
+
+  useEffect(() => {
+    loadTeamInfo();
+    loadMembers();
+    loadMatches();
+    loadWeightMaxes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    loadMonthMenus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarCursor]);
+
+  async function loadTeamInfo() {
+    const { data, error } = await supabase
+      .from("teams")
+      .select("name")
+      .eq("id", profile.team_id)
+      .maybeSingle();
+    if (error) {
+      setErrorMsg(error.message);
+    } else if (data) {
+      setTeamName((data as { name: string }).name);
+    }
+  }
+
+  async function loadMembers() {
+    setLoadingMembers(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, display_name, role, home_location, entry_year")
+      .eq("team_id", profile.team_id)
+      .order("display_name", { ascending: true });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setMembers((data ?? []) as MemberRow[]);
+    }
+    setLoadingMembers(false);
+  }
+
+  async function loadMatches() {
+    setLoadingMatches(true);
+    const { data, error } = await supabase
+      .from("matches")
+      .select("id, name, date, member_id")
+      .eq("team_id", profile.team_id)
+      .order("date", { ascending: true });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setMatches((data ?? []) as MatchRow[]);
+    }
+    setLoadingMatches(false);
+  }
+
+  async function loadMonthMenus() {
+    setLoadingMonthMenus(true);
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const rangeStart = toDateKey(new Date(year, month, 1));
+    const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+    const { data, error } = await supabase
+      .from("menus")
+      .select("id, date, location, is_off, is_joint")
+      .eq("team_id", profile.team_id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setMonthMenus((data ?? []) as MonthMenuRow[]);
+    }
+    setLoadingMonthMenus(false);
+  }
+
+  async function loadWeightMaxes() {
+    setLoadingMaxes(true);
+    const { data, error } = await supabase
+      .from("weight_maxes")
+      .select("author_id, bench, squat, deadlift")
+      .eq("team_id", profile.team_id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setWeightMaxes((data ?? []) as WeightMaxRow[]);
+    }
+    setLoadingMaxes(false);
+  }
+
+  const memberNameById = new Map(members.map((m) => [m.id, m.display_name]));
+  const upcomingMatches = matches.filter((m) => m.date >= todayStr);
+  const pastMatches = matches.filter((m) => m.date < todayStr);
+  const maxByAuthor = new Map(weightMaxes.map((w) => [w.author_id, w]));
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <h1 className="text-base font-bold sm:text-lg">チームページ</h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+          <button
+            onClick={() => router.push("/mypage")}
+            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+          >
+            マイページ
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+          >
+            掲示板に戻る
+          </button>
+        </div>
+      </header>
+
+      <div className="flex flex-col gap-5 p-4 sm:p-5">
+        {errorMsg && (
+          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+            {errorMsg}
+          </p>
+        )}
+
+        {/* チーム全体の情報 */}
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            チーム情報
+          </h2>
+          <div className="rounded-lg border border-neutral-200 p-4">
+            <p className="text-base font-bold text-neutral-800">
+              {teamName ?? "読み込み中…"}
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              部員数 {members.length}人
+            </p>
+          </div>
+          {loadingMembers ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : (
+            <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+              {members.map((m) => {
+                const gradeLabel =
+                  m.entry_year != null ? `${currentGrade(m.entry_year)}年` : null;
+                return (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                  >
+                    <span className="font-medium text-neutral-800">
+                      {m.display_name}
+                      {gradeLabel && (
+                        <span className="ml-1 text-neutral-400">
+                          {gradeLabel}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-2 text-neutral-500">
+                      {m.home_location && (
+                        <span className="rounded bg-neutral-100 px-1.5 py-0.5">
+                          {locationLabel[m.home_location]}
+                        </span>
+                      )}
+                      <span className="rounded bg-neutral-100 px-1.5 py-0.5">
+                        {roleLabel[m.role]}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* 試合スケジュール */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            試合スケジュール
+          </h2>
+          {loadingMatches ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : upcomingMatches.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              今後の試合予定はまだ登録されていません。
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {upcomingMatches.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs"
+                >
+                  <span className="font-medium text-red-700">{m.name}</span>
+                  <span className="flex items-center gap-2 text-red-500">
+                    {m.member_id ? (
+                      <span>
+                        {memberNameById.get(m.member_id) ?? "部員"}の試合
+                      </span>
+                    ) : (
+                      <span>チーム全体</span>
+                    )}
+                    <span>{formatMonthDay(m.date)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {pastMatches.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setShowPastMatches((v) => !v)}
+                className="self-start text-[11px] font-medium text-neutral-500 active:text-neutral-700"
+              >
+                {showPastMatches
+                  ? "終了した試合を隠す"
+                  : `終了した試合を見る（${pastMatches.length}件）`}
+              </button>
+              {showPastMatches && (
+                <ul className="flex flex-col gap-2">
+                  {pastMatches.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-500"
+                    >
+                      <span className="font-medium">{m.name}</span>
+                      <span className="flex items-center gap-2">
+                        {m.member_id ? (
+                          <span>
+                            {memberNameById.get(m.member_id) ?? "部員"}の試合
+                          </span>
+                        ) : (
+                          <span>チーム全体</span>
+                        )}
+                        <span>{formatMonthDay(m.date)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* 月間の練習スケジュール */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            月間の練習スケジュール
+          </h2>
+          <MonthlyCalendar
+            cursor={calendarCursor}
+            onCursorChange={setCalendarCursor}
+            menus={monthMenus}
+            loading={loadingMonthMenus}
+          />
+        </section>
+
+        {/* 全員のウェイトMAX */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            ウェイトMAX（自己ベスト）一覧
+          </h2>
+          {loadingMembers || loadingMaxes ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-neutral-200">
+              <table className="w-full min-w-[420px] text-xs">
+                <thead>
+                  <tr className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
+                    <th className="px-3 py-2 text-left font-medium">氏名</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      ベンチ
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      スクワット
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      デッドリフト
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {members.map((m) => {
+                    const max = maxByAuthor.get(m.id);
+                    const fmt = (v: number | null | undefined) =>
+                      v != null ? `${v}kg` : "未登録";
+                    return (
+                      <tr key={m.id}>
+                        <td className="px-3 py-2 font-medium text-neutral-800">
+                          {m.display_name}
+                        </td>
+                        <td className="px-3 py-2 text-right text-neutral-600">
+                          {fmt(max?.bench)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-neutral-600">
+                          {fmt(max?.squat)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-neutral-600">
+                          {fmt(max?.deadlift)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function MonthlyCalendar({
+  cursor,
+  onCursorChange,
+  menus,
+  loading,
+}: {
+  cursor: Date;
+  onCursorChange: (d: Date) => void;
+  menus: MonthMenuRow[];
+  loading: boolean;
+}) {
+  const byDate = new Map<string, MonthMenuRow[]>();
+  for (const m of menus) {
+    const list = byDate.get(m.date) ?? [];
+    list.push(m);
+    byDate.set(m.date, list);
+  }
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+
+  return (
+    <div className="rounded-lg border border-neutral-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          onClick={() => onCursorChange(new Date(year, month - 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＜
+        </button>
+        <span className="text-sm font-semibold">
+          {year}年{month + 1}月
+        </span>
+        <button
+          onClick={() => onCursorChange(new Date(year, month + 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＞
+        </button>
+      </div>
+      {loading ? (
+        <p className="text-xs text-neutral-400">読み込み中…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400">
+            {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
+              <div key={w}>{w}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((date, i) => {
+              if (!date) return <div key={i} />;
+              const key = toDateKey(date);
+              const rows = byDate.get(key) ?? [];
+              const hasOff = rows.some((r) => r.is_off);
+              const activeLocations = Array.from(
+                new Set(
+                  rows.filter((r) => !r.is_off).map((r) => r.location)
+                )
+              );
+              return (
+                <div
+                  key={i}
+                  className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600"
+                >
+                  <span>{date.getDate()}</span>
+                  {activeLocations.length > 0 && (
+                    <span className="flex flex-wrap justify-center gap-0.5">
+                      {activeLocations.map((loc) => (
+                        <span
+                          key={loc}
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${locationDotColor[loc]}`}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  {hasOff && activeLocations.length === 0 && (
+                    <span className="text-[9px] text-neutral-300">off</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+            {locations.map((loc) => (
+              <span key={loc} className="flex items-center gap-1">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${locationDotColor[loc]}`}
+                />
+                {locationLabel[loc]}
+              </span>
+            ))}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}

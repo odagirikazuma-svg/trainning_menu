@@ -38,6 +38,7 @@ type CommentRow = {
   parent_id: string | null;
   created_at: string;
   author_id: string;
+  alt_type: "running" | "weight" | "other" | null;
   author: { display_name: string; role: Profile["role"] } | null;
 };
 
@@ -308,7 +309,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("comments")
       .select(
-        "id, text, kind, parent_id, created_at, author_id, author:profiles!comments_author_id_fkey(display_name, role)"
+        "id, text, kind, parent_id, created_at, author_id, alt_type, author:profiles!comments_author_id_fkey(display_name, role)"
       )
       .eq("menu_id", menuId)
       .order("created_at", { ascending: true });
@@ -452,6 +453,36 @@ export default function TrainingBoardSupabase({
     }
   }
 
+  async function handleUpdateComment(
+    commentId: string,
+    text: string,
+    altType: string | null = null
+  ) {
+    if (!text.trim()) return;
+    const { error } = await supabase
+      .from("comments")
+      .update({ text: text.trim(), alt_type: altType })
+      .eq("id", commentId);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    if (selectedId) await loadComments(selectedId);
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    if (selectedId) await loadComments(selectedId);
+    await loadSubmissionSummary(menus.map((m) => m.id));
+  }
+
   async function handleAddComment(e: React.FormEvent) {
     e.preventDefault();
     await submitComment("opinion", commentText);
@@ -494,6 +525,9 @@ export default function TrainingBoardSupabase({
   );
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
+  const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
+  const myAbsent =
+    absentReports.find((c) => c.author_id === profile.id) ?? null;
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
   const reportSubmittedCount = selectedSubmission
@@ -1034,11 +1068,18 @@ export default function TrainingBoardSupabase({
                     report={r}
                     replies={repliesOf(r.id)}
                     onReply={(text) => submitComment("opinion", text, r.id)}
+                    currentUserId={profile.id}
+                    onUpdate={(text) => handleUpdateComment(r.id, text)}
+                    onDelete={() => handleDeleteComment(r.id)}
                   />
                 ))}
               </ul>
 
-              {reportOpen ? (
+              {myReport ? (
+                <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
+                  実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
+                </p>
+              ) : reportOpen ? (
                 <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
                     value={reportText}
@@ -1079,9 +1120,20 @@ export default function TrainingBoardSupabase({
                     replies={repliesOf(c.id)}
                     onReply={(text) => submitComment("opinion", text, c.id)}
                     tone="neutral"
+                    currentUserId={profile.id}
+                    editableAltType
+                    onUpdate={(text, altType) =>
+                      handleUpdateComment(c.id, text, altType ?? null)
+                    }
+                    onDelete={() => handleDeleteComment(c.id)}
                   />
                 ))}
               </ul>
+              {myAbsent ? (
+                <p className="rounded-lg bg-neutral-100 p-3 text-xs text-neutral-600">
+                  未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
+                </p>
+              ) : (
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
                 <label className="flex flex-col text-[11px] text-neutral-500">
                   未実施の理由
@@ -1128,6 +1180,7 @@ export default function TrainingBoardSupabase({
                   未実施報告を提出する
                 </button>
               </form>
+              )}
             </section>
           </>
         ) : (
@@ -1189,14 +1242,28 @@ function ReportThread({
   replies,
   onReply,
   tone = "emerald",
+  currentUserId,
+  editableAltType = false,
+  onUpdate,
+  onDelete,
 }: {
   report: CommentRow;
   replies: CommentRow[];
   onReply: (text: string) => Promise<void>;
   tone?: "emerald" | "neutral";
+  currentUserId?: string;
+  editableAltType?: boolean;
+  onUpdate?: (text: string, altType?: string | null) => Promise<void>;
+  onDelete?: () => Promise<void>;
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReplyForm, setShowReplyForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(report.text);
+  const [editAltType, setEditAltType] = useState(report.alt_type ?? "running");
+  const [saving, setSaving] = useState(false);
+
+  const isOwn = currentUserId != null && report.author_id === currentUserId;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1204,6 +1271,22 @@ function ReportThread({
     await onReply(replyText);
     setReplyText("");
     setShowReplyForm(false);
+  }
+
+  async function handleSaveEdit() {
+    if (!editText.trim() || !onUpdate) return;
+    setSaving(true);
+    await onUpdate(editText, editableAltType ? editAltType : undefined);
+    setSaving(false);
+    setIsEditing(false);
+  }
+
+  async function handleDeleteClick() {
+    if (!onDelete) return;
+    if (!window.confirm("この報告を削除しますか？削除すると元に戻せません。")) {
+      return;
+    }
+    await onDelete();
   }
 
   const colors =
@@ -1225,19 +1308,86 @@ function ReportThread({
 
   return (
     <li className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
-      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-400">
-        <span className={`rounded px-1.5 py-0.5 font-medium ${colors.tag}`}>
-          {commentKindLabel[report.kind]}
-        </span>
-        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
-          {report.author ? roleLabel[report.author.role] : "?"}
-        </span>
-        <span>{report.author?.display_name ?? "不明"}</span>
-        <span>{formatDateTime(report.created_at)}</span>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-400">
+          <span className={`rounded px-1.5 py-0.5 font-medium ${colors.tag}`}>
+            {commentKindLabel[report.kind]}
+          </span>
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
+            {report.author ? roleLabel[report.author.role] : "?"}
+          </span>
+          <span>{report.author?.display_name ?? "不明"}</span>
+          <span>{formatDateTime(report.created_at)}</span>
+        </div>
+        {isOwn && !isEditing && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <button
+              onClick={() => {
+                setEditText(report.text);
+                setEditAltType(report.alt_type ?? "running");
+                setIsEditing(true);
+              }}
+              className={`font-medium ${colors.link}`}
+            >
+              編集
+            </button>
+            <button
+              onClick={handleDeleteClick}
+              className="font-medium text-red-600 active:text-red-800"
+            >
+              削除
+            </button>
+          </div>
+        )}
       </div>
-      <p className="whitespace-pre-wrap text-sm text-neutral-800">
-        {report.text}
-      </p>
+
+      {isEditing ? (
+        <div className="flex flex-col gap-2">
+          {editableAltType && (
+            <label className="flex flex-col text-[11px] text-neutral-500">
+              代替メニュー
+              <select
+                value={editAltType}
+                onChange={(e) =>
+                  setEditAltType(
+                    e.target.value as "running" | "weight" | "other"
+                  )
+                }
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              >
+                <option value="running">ランニング</option>
+                <option value="weight">ウェイト</option>
+                <option value="other">その他</option>
+              </select>
+            </label>
+          )}
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={5}
+            className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveEdit}
+              disabled={saving}
+              className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+            >
+              保存する
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs text-neutral-600"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm text-neutral-800">
+          {report.text}
+        </p>
+      )}
 
       {replies.length > 0 && (
         <ul className={`mt-3 flex flex-col gap-2 border-l-2 ${colors.replyBorder} pl-3`}>

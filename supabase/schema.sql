@@ -313,3 +313,36 @@ create policy "matches_delete" on matches
 -- ============================================
 create policy "matches_update_self" on matches
   for update using (member_id = auth.uid());
+
+-- ============================================
+-- 追加: 部員全員のウェイトMAX（自己ベスト）記録
+-- ============================================
+create table if not exists weight_maxes (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid references profiles(id) on delete set null,
+  bench numeric,
+  squat numeric,
+  deadlift numeric,
+  updated_at timestamptz not null default now(),
+  unique (author_id)
+);
+alter table weight_maxes enable row level security;
+
+create policy "weight_maxes_select_same_team" on weight_maxes
+  for select using (team_id = get_my_team_id());
+
+create policy "weight_maxes_insert_self" on weight_maxes
+  for insert with check (author_id = auth.uid());
+
+create policy "weight_maxes_update_self" on weight_maxes
+  for update using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: 実施報告・未実施報告など、自分のコメントの編集・削除を許可
+-- ============================================
+create policy "comments_update_self" on comments
+  for update using (author_id = auth.uid());
+
+create policy "comments_delete_self" on comments
+  for delete using (author_id = auth.uid());
