@@ -24,11 +24,11 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
   member: "役職なし",
 };
 
-// 直近6年分を入学年の候補にする
+// 直近4年分を入学年の候補にする
 const entryYearOptions: number[] = (() => {
   const now = new Date();
   const academicYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  return Array.from({ length: 6 }, (_, i) => academicYear - i);
+  return Array.from({ length: 4 }, (_, i) => academicYear - i);
 })();
 
 export default function AuthGate({
