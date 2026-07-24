@@ -160,3 +160,16 @@ create policy "menus_update_leader_coach" on menus
       where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
     )
   );
+
+-- ============================================
+-- 追加: オフの日（練習なし）、メニューの削除権限
+-- ============================================
+alter table menus add column if not exists is_off boolean not null default false;
+
+create policy "menus_delete_leader_coach" on menus
+  for delete using (
+    team_id in (
+      select team_id from profiles
+      where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+    )
+  );

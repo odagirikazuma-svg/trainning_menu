@@ -21,6 +21,7 @@ type MenuRow = {
   location: Location;
   start_time: string | null;
   is_joint: boolean;
+  is_off: boolean;
   created_at: string;
   created_by: string;
   creator: { display_name: string } | null;
@@ -80,7 +81,10 @@ export default function TrainingBoardSupabase({
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAlternative, setAbsentAlternative] = useState("");
-  const [newIsJoint, setNewIsJoint] = useState(false);
+  const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
+    "normal"
+  );
+  const [newOffBothLocations, setNewOffBothLocations] = useState(false);
   const [editingMenu, setEditingMenu] = useState(false);
   const [editDate, setEditDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
@@ -135,7 +139,7 @@ export default function TrainingBoardSupabase({
     const { data, error } = await supabase
       .from("menus")
       .select(
-        "id, date, title, content, location, start_time, is_joint, created_at, created_by, last_edited_by, last_edited_at, creator:profiles!menus_created_by_fkey(display_name), editor:profiles!menus_last_edited_by_fkey(display_name)"
+        "id, date, title, content, location, start_time, is_joint, is_off, created_at, created_by, last_edited_by, last_edited_at, creator:profiles!menus_created_by_fkey(display_name), editor:profiles!menus_last_edited_by_fkey(display_name)"
       )
       .eq("location", activeLocation)
       .order("date", { ascending: false });
@@ -227,21 +231,49 @@ export default function TrainingBoardSupabase({
 
   async function handleCreateMenu(e: React.FormEvent) {
     e.preventDefault();
-    if (!newDate || !newTitle || !newContent) return;
-    const { data, error } = await supabase
-      .from("menus")
-      .insert({
-        team_id: profile.team_id,
-        date: newDate,
+    if (!newDate) return;
+    if (newMenuType !== "off" && (!newTitle || !newContent)) return;
+
+    const otherLocation = locations.find((l) => l !== activeLocation)!;
+    const basePayload = {
+      team_id: profile.team_id,
+      date: newDate,
+      created_by: profile.id,
+    };
+
+    let error;
+    if (newMenuType === "off") {
+      const offPayload = {
+        ...basePayload,
+        title: "オフ",
+        content: "",
+        start_time: null,
+        is_joint: false,
+        is_off: true,
+      };
+      const res = await supabase
+        .from("menus")
+        .insert({ ...offPayload, location: activeLocation });
+      error = res.error;
+
+      if (!error && newOffBothLocations) {
+        const res2 = await supabase
+          .from("menus")
+          .insert({ ...offPayload, location: otherLocation });
+        error = res2.error;
+      }
+    } else {
+      const res = await supabase.from("menus").insert({
+        ...basePayload,
         title: newTitle,
         content: newContent,
         location: activeLocation,
         start_time: newStartTime || null,
-        is_joint: newIsJoint,
-        created_by: profile.id,
-      })
-      .select("id")
-      .single();
+        is_joint: newMenuType === "joint",
+        is_off: false,
+      });
+      error = res.error;
+    }
 
     if (error) {
       setErrorMsg(error.message);
@@ -251,11 +283,23 @@ export default function TrainingBoardSupabase({
     setNewStartTime("");
     setNewTitle("");
     setNewContent("");
-    setNewIsJoint(false);
+    setNewMenuType("normal");
+    setNewOffBothLocations(false);
     setShowNewForm(false);
     setConfirmingNew(false);
     await loadMenus();
-    if (data) setSelectedId(data.id);
+    await loadJointElsewhere();
+  }
+
+  async function handleDeleteMenu(menuId: string) {
+    const { error } = await supabase.from("menus").delete().eq("id", menuId);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    setSelectedId(null);
+    await loadMenus();
+    await loadJointElsewhere();
   }
 
   function startEditingMenu(m: MenuRow) {
@@ -431,6 +475,8 @@ export default function TrainingBoardSupabase({
               onClick={() => {
                 setShowNewForm((v) => !v);
                 setConfirmingNew(false);
+                setNewMenuType("normal");
+                setNewOffBothLocations(false);
               }}
               className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white active:bg-neutral-700"
             >
@@ -450,15 +496,24 @@ export default function TrainingBoardSupabase({
                   <p className="text-xs font-semibold text-blue-700">
                     以下の内容で投稿します。よろしいですか？
                   </p>
-                  <p>
-                    {locationLabel[activeLocation]}・{newDate}
-                    {newStartTime && ` ${newStartTime}〜`}
-                    {newIsJoint && "・全体練習"}
-                  </p>
-                  <p className="font-bold">{newTitle}</p>
-                  <p className="whitespace-pre-wrap text-neutral-800">
-                    {newContent}
-                  </p>
+                  {newMenuType === "off" ? (
+                    <p>
+                      {newDate}・オフ
+                      {newOffBothLocations && "（多摩・大塚とも）"}
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        {locationLabel[activeLocation]}・{newDate}
+                        {newStartTime && ` ${newStartTime}〜`}
+                        {newMenuType === "joint" && "・全体練習"}
+                      </p>
+                      <p className="font-bold">{newTitle}</p>
+                      <p className="whitespace-pre-wrap text-neutral-800">
+                        {newContent}
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -469,38 +524,74 @@ export default function TrainingBoardSupabase({
                     className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                     required
                   />
-                  <label className="flex flex-col text-[11px] text-neutral-500">
-                    開始時刻
-                    <TimeSelect
-                      value={newStartTime}
-                      onChange={setNewStartTime}
-                    />
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="タイトル（例：通常練習）"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                    required
-                  />
-                  <textarea
-                    placeholder="メニュー詳細（自由記述）"
-                    value={newContent}
-                    onChange={(e) => setNewContent(e.target.value)}
-                    rows={4}
-                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                    required
-                  />
-                  <label className="flex items-center gap-2 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={newIsJoint}
-                      onChange={(e) => setNewIsJoint(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    全体練習にする（もう一方の拠点はこの練習に合流）
-                  </label>
+
+                  <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                    {(
+                      [
+                        { v: "normal", label: "通常" },
+                        { v: "joint", label: "全体練習" },
+                        { v: "off", label: "オフ" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setNewMenuType(opt.v)}
+                        className={`flex-1 rounded-md py-2 font-medium ${
+                          newMenuType === opt.v
+                            ? "bg-white shadow text-neutral-900"
+                            : "text-neutral-500"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {newMenuType === "off" ? (
+                    <label className="flex items-center gap-2 text-sm text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={newOffBothLocations}
+                        onChange={(e) =>
+                          setNewOffBothLocations(e.target.checked)
+                        }
+                        className="h-4 w-4"
+                      />
+                      両拠点同時にオフにする（多摩・大塚とも）
+                    </label>
+                  ) : (
+                    <>
+                      <label className="flex flex-col text-[11px] text-neutral-500">
+                        開始時刻
+                        <TimeSelect
+                          value={newStartTime}
+                          onChange={setNewStartTime}
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="タイトル（例：通常練習）"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                        required
+                      />
+                      <textarea
+                        placeholder="メニュー詳細（自由記述）"
+                        value={newContent}
+                        onChange={(e) => setNewContent(e.target.value)}
+                        rows={4}
+                        className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                        required
+                      />
+                      {newMenuType === "joint" && (
+                        <p className="text-[11px] text-neutral-500">
+                          もう一方の拠点はこの練習に合流します
+                        </p>
+                      )}
+                    </>
+                  )}
                 </>
               )}
 
@@ -524,7 +615,11 @@ export default function TrainingBoardSupabase({
                 <button
                   type="button"
                   onClick={() => {
-                    if (newDate && newTitle && newContent) setConfirmingNew(true);
+                    if (
+                      newDate &&
+                      (newMenuType === "off" || (newTitle && newContent))
+                    )
+                      setConfirmingNew(true);
                   }}
                   className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
                 >
@@ -607,6 +702,24 @@ export default function TrainingBoardSupabase({
               のページを開く
             </button>
           </div>
+        ) : selected?.is_off ? (
+          <section className="rounded-lg border border-neutral-300 bg-neutral-100 p-4">
+            <div className="mb-2 text-xs text-neutral-500">
+              {locationLabel[selected.location]}・{selected.date}
+              ・作成者: {selected.creator?.display_name ?? "不明"}
+            </div>
+            <p className="mb-3 text-base font-bold text-neutral-700">
+              本日はオフです
+            </p>
+            {(canCreateMenu(profile.role) || profile.role === "coach") && (
+              <button
+                onClick={() => handleDeleteMenu(selected.id)}
+                className="rounded-lg border border-neutral-400 px-3 py-2 text-xs text-neutral-600 active:bg-neutral-200"
+              >
+                オフを取り消す
+              </button>
+            )}
+          </section>
         ) : selected ? (
           <>
             <section className="rounded-lg border border-neutral-200 p-4">
@@ -1016,6 +1129,7 @@ function MenuCalendar({
   // （過去の日付のみ対象。今日・未来はまだ提出期間中なので対象外）
   function isIncomplete(dayMenus: MenuRow[]): boolean {
     return dayMenus.some((m) => {
+      if (m.is_off) return false;
       const total = m.is_joint ? memberCounts.all : memberCounts[m.location];
       const respondedCount = submissionMap[m.id]?.respondedAuthors.size ?? 0;
       return respondedCount < total;
@@ -1052,6 +1166,7 @@ function MenuCalendar({
           const key = toDateKey(date);
           const dayMenus = menusByDate.get(key) ?? [];
           const hasMenu = dayMenus.length > 0;
+          const isOff = dayMenus.some((m) => m.is_off);
           const jointInfo = !hasMenu ? jointElsewhere.get(key) : undefined;
           const isToday = key === todayKey;
           const isPast = key < todayKey;
@@ -1068,6 +1183,8 @@ function MenuCalendar({
               className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
                 isSelected
                   ? "bg-blue-600 font-semibold text-white"
+                  : isOff
+                  ? "bg-neutral-200 font-medium text-neutral-500 active:bg-neutral-300"
                   : hasMenu
                   ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
                   : jointInfo
@@ -1083,7 +1200,7 @@ function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex items-center gap-3 text-[10px] text-neutral-400">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
         <span className="flex items-center gap-1">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
           未提出の部員がいる日
@@ -1091,6 +1208,10 @@ function MenuCalendar({
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded bg-purple-50" />
           全体練習（別拠点）
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded bg-neutral-200" />
+          オフ
         </span>
       </p>
     </div>
