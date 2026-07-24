@@ -691,9 +691,17 @@ export default function TrainingBoardSupabase({
               {locationLabel[activeLocation]}のメニューはまだありません。下のカレンダーから作成・確認できます。
             </p>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
+            <div
+              className={`grid gap-2 ${
+                fixedCards.length === 1
+                  ? "grid-cols-1"
+                  : fixedCards.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}
+            >
               {fixedCards.map((m) => {
-                const executed = isReportOpen(m);
+                const executed = !m.is_off && isReportOpen(m);
                 const total = m.is_joint
                   ? memberCounts.all
                   : memberCounts[m.location];
