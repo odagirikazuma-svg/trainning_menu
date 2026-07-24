@@ -8,7 +8,6 @@ import {
   currentGrade,
   Location,
   locationLabel,
-  roleLabel,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
@@ -29,6 +28,7 @@ type MatchRow = {
   id: string;
   name: string;
   date: string;
+  member_id: string | null;
 };
 
 type WeightLogRow = {
@@ -101,6 +101,7 @@ export default function MyPage({
   const [showMatchForm, setShowMatchForm] = useState(false);
   const [newMatchName, setNewMatchName] = useState("");
   const [newMatchDate, setNewMatchDate] = useState("");
+  const [newMatchForAll, setNewMatchForAll] = useState(false);
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [todayLogText, setTodayLogText] = useState("");
@@ -143,23 +144,48 @@ export default function MyPage({
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const rangeStart = toDateKey(twoWeeksAgo);
 
-    const { data: menuData, error: menuError } = await supabase
+    // 自分の所属拠点のメニュー
+    const { data: ownMenuData, error: ownMenuError } = await supabase
       .from("menus")
       .select("id, date, title, content, location, start_time, is_off")
       .eq("team_id", profile.team_id)
       .eq("location", profile.home_location)
       .eq("is_off", false)
       .gte("date", rangeStart)
-      .lte("date", todayStr)
-      .order("date", { ascending: false });
+      .lte("date", todayStr);
 
-    if (menuError) {
-      setErrorMsg(menuError.message);
+    if (ownMenuError) {
+      setErrorMsg(ownMenuError.message);
       setLoadingTodo(false);
       return;
     }
 
-    const menus = (menuData ?? []) as unknown as MenuRow[];
+    // もう一方の拠点で全体練習になっている日も対象にする（全員が報告対象のため）
+    const { data: jointMenuData, error: jointMenuError } = await supabase
+      .from("menus")
+      .select("id, date, title, content, location, start_time, is_off")
+      .eq("team_id", profile.team_id)
+      .eq("is_joint", true)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (jointMenuError) {
+      setErrorMsg(jointMenuError.message);
+      setLoadingTodo(false);
+      return;
+    }
+
+    const menuMap = new Map<string, MenuRow>();
+    for (const m of (ownMenuData ?? []) as unknown as MenuRow[]) {
+      menuMap.set(m.id, m);
+    }
+    for (const m of (jointMenuData ?? []) as unknown as MenuRow[]) {
+      menuMap.set(m.id, m);
+    }
+    const menus = Array.from(menuMap.values()).sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
     const openMenus = menus.filter((m) => isReportOpen(m));
 
     if (openMenus.length === 0) {
@@ -195,8 +221,9 @@ export default function MyPage({
     setLoadingMatch(true);
     const { data, error } = await supabase
       .from("matches")
-      .select("id, name, date")
+      .select("id, name, date, member_id")
       .eq("team_id", profile.team_id)
+      .or(`member_id.eq.${profile.id},member_id.is.null`)
       .gte("date", todayStr)
       .order("date", { ascending: true })
       .limit(1)
@@ -218,6 +245,7 @@ export default function MyPage({
       name: newMatchName.trim(),
       date: newMatchDate,
       created_by: profile.id,
+      member_id: newMatchForAll ? null : profile.id,
     });
     if (error) {
       setErrorMsg(error.message);
@@ -225,6 +253,7 @@ export default function MyPage({
     }
     setNewMatchName("");
     setNewMatchDate("");
+    setNewMatchForAll(false);
     setShowMatchForm(false);
     await loadNextMatch();
   }
@@ -361,6 +390,13 @@ export default function MyPage({
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
         <h1 className="text-base font-bold sm:text-lg">マイページ</h1>
+        <div className="flex flex-col items-end text-[11px] leading-tight text-neutral-500">
+          <span>{formatFullDate(todayStr)}</span>
+          <span className="font-semibold text-neutral-700">
+            {profile.display_name}
+            {gradeLabel && ` ${gradeLabel}`}
+          </span>
+        </div>
         <div className="flex items-center gap-2 text-[11px] text-neutral-500">
           <button
             onClick={() => router.push("/")}
@@ -384,26 +420,17 @@ export default function MyPage({
           </p>
         )}
 
-        {/* 日誌タイトル */}
-        <section className="rounded-lg border border-neutral-200 p-4">
-          <p className="text-xs text-neutral-400">{formatFullDate(todayStr)}</p>
-          <p className="text-lg font-bold">
-            {profile.display_name}
-            {gradeLabel && ` ${gradeLabel}`}（{roleLabel[profile.role]}）
-          </p>
-        </section>
-
         {/* 次の試合まで */}
         <section className="flex flex-col gap-2">
           {loadingMatch ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : nextMatch ? (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
-              <p className="text-xs text-blue-600">次の試合【{nextMatch.name}】まで</p>
-              <p className="text-3xl font-bold text-blue-700">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+              <p className="text-xs text-red-600">次の試合【{nextMatch.name}】まで</p>
+              <p className="text-3xl font-bold text-red-700">
                 あと{matchDays}日
               </p>
-              <p className="text-[11px] text-blue-500">
+              <p className="text-[11px] text-red-500">
                 {formatMonthDay(nextMatch.date)}
               </p>
             </div>
@@ -413,43 +440,50 @@ export default function MyPage({
             </p>
           )}
 
-          {canCreateMenu(profile.role) && (
-            <>
-              <button
-                onClick={() => setShowMatchForm((v) => !v)}
-                className="self-start text-[11px] font-medium text-blue-700 active:text-blue-900"
-              >
-                {showMatchForm ? "キャンセル" : "＋ 試合を登録する"}
-              </button>
-              {showMatchForm && (
-                <form
-                  onSubmit={handleAddMatch}
-                  className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
-                >
+          <button
+            onClick={() => setShowMatchForm((v) => !v)}
+            className="self-start text-[11px] font-medium text-red-700 active:text-red-900"
+          >
+            {showMatchForm ? "キャンセル" : "＋ 試合を登録する"}
+          </button>
+          {showMatchForm && (
+            <form
+              onSubmit={handleAddMatch}
+              className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
+            >
+              <input
+                type="text"
+                placeholder="試合名（例：全日本学生選手権）"
+                value={newMatchName}
+                onChange={(e) => setNewMatchName(e.target.value)}
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                required
+              />
+              <input
+                type="date"
+                value={newMatchDate}
+                onChange={(e) => setNewMatchDate(e.target.value)}
+                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                required
+              />
+              {canCreateMenu(profile.role) && (
+                <label className="flex items-center gap-2 text-xs text-neutral-600">
                   <input
-                    type="text"
-                    placeholder="試合名（例：全日本学生選手権）"
-                    value={newMatchName}
-                    onChange={(e) => setNewMatchName(e.target.value)}
-                    className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                    required
+                    type="checkbox"
+                    checked={newMatchForAll}
+                    onChange={(e) => setNewMatchForAll(e.target.checked)}
+                    className="h-4 w-4"
                   />
-                  <input
-                    type="date"
-                    value={newMatchDate}
-                    onChange={(e) => setNewMatchDate(e.target.value)}
-                    className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-blue-600 py-2 text-sm font-medium text-white active:bg-blue-700"
-                  >
-                    登録する
-                  </button>
-                </form>
+                  部員全員向けの試合として登録する（チェックなしは自分だけ）
+                </label>
               )}
-            </>
+              <button
+                type="submit"
+                className="rounded-lg bg-red-600 py-2 text-sm font-medium text-white active:bg-red-700"
+              >
+                登録する
+              </button>
+            </form>
           )}
         </section>
 

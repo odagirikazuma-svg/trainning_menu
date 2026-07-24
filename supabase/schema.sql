@@ -272,3 +272,38 @@ alter table weight_logs add column if not exists type text not null default 'wei
 
 alter table comments add column if not exists alt_type text
   check (alt_type in ('running', 'weight', 'other'));
+
+-- ============================================
+-- 更新: 試合を個人ごとに登録できるようにする
+-- （member_idがNULLなら全員向け、指定されていれば本人専用）
+-- ============================================
+alter table matches add column if not exists member_id uuid references profiles(id) on delete cascade;
+
+drop policy if exists "matches_insert_leader_coach" on matches;
+create policy "matches_insert" on matches
+  for insert with check (
+    team_id = get_my_team_id()
+    and (
+      member_id = auth.uid()
+      or (
+        member_id is null
+        and exists (
+          select 1 from profiles
+          where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+        )
+      )
+    )
+  );
+
+drop policy if exists "matches_delete_leader_coach" on matches;
+create policy "matches_delete" on matches
+  for delete using (
+    member_id = auth.uid()
+    or (
+      member_id is null
+      and team_id in (
+        select team_id from profiles
+        where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+      )
+    )
+  );

@@ -520,24 +520,54 @@ export default function TrainingBoardSupabase({
   }
 
   // 上部カードは「今表示中のメニュー」を中央に、前後(古い/新しい)を左右に表示する
+  // もう一方の拠点の全体練習日も、仮想アイテムとして同じ時系列に混ぜる
+  type NeighborItem =
+    | { kind: "menu"; menu: MenuRow; sortKey: string }
+    | { kind: "joint"; date: string; location: Location; sortKey: string };
+
+  const menuItems: NeighborItem[] = chronoMenus.map((m) => ({
+    kind: "menu",
+    menu: m,
+    sortKey: `${m.date}T${m.start_time ?? "00:00"}`,
+  }));
+  const jointItems: NeighborItem[] = Array.from(jointElsewhere.entries()).map(
+    ([date, info]) => ({
+      kind: "joint",
+      date,
+      location: info.location,
+      sortKey: `${date}T00:00`,
+    })
+  );
+  const allItems = [...menuItems, ...jointItems].sort((a, b) =>
+    a.sortKey.localeCompare(b.sortKey)
+  );
+
   const referenceKey = selected
     ? `${selected.date}T${selected.start_time ?? "00:00"}`
+    : jointNoticeDate
+    ? `${jointNoticeDate}T00:00`
     : `${viewDate}T12:00`;
-  const prevCard =
-    [...chronoMenus]
-      .reverse()
-      .find(
-        (m) => `${m.date}T${m.start_time ?? "00:00"}` < referenceKey
-      ) ?? null;
-  const nextCard =
-    chronoMenus.find(
-      (m) => `${m.date}T${m.start_time ?? "00:00"}` > referenceKey
-    ) ?? null;
-  const neighborCards: { menu: MenuRow; role: "prev" | "current" | "next" }[] =
+
+  const centerItem: NeighborItem | null = selected
+    ? { kind: "menu", menu: selected, sortKey: referenceKey }
+    : jointNoticeDate
+    ? {
+        kind: "joint",
+        date: jointNoticeDate,
+        location: jointElsewhere.get(jointNoticeDate)!.location,
+        sortKey: referenceKey,
+      }
+    : null;
+
+  const prevItem =
+    [...allItems].reverse().find((it) => it.sortKey < referenceKey) ?? null;
+  const nextItem = allItems.find((it) => it.sortKey > referenceKey) ?? null;
+
+  const neighborCards: { item: NeighborItem; role: "prev" | "current" | "next" }[] =
     [
-      ...(prevCard ? [{ menu: prevCard, role: "prev" as const }] : []),
-      ...(selected ? [{ menu: selected, role: "current" as const }] : []),
-      ...(nextCard ? [{ menu: nextCard, role: "next" as const }] : []),
+      ...(prevItem ? [{ item: prevItem, role: "prev" as const }] : []),
+      ...(centerItem ? [{ item: centerItem, role: "current" as const }] : []),
+      ...(nextItem ? [{ item: nextItem, role: "next" as const }] : []),
     ];
 
   return (
@@ -755,7 +785,36 @@ export default function TrainingBoardSupabase({
                   : "grid-cols-3"
               }`}
             >
-              {neighborCards.map(({ menu: m, role }) => {
+              {neighborCards.map(({ item, role }) => {
+                const isCurrent = role === "current";
+                const key =
+                  item.kind === "menu" ? item.menu.id : `joint-${item.date}`;
+
+                if (item.kind === "joint") {
+                  return (
+                    <div
+                      key={key}
+                      className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                        isCurrent
+                          ? "border-purple-600 bg-purple-50 font-semibold text-purple-700 shadow-sm"
+                          : "border-neutral-100 bg-neutral-50 text-neutral-400"
+                      }`}
+                    >
+                      <span
+                        className={`truncate text-[10px] ${
+                          isCurrent ? "text-purple-400" : "text-neutral-300"
+                        }`}
+                      >
+                        {item.date.slice(5)}
+                      </span>
+                      <span className="truncate">
+                        全体練習（{locationLabel[item.location]}）
+                      </span>
+                    </div>
+                  );
+                }
+
+                const m = item.menu;
                 const executed = !m.is_off && isReportOpen(m);
                 const total = m.is_joint
                   ? memberCounts.all
@@ -763,10 +822,9 @@ export default function TrainingBoardSupabase({
                 const responded =
                   submissionMap[m.id]?.respondedAuthors.size ?? 0;
                 const unsubmitted = executed && !m.is_off && responded < total;
-                const isCurrent = role === "current";
                 return (
                   <div
-                    key={m.id}
+                    key={key}
                     className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
                       isCurrent
                         ? "border-blue-600 bg-blue-50 font-semibold text-blue-700 shadow-sm"
