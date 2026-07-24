@@ -17,6 +17,29 @@ export const locationLabel: Record<Location, string> = {
 
 export const locations: Location[] = ["tama", "otsuka"];
 
+export type TrainingType = "running" | "weight" | "other";
+
+export const trainingTypeLabel: Record<TrainingType, string> = {
+  running: "ラン",
+  weight: "ウェイト",
+  other: "その他",
+};
+
+// カレンダー表示用の色（ウェイト=青、ラン=赤、その他=グレー）
+export const trainingTypeDotColor: Record<TrainingType, string> = {
+  running: "bg-red-500",
+  weight: "bg-blue-500",
+  other: "bg-neutral-400",
+};
+
+// 入学年から現在の学年を計算する（4月1日で繰り上がる）
+export function currentGrade(entryYear: number): number {
+  const now = new Date();
+  const academicYear =
+    now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return academicYear - entryYear + 1;
+}
+
 export type Comment = {
   id: string;
   authorName: string;

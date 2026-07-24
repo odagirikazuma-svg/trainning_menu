@@ -430,7 +430,8 @@ export default function TrainingBoardSupabase({
   async function submitComment(
     kind: CommentKind,
     text: string,
-    parentId: string | null = null
+    parentId: string | null = null,
+    altType: string | null = null
   ) {
     if (!selectedId || !text.trim()) return;
     const { error } = await supabase.from("comments").insert({
@@ -439,6 +440,7 @@ export default function TrainingBoardSupabase({
       kind,
       parent_id: parentId,
       text: text.trim(),
+      alt_type: altType,
     });
     if (error) {
       setErrorMsg(error.message);
@@ -472,7 +474,7 @@ export default function TrainingBoardSupabase({
         ? "ウェイト"
         : "その他";
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
-    await submitComment("absent", combined);
+    await submitComment("absent", combined, null, absentAltType);
     setAbsentReason("");
     setAbsentAltType("running");
     setAbsentAlternative("");

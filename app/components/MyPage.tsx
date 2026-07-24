@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { canCreateMenu, Location, locationLabel, roleLabel } from "../lib/types";
+import {
+  canCreateMenu,
+  currentGrade,
+  Location,
+  locationLabel,
+  roleLabel,
+  TrainingType,
+  trainingTypeDotColor,
+  trainingTypeLabel,
+} from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type MenuRow = {
@@ -26,6 +35,7 @@ type WeightLogRow = {
   id: string;
   date: string;
   content: string;
+  type: TrainingType;
 };
 
 function toDateKey(d: Date) {
@@ -94,20 +104,38 @@ export default function MyPage({
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [todayLogText, setTodayLogText] = useState("");
+  const [todayLogType, setTodayLogType] = useState<TrainingType>("weight");
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
 
-  const [pastLogs, setPastLogs] = useState<WeightLogRow[]>([]);
-  const [loadingPastLogs, setLoadingPastLogs] = useState(true);
+  const [recentLogs, setRecentLogs] = useState<WeightLogRow[]>([]);
+  const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
+
+  // カレンダー用
+  const [calendarCursor, setCalendarCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [calendarWeightLogs, setCalendarWeightLogs] = useState<
+    { date: string; type: TrainingType }[]
+  >([]);
+  const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
+    { date: string; type: TrainingType }[]
+  >([]);
 
   useEffect(() => {
     if (profile.home_location) loadTodo();
     else setLoadingTodo(false);
     loadNextMatch();
     loadTodayLog();
-    loadPastLogs();
+    loadRecentLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadCalendarData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarCursor]);
 
   async function loadTodo() {
     setLoadingTodo(true);
@@ -205,7 +233,7 @@ export default function MyPage({
     setLoadingLog(true);
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("id, date, content")
+      .select("id, date, content, type")
       .eq("author_id", profile.id)
       .eq("date", todayStr)
       .maybeSingle();
@@ -213,17 +241,19 @@ export default function MyPage({
     if (error) {
       setErrorMsg(error.message);
     } else if (data) {
-      setTodayLog(data as WeightLogRow);
-      setTodayLogText((data as WeightLogRow).content);
+      const row = data as WeightLogRow;
+      setTodayLog(row);
+      setTodayLogText(row.content);
+      setTodayLogType(row.type);
     }
     setLoadingLog(false);
   }
 
-  async function loadPastLogs() {
-    setLoadingPastLogs(true);
+  async function loadRecentLogs() {
+    setLoadingRecentLogs(true);
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("id, date, content")
+      .select("id, date, content, type")
       .eq("author_id", profile.id)
       .lt("date", todayStr)
       .order("date", { ascending: false })
@@ -232,9 +262,9 @@ export default function MyPage({
     if (error) {
       setErrorMsg(error.message);
     } else {
-      setPastLogs((data ?? []) as WeightLogRow[]);
+      setRecentLogs((data ?? []) as WeightLogRow[]);
     }
-    setLoadingPastLogs(false);
+    setLoadingRecentLogs(false);
   }
 
   async function handleSaveLog() {
@@ -248,11 +278,12 @@ export default function MyPage({
           author_id: profile.id,
           date: todayStr,
           content: todayLogText,
+          type: todayLogType,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "author_id,date" }
       )
-      .select("id, date, content")
+      .select("id, date, content, type")
       .single();
 
     if (error) {
@@ -261,6 +292,53 @@ export default function MyPage({
       setTodayLog(data as WeightLogRow);
     }
     setSavingLog(false);
+  }
+
+  async function loadCalendarData() {
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const rangeStart = toDateKey(new Date(year, month, 1));
+    const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+    const { data: weightData, error: weightError } = await supabase
+      .from("weight_logs")
+      .select("date, type")
+      .eq("author_id", profile.id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (weightError) {
+      setErrorMsg(weightError.message);
+    } else {
+      setCalendarWeightLogs(
+        (weightData ?? []) as { date: string; type: TrainingType }[]
+      );
+    }
+
+    const { data: absentData, error: absentError } = await supabase
+      .from("comments")
+      .select("alt_type, menu:menus!comments_menu_id_fkey(date)")
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null);
+
+    if (absentError) {
+      setErrorMsg(absentError.message);
+    } else {
+      const rows = (absentData ?? []) as unknown as {
+        alt_type: TrainingType;
+        menu: { date: string } | null;
+      }[];
+      const filtered = rows
+        .filter(
+          (r) =>
+            r.menu &&
+            r.menu.date >= rangeStart &&
+            r.menu.date <= rangeEnd
+        )
+        .map((r) => ({ date: r.menu!.date, type: r.alt_type }));
+      setCalendarAbsentLogs(filtered);
+    }
   }
 
   function goToMenu(m: MenuRow) {
@@ -276,6 +354,8 @@ export default function MyPage({
   }
 
   const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
+  const gradeLabel =
+    profile.entry_year != null ? `${currentGrade(profile.entry_year)}年` : null;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -308,7 +388,8 @@ export default function MyPage({
         <section className="rounded-lg border border-neutral-200 p-4">
           <p className="text-xs text-neutral-400">{formatFullDate(todayStr)}</p>
           <p className="text-lg font-bold">
-            {profile.display_name}（{roleLabel[profile.role]}）
+            {profile.display_name}
+            {gradeLabel && ` ${gradeLabel}`}（{roleLabel[profile.role]}）
           </p>
         </section>
 
@@ -409,15 +490,33 @@ export default function MyPage({
           )}
         </section>
 
-        {/* 本日のウェイトメニュー */}
+        {/* 本日のトレーニングメニュー */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            本日のウェイトメニュー
+            本日のトレーニングメニュー
           </h2>
           {loadingLog ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : (
             <div className="flex flex-col gap-2">
+              <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                {(
+                  Object.keys(trainingTypeLabel) as TrainingType[]
+                ).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTodayLogType(t)}
+                    className={`flex-1 rounded-md py-2 font-medium ${
+                      todayLogType === t
+                        ? "bg-white text-neutral-900 shadow"
+                        : "text-neutral-500"
+                    }`}
+                  >
+                    {trainingTypeLabel[t]}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={todayLogText}
                 onChange={(e) => setTodayLogText(e.target.value)}
@@ -438,26 +537,29 @@ export default function MyPage({
           )}
         </section>
 
-        {/* 過去3回分のトレーニング記録 */}
+        {/* 直近のトレーニング記録 */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            前回までのトレーニング記録
+            直近のトレーニング記録
           </h2>
-          {loadingPastLogs ? (
+          {loadingRecentLogs ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
-          ) : pastLogs.length === 0 ? (
+          ) : recentLogs.length === 0 ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
               まだ記録がありません。
             </p>
           ) : (
             <div className="flex flex-col gap-2">
-              {pastLogs.map((log) => (
+              {recentLogs.map((log) => (
                 <details
                   key={log.id}
                   className="rounded-lg border border-neutral-200 p-3"
                 >
-                  <summary className="cursor-pointer text-xs font-semibold text-neutral-500">
-                    {formatMonthDay(log.date)}
+                  <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-500">
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
+                    />
+                    {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
                   </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
                     {log.content || "(記録なし)"}
@@ -466,6 +568,19 @@ export default function MyPage({
               ))}
             </div>
           )}
+        </section>
+
+        {/* トレーニングカレンダー */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            トレーニングカレンダー
+          </h2>
+          <TrainingCalendar
+            cursor={calendarCursor}
+            onCursorChange={setCalendarCursor}
+            weightLogs={calendarWeightLogs}
+            absentLogs={calendarAbsentLogs}
+          />
         </section>
 
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
@@ -484,6 +599,97 @@ export default function MyPage({
           </p>
         </section>
       </div>
+    </div>
+  );
+}
+
+function TrainingCalendar({
+  cursor,
+  onCursorChange,
+  weightLogs,
+  absentLogs,
+}: {
+  cursor: Date;
+  onCursorChange: (d: Date) => void;
+  weightLogs: { date: string; type: TrainingType }[];
+  absentLogs: { date: string; type: TrainingType }[];
+}) {
+  const dotsByDate = new Map<string, TrainingType[]>();
+  for (const row of [...weightLogs, ...absentLogs]) {
+    const list = dotsByDate.get(row.date) ?? [];
+    list.push(row.type);
+    dotsByDate.set(row.date, list);
+  }
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+
+  return (
+    <div className="rounded-lg border border-neutral-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          onClick={() => onCursorChange(new Date(year, month - 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＜
+        </button>
+        <span className="text-sm font-semibold">
+          {year}年{month + 1}月
+        </span>
+        <button
+          onClick={() => onCursorChange(new Date(year, month + 1, 1))}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+        >
+          ＞
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400">
+        {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
+          <div key={w}>{w}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} />;
+          const key = toDateKey(date);
+          const dots = dotsByDate.get(key) ?? [];
+          return (
+            <div
+              key={i}
+              className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600"
+            >
+              <span>{date.getDate()}</span>
+              {dots.length > 0 && (
+                <span className="flex flex-wrap justify-center gap-0.5">
+                  {dots.map((t, idx) => (
+                    <span
+                      key={idx}
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${trainingTypeDotColor[t]}`}
+                    />
+                  ))}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+        {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
+          <span key={t} className="flex items-center gap-1">
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${trainingTypeDotColor[t]}`}
+            />
+            {trainingTypeLabel[t]}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }

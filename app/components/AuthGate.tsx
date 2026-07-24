@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/client";
-import { Location, locationLabel, locations, Role } from "../lib/types";
+import { currentGrade, Location, locationLabel, locations, Role } from "../lib/types";
 
 export type Profile = {
   id: string;
@@ -11,7 +11,7 @@ export type Profile = {
   display_name: string;
   role: Role;
   home_location: Location | null;
-  grade: string | null;
+  entry_year: number | null;
 };
 
 type SignupCategory = "member" | "coach";
@@ -23,6 +23,13 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
   leader: "リーダー",
   member: "役職なし",
 };
+
+// 直近6年分を入学年の候補にする
+const entryYearOptions: number[] = (() => {
+  const now = new Date();
+  const academicYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return Array.from({ length: 6 }, (_, i) => academicYear - i);
+})();
 
 export default function AuthGate({
   children,
@@ -39,7 +46,7 @@ export default function AuthGate({
   const [displayName, setDisplayName] = useState("");
   const [signupCategory, setSignupCategory] = useState<SignupCategory | "">("");
   const [signupLocation, setSignupLocation] = useState<Location | "">("");
-  const [signupGrade, setSignupGrade] = useState("");
+  const [signupEntryYear, setSignupEntryYear] = useState("");
   const [signupRoleChoice, setSignupRoleChoice] =
     useState<SignupRoleChoice>("member");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -70,7 +77,7 @@ export default function AuthGate({
     if (!session) return;
     const { data: existing, error: existingError } = await supabase
       .from("profiles")
-      .select("id, team_id, display_name, role, home_location, grade")
+      .select("id, team_id, display_name, role, home_location, entry_year")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -113,8 +120,10 @@ export default function AuthGate({
       metaCategory === "member"
         ? ((meta?.home_location as Location | undefined) ?? null)
         : null;
-    const metaGrade =
-      metaCategory === "member" ? ((meta?.grade as string | undefined) ?? null) : null;
+    const metaEntryYear =
+      metaCategory === "member"
+        ? ((meta?.entry_year as number | undefined) ?? null)
+        : null;
 
     const { data: created, error } = await supabase
       .from("profiles")
@@ -127,9 +136,9 @@ export default function AuthGate({
           "名無し",
         role: metaRole,
         home_location: metaLocation,
-        grade: metaGrade,
+        entry_year: metaEntryYear,
       })
-      .select("id, team_id, display_name, role, home_location, grade")
+      .select("id, team_id, display_name, role, home_location, entry_year")
       .single();
 
     if (error) {
@@ -154,6 +163,11 @@ export default function AuthGate({
         setSubmitting(false);
         return;
       }
+      if (signupCategory === "member" && !signupEntryYear) {
+        setErrorMsg("入学年を選択してください。");
+        setSubmitting(false);
+        return;
+      }
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -162,7 +176,8 @@ export default function AuthGate({
             display_name: displayName,
             category: signupCategory,
             home_location: signupCategory === "member" ? signupLocation : null,
-            grade: signupCategory === "member" ? signupGrade : null,
+            entry_year:
+              signupCategory === "member" ? Number(signupEntryYear) : null,
             role_choice: signupCategory === "member" ? signupRoleChoice : null,
           },
         },
@@ -275,13 +290,23 @@ export default function AuthGate({
                     </div>
                   </div>
 
-                  <input
-                    type="text"
-                    placeholder="学年（例：2年）"
-                    value={signupGrade}
-                    onChange={(e) => setSignupGrade(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                  />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] text-neutral-500">
+                      入学年（学年は自動計算されます）
+                    </span>
+                    <select
+                      value={signupEntryYear}
+                      onChange={(e) => setSignupEntryYear(e.target.value)}
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">選択してください</option>
+                      {entryYearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}年入学（現在{currentGrade(y)}年）
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div className="flex flex-col gap-1">
                     <span className="text-[11px] text-neutral-500">役職</span>

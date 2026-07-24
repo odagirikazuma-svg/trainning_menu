@@ -261,3 +261,14 @@ create policy "weight_logs_insert_self" on weight_logs
 
 create policy "weight_logs_update_self" on weight_logs
   for update using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: 入学年(学年を自動計算するため)、トレーニング種別
+-- ============================================
+alter table profiles add column if not exists entry_year int;
+
+alter table weight_logs add column if not exists type text not null default 'weight'
+  check (type in ('running', 'weight', 'other'));
+
+alter table comments add column if not exists alt_type text
+  check (alt_type in ('running', 'weight', 'other'));
