@@ -110,6 +110,7 @@ export default function TrainingBoardSupabase({
     Map<string, { menuId: string; location: Location }>
   >(new Map());
   const [jointNoticeDate, setJointNoticeDate] = useState<string | null>(null);
+  const [viewDate, setViewDate] = useState<string>(() => toDateKey(new Date()));
 
   useEffect(() => {
     // 練習に参加しうる部員を、コーチを除いて拠点ごとに集計する
@@ -128,10 +129,14 @@ export default function TrainingBoardSupabase({
   }, []);
 
   useEffect(() => {
-    loadMenus();
-    loadJointElsewhere();
-    setSelectedId(null);
-    setJointNoticeDate(null);
+    (async () => {
+      const [rows, jointMap] = await Promise.all([
+        loadMenus(),
+        loadJointElsewhere(),
+      ]);
+      const todayStr = toDateKey(new Date());
+      applySelectionForDate(todayStr, rows, jointMap);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocation]);
 
@@ -140,7 +145,43 @@ export default function TrainingBoardSupabase({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  async function loadMenus() {
+  // 指定した日付の表示状態（メニュー／全体練習案内／未作成）を決めて反映する
+  function applySelectionForDate(
+    date: string,
+    rows: MenuRow[],
+    jointMap: Map<string, { menuId: string; location: Location }>
+  ) {
+    setViewDate(date);
+    setEditingMenu(false);
+    const dayMenus = rows
+      .filter((m) => m.date === date)
+      .sort((a, b) => (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99"));
+    if (dayMenus.length > 0) {
+      setSelectedId(dayMenus[0].id);
+      setJointNoticeDate(null);
+    } else if (jointMap.has(date)) {
+      setSelectedId(null);
+      setJointNoticeDate(date);
+    } else {
+      setSelectedId(null);
+      setJointNoticeDate(null);
+    }
+  }
+
+  function shiftDateStr(dateStr: string, delta: number) {
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setDate(d.getDate() + delta);
+    return toDateKey(d);
+  }
+
+  function goPrevDay() {
+    applySelectionForDate(shiftDateStr(viewDate, -1), menus, jointElsewhere);
+  }
+  function goNextDay() {
+    applySelectionForDate(shiftDateStr(viewDate, 1), menus, jointElsewhere);
+  }
+
+  async function loadMenus(): Promise<MenuRow[]> {
     setLoadingMenus(true);
     const { data, error } = await supabase
       .from("menus")
@@ -150,26 +191,22 @@ export default function TrainingBoardSupabase({
       .eq("location", activeLocation)
       .order("date", { ascending: false });
 
+    let rows: MenuRow[] = [];
     if (error) {
       setErrorMsg(error.message);
     } else {
-      const rows = (data ?? []) as unknown as MenuRow[];
+      rows = (data ?? []) as unknown as MenuRow[];
       setMenus(rows);
-
-      // デフォルトは「今日」の中で最も開始時刻が早いメニュー。無ければ未選択（プレースホルダー表示）
-      const todayStr = toDateKey(new Date());
-      const todaysMenus = rows
-        .filter((m) => m.date === todayStr)
-        .sort((a, b) => (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99"));
-      setSelectedId(todaysMenus.length > 0 ? todaysMenus[0].id : null);
-
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
     setLoadingMenus(false);
+    return rows;
   }
 
   // もう一方の拠点で「全体練習」として作成されたメニューを取得する
-  async function loadJointElsewhere() {
+  async function loadJointElsewhere(): Promise<
+    Map<string, { menuId: string; location: Location }>
+  > {
     const otherLocation = locations.find((l) => l !== activeLocation)!;
     const { data, error } = await supabase
       .from("menus")
@@ -180,13 +217,14 @@ export default function TrainingBoardSupabase({
 
     if (error) {
       setErrorMsg(error.message);
-      return;
+      return jointElsewhere;
     }
     const map = new Map<string, { menuId: string; location: Location }>();
     for (const row of (data ?? []) as { id: string; date: string }[]) {
       map.set(row.date, { menuId: row.id, location: otherLocation });
     }
     setJointElsewhere(map);
+    return map;
   }
 
   // メニューごとに「実施報告」「未実施報告」を提出した部員（重複なし）を集計する
@@ -300,8 +338,11 @@ export default function TrainingBoardSupabase({
     setNewOffBothLocations(false);
     setShowNewForm(false);
     setConfirmingNew(false);
-    await loadMenus();
-    await loadJointElsewhere();
+    const [rows, jointMap] = await Promise.all([
+      loadMenus(),
+      loadJointElsewhere(),
+    ]);
+    applySelectionForDate(newDate, rows, jointMap);
   }
 
   async function handleDeleteMenu(menuId: string) {
@@ -310,9 +351,12 @@ export default function TrainingBoardSupabase({
       setErrorMsg(error.message);
       return;
     }
-    setSelectedId(null);
-    await loadMenus();
-    await loadJointElsewhere();
+    const dateBefore = viewDate;
+    const [rows, jointMap] = await Promise.all([
+      loadMenus(),
+      loadJointElsewhere(),
+    ]);
+    applySelectionForDate(dateBefore, rows, jointMap);
   }
 
   function startEditingMenu(m: MenuRow) {
@@ -342,9 +386,8 @@ export default function TrainingBoardSupabase({
       setErrorMsg(error.message);
       return;
     }
-    setEditingMenu(false);
-    await loadMenus();
-    setSelectedId(selectedId);
+    const rows = await loadMenus();
+    applySelectionForDate(editDate, rows, jointElsewhere);
   }
 
   async function submitComment(
@@ -397,19 +440,6 @@ export default function TrainingBoardSupabase({
     const bKey = `${b.date}T${b.start_time ?? "00:00"}`;
     return aKey.localeCompare(bKey);
   });
-  const chronoIndex = selectedId
-    ? chronoMenus.findIndex((m) => m.id === selectedId)
-    : -1;
-  const hasPrevMenu = chronoIndex > 0;
-  const hasNextMenu =
-    chronoIndex >= 0 && chronoIndex < chronoMenus.length - 1;
-
-  function goPrevMenu() {
-    if (hasPrevMenu) selectMenu(chronoMenus[chronoIndex - 1].id);
-  }
-  function goNextMenu() {
-    if (hasNextMenu) selectMenu(chronoMenus[chronoIndex + 1].id);
-  }
 
   const opinions = comments.filter((c) => c.kind === "opinion" && !c.parent_id);
   const reports = comments.filter((c) => c.kind === "report" && !c.parent_id);
@@ -430,34 +460,27 @@ export default function TrainingBoardSupabase({
     : 0;
 
   function selectMenu(id: string) {
+    const m = menus.find((mm) => mm.id === id);
+    if (m) setViewDate(m.date);
     setJointNoticeDate(null);
     setEditingMenu(false);
     setSelectedId(id);
   }
 
   function selectJointDate(date: string) {
+    setViewDate(date);
     setSelectedId(null);
     setJointNoticeDate(date);
   }
 
-  // 前日・当日・翌日のメニューのみを上部のカードに表示する
-  const toDateStr = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const nearbyRange = [
-    toDateStr(yesterday),
-    toDateStr(today),
-    toDateStr(tomorrow),
+  // 上部カードは常に3枚固定：直近の未実施(開始前)2件＋その直前の実施済み1件
+  const upcomingMenus = chronoMenus.filter((m) => !isReportOpen(m));
+  const pastMenus = chronoMenus.filter((m) => isReportOpen(m));
+  const nearestPast = pastMenus.length > 0 ? pastMenus[pastMenus.length - 1] : null;
+  const fixedCards: MenuRow[] = [
+    ...(nearestPast ? [nearestPast] : []),
+    ...upcomingMenus.slice(0, 2),
   ];
-  const nearbyMenus = chronoMenus.filter((m) => nearbyRange.includes(m.date));
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -663,104 +686,56 @@ export default function TrainingBoardSupabase({
 
           {loadingMenus ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : fixedCards.length === 0 ? (
+            <p className="text-xs text-neutral-400">
+              {locationLabel[activeLocation]}のメニューはまだありません。下のカレンダーから作成・確認できます。
+            </p>
           ) : (
-            (() => {
-              type Card =
-                | { kind: "menu"; sortKey: string; menu: MenuRow }
-                | { kind: "joint"; sortKey: string; date: string };
-
-              const menuCards: Card[] = nearbyMenus.map((m) => ({
-                kind: "menu",
-                sortKey: `${m.date}T${m.start_time ?? "00:00"}`,
-                menu: m,
-              }));
-              const jointCards: Card[] = nearbyRange
-                .filter(
-                  (d) =>
-                    !menus.some((m) => m.date === d) && jointElsewhere.has(d)
-                )
-                .map((d) => ({
-                  kind: "joint",
-                  sortKey: `${d}T00:00`,
-                  date: d,
-                }));
-              const cards = [...menuCards, ...jointCards].sort((a, b) =>
-                a.sortKey.localeCompare(b.sortKey)
-              );
-              const many = cards.length > 3;
-
-              return (
-                <div className="flex flex-col gap-1">
-                  <div
-                    className={
-                      many
-                        ? "-mx-3 flex gap-2 overflow-x-auto px-3 pb-1"
-                        : "grid grid-cols-3 gap-2"
-                    }
+            <div className="grid grid-cols-3 gap-2">
+              {fixedCards.map((m) => {
+                const executed = isReportOpen(m);
+                const total = m.is_joint
+                  ? memberCounts.all
+                  : memberCounts[m.location];
+                const responded =
+                  submissionMap[m.id]?.respondedAuthors.size ?? 0;
+                const unsubmitted = executed && !m.is_off && responded < total;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => selectMenu(m.id)}
+                    className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                      m.id === selectedId
+                        ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
+                        : "border-neutral-200 bg-white text-neutral-600"
+                    }`}
                   >
-                    {cards.map((c) =>
-                      c.kind === "menu" ? (
-                        <button
-                          key={c.menu.id}
-                          onClick={() => selectMenu(c.menu.id)}
-                          className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                            many ? "w-28 shrink-0" : ""
-                          } ${
-                            c.menu.id === selectedId
-                              ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
-                              : "border-neutral-200 bg-white text-neutral-600"
-                          }`}
-                        >
-                          <span className="truncate text-[10px] text-neutral-400">
-                            {c.menu.date.slice(5)}
-                            {c.menu.start_time
-                              ? ` ${c.menu.start_time.slice(0, 5)}〜`
-                              : ""}
-                          </span>
-                          <span className="truncate">{c.menu.title}</span>
-                        </button>
-                      ) : (
-                        <button
-                          key={c.date}
-                          onClick={() => selectJointDate(c.date)}
-                          className={`flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                            many ? "w-28 shrink-0" : ""
-                          } ${
-                            jointNoticeDate === c.date
-                              ? "border-purple-600 bg-purple-50 font-semibold text-purple-700"
-                              : "border-purple-200 bg-purple-50 text-purple-600"
-                          }`}
-                        >
-                          <span className="truncate text-[10px] text-purple-400">
-                            {c.date.slice(5)}
-                          </span>
-                          <span className="truncate">
-                            全体練習（
-                            {locationLabel[jointElsewhere.get(c.date)!.location]}）
-                          </span>
-                        </button>
-                      )
+                    <span className="truncate text-[10px] text-neutral-400">
+                      {m.date.slice(5)}
+                      {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
+                    </span>
+                    <span className="truncate">{m.title}</span>
+                    {executed && (
+                      <span
+                        className={`mt-1 inline-block w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          unsubmitted
+                            ? "bg-red-100 text-red-600"
+                            : "bg-neutral-100 text-neutral-500"
+                        }`}
+                      >
+                        {unsubmitted ? "実施済み・未提出あり" : "実施済み"}
+                      </span>
                     )}
-                    {cards.length === 0 && (
-                      <p className="col-span-3 text-xs text-neutral-400">
-                        前日〜翌日の{locationLabel[activeLocation]}
-                        のメニューはありません。下のカレンダーから他の日を選べます。
-                      </p>
-                    )}
-                  </div>
-                  {many && (
-                    <p className="text-[10px] text-neutral-400">
-                      ← 横にスワイプ／スクロールできます →
-                    </p>
-                  )}
-                </div>
-              );
-            })()
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
         {jointNoticeDate ? (
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+            <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
             <p className="mb-2">
               {jointNoticeDate}は
               {locationLabel[jointElsewhere.get(jointNoticeDate)!.location]}
@@ -781,12 +756,7 @@ export default function TrainingBoardSupabase({
           </div>
         ) : selected?.is_off ? (
           <section className="rounded-lg border border-neutral-300 bg-neutral-100 p-4">
-            <MenuNavBar
-              hasPrev={hasPrevMenu}
-              hasNext={hasNextMenu}
-              onPrev={goPrevMenu}
-              onNext={goNextMenu}
-            />
+            <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
             <div className="mb-2 text-xs text-neutral-500">
               {locationLabel[selected.location]}・{selected.date}
               ・作成者: {selected.creator?.display_name ?? "不明"}
@@ -806,12 +776,7 @@ export default function TrainingBoardSupabase({
         ) : selected ? (
           <>
             <section className="rounded-lg border border-neutral-200 p-4">
-              <MenuNavBar
-                hasPrev={hasPrevMenu}
-                hasNext={hasNextMenu}
-                onPrev={goPrevMenu}
-                onNext={goNextMenu}
-              />
+              <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
               {editingMenu ? (
                 <form onSubmit={handleUpdateMenu} className="flex flex-col gap-2">
                   <input
@@ -1029,10 +994,12 @@ export default function TrainingBoardSupabase({
             </section>
           </>
         ) : (
-          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-400">
-            {formatMonthDay(toDateKey(new Date()))}
-            のメニューはまだ作成されていません
-          </p>
+          <div className="rounded-lg border border-dashed border-neutral-300 p-4">
+            <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
+            <p className="text-center text-sm text-neutral-400">
+              {formatMonthDay(viewDate)}のメニューはまだ作成されていません
+            </p>
+          </div>
         )}
 
         {/* すべてのメニューを見るカレンダー */}
@@ -1048,6 +1015,9 @@ export default function TrainingBoardSupabase({
             memberCounts={memberCounts}
             jointElsewhere={jointElsewhere}
             onSelectJoint={selectJointDate}
+            onSelectEmpty={(date) =>
+              applySelectionForDate(date, menus, jointElsewhere)
+            }
           />
         </section>
       </div>
@@ -1178,6 +1148,7 @@ function MenuCalendar({
   memberCounts,
   jointElsewhere,
   onSelectJoint,
+  onSelectEmpty,
 }: {
   menus: MenuRow[];
   selectedId: string | null;
@@ -1189,6 +1160,7 @@ function MenuCalendar({
   memberCounts: { tama: number; otsuka: number; all: number };
   jointElsewhere: Map<string, { menuId: string; location: Location }>;
   onSelectJoint: (date: string) => void;
+  onSelectEmpty: (date: string) => void;
 }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -1264,10 +1236,10 @@ function MenuCalendar({
           return (
             <button
               key={i}
-              disabled={!hasMenu && !jointInfo}
               onClick={() => {
                 if (hasMenu) onSelect(dayMenus[0].id);
                 else if (jointInfo) onSelectJoint(key);
+                else onSelectEmpty(key);
               }}
               className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
                 isSelected
@@ -1359,30 +1331,23 @@ function TimeSelect({
 }
 
 function MenuNavBar({
-  hasPrev,
-  hasNext,
   onPrev,
   onNext,
 }: {
-  hasPrev: boolean;
-  hasNext: boolean;
   onPrev: () => void;
   onNext: () => void;
 }) {
-  if (!hasPrev && !hasNext) return null;
   return (
     <div className="mb-2 flex items-center justify-between">
       <button
         onClick={onPrev}
-        disabled={!hasPrev}
-        className="rounded px-2 py-1 text-sm text-neutral-500 disabled:opacity-0 active:bg-neutral-100"
+        className="rounded px-2 py-1 text-sm text-neutral-500 active:bg-neutral-100"
       >
         ◀
       </button>
       <button
         onClick={onNext}
-        disabled={!hasNext}
-        className="rounded px-2 py-1 text-sm text-neutral-500 disabled:opacity-0 active:bg-neutral-100"
+        className="rounded px-2 py-1 text-sm text-neutral-500 active:bg-neutral-100"
       >
         ▶
       </button>
