@@ -56,6 +56,15 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
+// "YYYY-MM-DD" + "HH:MM" -> "2026年7月24日 10時10分〜"
+function formatFullDateTime(dateStr: string, startTime: string | null) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const base = `${y}年${m}月${d}日`;
+  if (!startTime) return base;
+  const [h, min] = startTime.split(":").map(Number);
+  return `${base} ${h}時${String(min).padStart(2, "0")}分〜`;
+}
+
 // メニューの開始時刻を過ぎているか判定（開始時刻未設定の場合は常に報告可能）
 function isReportOpen(menu: MenuRow): boolean {
   if (!menu.start_time) return true;
@@ -725,7 +734,7 @@ export default function TrainingBoardSupabase({
                       {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
                     </span>
                     <span className="truncate">
-                      {m.title || m.content.slice(0, 12) || "(内容未設定)"}
+                      {m.title || formatFullDateTime(m.date, m.start_time)}
                     </span>
                     {executed && (
                       <span
@@ -843,11 +852,10 @@ export default function TrainingBoardSupabase({
                       <>（編集: {selected.editor.display_name}）</>
                     )}
                   </div>
-                  {selected.title && (
-                    <h2 className="mb-2 text-base font-bold">
-                      {selected.title}
-                    </h2>
-                  )}
+                  <h2 className="mb-2 text-lg font-bold">
+                    {selected.title ||
+                      formatFullDateTime(selected.date, selected.start_time)}
+                  </h2>
                   <p className="whitespace-pre-wrap text-sm text-neutral-800">
                     {selected.content}
                   </p>
