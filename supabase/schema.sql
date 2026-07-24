@@ -190,3 +190,74 @@ create policy "menus_insert_captain_only" on menus
 -- 追加: 部員の学年
 -- ============================================
 alter table profiles add column if not exists grade text;
+
+-- ============================================
+-- 更新: アカウント削除時にメニュー・コメントは残し、
+-- 作成者/投稿者情報だけをNULL（不明）にする
+-- ============================================
+alter table menus alter column created_by drop not null;
+alter table menus drop constraint menus_created_by_fkey;
+alter table menus add constraint menus_created_by_fkey
+  foreign key (created_by) references profiles(id) on delete set null;
+
+alter table menus drop constraint menus_last_edited_by_fkey;
+alter table menus add constraint menus_last_edited_by_fkey
+  foreign key (last_edited_by) references profiles(id) on delete set null;
+
+alter table comments alter column author_id drop not null;
+alter table comments drop constraint comments_author_id_fkey;
+alter table comments add constraint comments_author_id_fkey
+  foreign key (author_id) references profiles(id) on delete set null;
+
+-- ============================================
+-- 追加: 試合日程、個人のウェイトトレーニング記録（マイページ用）
+-- ============================================
+create table if not exists matches (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  name text not null,
+  date date not null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table matches enable row level security;
+
+create policy "matches_select_same_team" on matches
+  for select using (team_id = get_my_team_id());
+
+create policy "matches_insert_leader_coach" on matches
+  for insert with check (
+    team_id in (
+      select team_id from profiles
+      where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+    )
+  );
+
+create policy "matches_delete_leader_coach" on matches
+  for delete using (
+    team_id in (
+      select team_id from profiles
+      where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+    )
+  );
+
+create table if not exists weight_logs (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid references profiles(id) on delete set null,
+  date date not null,
+  content text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (author_id, date)
+);
+alter table weight_logs enable row level security;
+
+create policy "weight_logs_select_self" on weight_logs
+  for select using (author_id = auth.uid());
+
+create policy "weight_logs_insert_self" on weight_logs
+  for insert with check (author_id = auth.uid());
+
+create policy "weight_logs_update_self" on weight_logs
+  for update using (author_id = auth.uid());

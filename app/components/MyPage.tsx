@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { Location, locationLabel, roleLabel } from "../lib/types";
+import { canCreateMenu, Location, locationLabel, roleLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type MenuRow = {
@@ -14,6 +14,18 @@ type MenuRow = {
   location: Location;
   start_time: string | null;
   is_off: boolean;
+};
+
+type MatchRow = {
+  id: string;
+  name: string;
+  date: string;
+};
+
+type WeightLogRow = {
+  id: string;
+  date: string;
+  content: string;
 };
 
 function toDateKey(d: Date) {
@@ -39,6 +51,26 @@ function formatShortDateTime(dateStr: string, startTime: string | null) {
   return `${base} ${h}時${String(min).padStart(2, "0")}分〜`;
 }
 
+// "YYYY-MM-DD" -> "2026年7月24日"
+function formatFullDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return `${y}年${m}月${d}日`;
+}
+
+// "YYYY-MM-DD" -> "7月24日"
+function formatMonthDay(dateStr: string) {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+function daysUntil(dateStr: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${dateStr}T00:00:00`);
+  const diffMs = target.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
 export default function MyPage({
   profile,
   signOut,
@@ -48,19 +80,37 @@ export default function MyPage({
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const todayStr = toDateKey(new Date());
+
   const [todoMenus, setTodoMenus] = useState<MenuRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
+  const [loadingMatch, setLoadingMatch] = useState(true);
+  const [showMatchForm, setShowMatchForm] = useState(false);
+  const [newMatchName, setNewMatchName] = useState("");
+  const [newMatchDate, setNewMatchDate] = useState("");
+
+  const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
+  const [todayLogText, setTodayLogText] = useState("");
+  const [loadingLog, setLoadingLog] = useState(true);
+  const [savingLog, setSavingLog] = useState(false);
+
+  const [pastLogs, setPastLogs] = useState<WeightLogRow[]>([]);
+  const [loadingPastLogs, setLoadingPastLogs] = useState(true);
 
   useEffect(() => {
     if (profile.home_location) loadTodo();
-    else setLoading(false);
+    else setLoadingTodo(false);
+    loadNextMatch();
+    loadTodayLog();
+    loadPastLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.home_location]);
+  }, []);
 
   async function loadTodo() {
-    setLoading(true);
-    const todayStr = toDateKey(new Date());
+    setLoadingTodo(true);
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const rangeStart = toDateKey(twoWeeksAgo);
@@ -77,7 +127,7 @@ export default function MyPage({
 
     if (menuError) {
       setErrorMsg(menuError.message);
-      setLoading(false);
+      setLoadingTodo(false);
       return;
     }
 
@@ -86,7 +136,7 @@ export default function MyPage({
 
     if (openMenus.length === 0) {
       setTodoMenus([]);
-      setLoading(false);
+      setLoadingTodo(false);
       return;
     }
 
@@ -102,7 +152,7 @@ export default function MyPage({
 
     if (commentError) {
       setErrorMsg(commentError.message);
-      setLoading(false);
+      setLoadingTodo(false);
       return;
     }
 
@@ -110,7 +160,107 @@ export default function MyPage({
       ((commentData ?? []) as { menu_id: string }[]).map((c) => c.menu_id)
     );
     setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
-    setLoading(false);
+    setLoadingTodo(false);
+  }
+
+  async function loadNextMatch() {
+    setLoadingMatch(true);
+    const { data, error } = await supabase
+      .from("matches")
+      .select("id, name, date")
+      .eq("team_id", profile.team_id)
+      .gte("date", todayStr)
+      .order("date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setNextMatch((data as MatchRow | null) ?? null);
+    }
+    setLoadingMatch(false);
+  }
+
+  async function handleAddMatch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMatchName.trim() || !newMatchDate) return;
+    const { error } = await supabase.from("matches").insert({
+      team_id: profile.team_id,
+      name: newMatchName.trim(),
+      date: newMatchDate,
+      created_by: profile.id,
+    });
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    setNewMatchName("");
+    setNewMatchDate("");
+    setShowMatchForm(false);
+    await loadNextMatch();
+  }
+
+  async function loadTodayLog() {
+    setLoadingLog(true);
+    const { data, error } = await supabase
+      .from("weight_logs")
+      .select("id, date, content")
+      .eq("author_id", profile.id)
+      .eq("date", todayStr)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else if (data) {
+      setTodayLog(data as WeightLogRow);
+      setTodayLogText((data as WeightLogRow).content);
+    }
+    setLoadingLog(false);
+  }
+
+  async function loadPastLogs() {
+    setLoadingPastLogs(true);
+    const { data, error } = await supabase
+      .from("weight_logs")
+      .select("id, date, content")
+      .eq("author_id", profile.id)
+      .lt("date", todayStr)
+      .order("date", { ascending: false })
+      .limit(3);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setPastLogs((data ?? []) as WeightLogRow[]);
+    }
+    setLoadingPastLogs(false);
+  }
+
+  async function handleSaveLog() {
+    setSavingLog(true);
+    const { data, error } = await supabase
+      .from("weight_logs")
+      .upsert(
+        {
+          id: todayLog?.id,
+          team_id: profile.team_id,
+          author_id: profile.id,
+          date: todayStr,
+          content: todayLogText,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "author_id,date" }
+      )
+      .select("id, date, content")
+      .single();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setTodayLog(data as WeightLogRow);
+    }
+    setSavingLog(false);
   }
 
   function goToMenu(m: MenuRow) {
@@ -125,14 +275,13 @@ export default function MyPage({
     router.push("/");
   }
 
+  const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
+
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
         <h1 className="text-base font-bold sm:text-lg">マイページ</h1>
         <div className="flex items-center gap-2 text-[11px] text-neutral-500">
-          <span className="hidden sm:inline">
-            {profile.display_name}（{roleLabel[profile.role]}）
-          </span>
           <button
             onClick={() => router.push("/")}
             className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
@@ -148,23 +297,92 @@ export default function MyPage({
         </div>
       </header>
 
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
+      <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-50 p-2 text-xs text-red-600">
             {errorMsg}
           </p>
         )}
 
-        <section className="flex flex-col gap-3">
+        {/* 日誌タイトル */}
+        <section className="rounded-lg border border-neutral-200 p-4">
+          <p className="text-xs text-neutral-400">{formatFullDate(todayStr)}</p>
+          <p className="text-lg font-bold">
+            {profile.display_name}（{roleLabel[profile.role]}）
+          </p>
+        </section>
+
+        {/* 次の試合まで */}
+        <section className="flex flex-col gap-2">
+          {loadingMatch ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : nextMatch ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
+              <p className="text-xs text-blue-600">次の試合【{nextMatch.name}】まで</p>
+              <p className="text-3xl font-bold text-blue-700">
+                あと{matchDays}日
+              </p>
+              <p className="text-[11px] text-blue-500">
+                {formatMonthDay(nextMatch.date)}
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-400">
+              次の試合はまだ登録されていません。
+            </p>
+          )}
+
+          {canCreateMenu(profile.role) && (
+            <>
+              <button
+                onClick={() => setShowMatchForm((v) => !v)}
+                className="self-start text-[11px] font-medium text-blue-700 active:text-blue-900"
+              >
+                {showMatchForm ? "キャンセル" : "＋ 試合を登録する"}
+              </button>
+              {showMatchForm && (
+                <form
+                  onSubmit={handleAddMatch}
+                  className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
+                >
+                  <input
+                    type="text"
+                    placeholder="試合名（例：全日本学生選手権）"
+                    value={newMatchName}
+                    onChange={(e) => setNewMatchName(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    required
+                  />
+                  <input
+                    type="date"
+                    value={newMatchDate}
+                    onChange={(e) => setNewMatchDate(e.target.value)}
+                    className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-blue-600 py-2 text-sm font-medium text-white active:bg-blue-700"
+                  >
+                    登録する
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* やることリスト */}
+        <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            今日のやることリスト
+            やることリスト
           </h2>
 
           {!profile.home_location ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
               所属拠点(多摩/大塚)がまだ設定されていません。設定されると、未報告の練習メニューがここに表示されます。
             </p>
-          ) : loading ? (
+          ) : loadingTodo ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : todoMenus.length === 0 ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
@@ -191,22 +409,63 @@ export default function MyPage({
           )}
         </section>
 
+        {/* 本日のウェイトメニュー */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            今日のウェイトメニュー
+            本日のウェイトメニュー
           </h2>
-          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-            準備中です。ウェイトトレーニング機能の実装後、ここに表示されます。
-          </p>
+          {loadingLog ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={todayLogText}
+                onChange={(e) => setTodayLogText(e.target.value)}
+                placeholder={
+                  "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
+                }
+                rows={10}
+                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+              />
+              <button
+                onClick={handleSaveLog}
+                disabled={savingLog}
+                className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+              >
+                {todayLog ? "更新する" : "保存する"}
+              </button>
+            </div>
+          )}
         </section>
 
+        {/* 過去3回分のトレーニング記録 */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            次の試合日程
+            前回までのトレーニング記録
           </h2>
-          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-            準備中です。
-          </p>
+          {loadingPastLogs ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : pastLogs.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              まだ記録がありません。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {pastLogs.map((log) => (
+                <details
+                  key={log.id}
+                  className="rounded-lg border border-neutral-200 p-3"
+                >
+                  <summary className="cursor-pointer text-xs font-semibold text-neutral-500">
+                    {formatMonthDay(log.date)}
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
+                    {log.content || "(記録なし)"}
+                  </p>
+                </details>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
