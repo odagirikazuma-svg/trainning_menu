@@ -471,12 +471,9 @@ export default function TrainingBoardSupabase({
                   />
                   <label className="flex flex-col text-[11px] text-neutral-500">
                     開始時刻
-                    <input
-                      type="time"
-                      step={600}
+                    <TimeSelect
                       value={newStartTime}
-                      onChange={(e) => setNewStartTime(e.target.value)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                      onChange={setNewStartTime}
                     />
                   </label>
                   <input
@@ -624,12 +621,9 @@ export default function TrainingBoardSupabase({
                   />
                   <label className="flex flex-col text-[11px] text-neutral-500">
                     開始時刻
-                    <input
-                      type="time"
-                      step={600}
+                    <TimeSelect
                       value={editStartTime}
-                      onChange={(e) => setEditStartTime(e.target.value)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                      onChange={setEditStartTime}
                     />
                   </label>
                   <input
@@ -1099,6 +1093,57 @@ function MenuCalendar({
           全体練習（別拠点）
         </span>
       </p>
+    </div>
+  );
+}
+
+// 10分刻みのプルダウンで時刻を選ぶ（ブラウザ標準のtime inputはstep指定が
+// 効かない場合があるため、hour/minuteそれぞれをselectで選ばせる方式にしている）
+function TimeSelect({
+  value,
+  onChange,
+}: {
+  value: string; // "HH:MM" or ""
+  onChange: (value: string) => void;
+}) {
+  const [hour, minute] = value ? value.split(":") : ["", ""];
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const minutes = ["00", "10", "20", "30", "40", "50"];
+
+  function update(nextHour: string, nextMinute: string) {
+    if (!nextHour || !nextMinute) {
+      onChange("");
+      return;
+    }
+    onChange(`${nextHour}:${nextMinute}`);
+  }
+
+  return (
+    <div className="flex gap-2">
+      <select
+        value={hour}
+        onChange={(e) => update(e.target.value, minute || "00")}
+        className="flex-1 rounded-lg border border-neutral-300 px-2 py-2.5 text-sm"
+      >
+        <option value="">--</option>
+        {hours.map((h) => (
+          <option key={h} value={h}>
+            {h}時
+          </option>
+        ))}
+      </select>
+      <select
+        value={minute}
+        onChange={(e) => update(hour || "00", e.target.value)}
+        className="flex-1 rounded-lg border border-neutral-300 px-2 py-2.5 text-sm"
+      >
+        <option value="">--</option>
+        {minutes.map((m) => (
+          <option key={m} value={m}>
+            {m}分
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
