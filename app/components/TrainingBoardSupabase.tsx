@@ -473,14 +473,26 @@ export default function TrainingBoardSupabase({
     setJointNoticeDate(date);
   }
 
-  // 上部カードは常に3枚固定：直近の未実施(開始前)2件＋その直前の実施済み1件
-  const upcomingMenus = chronoMenus.filter((m) => !isReportOpen(m));
-  const pastMenus = chronoMenus.filter((m) => isReportOpen(m));
-  const nearestPast = pastMenus.length > 0 ? pastMenus[pastMenus.length - 1] : null;
-  const fixedCards: MenuRow[] = [
-    ...(nearestPast ? [nearestPast] : []),
-    ...upcomingMenus.slice(0, 2),
-  ];
+  // 上部カードは「今表示中のメニュー」を中央に、前後(古い/新しい)を左右に表示する
+  const referenceKey = selected
+    ? `${selected.date}T${selected.start_time ?? "00:00"}`
+    : `${viewDate}T12:00`;
+  const prevCard =
+    [...chronoMenus]
+      .reverse()
+      .find(
+        (m) => `${m.date}T${m.start_time ?? "00:00"}` < referenceKey
+      ) ?? null;
+  const nextCard =
+    chronoMenus.find(
+      (m) => `${m.date}T${m.start_time ?? "00:00"}` > referenceKey
+    ) ?? null;
+  const neighborCards: { menu: MenuRow; role: "prev" | "current" | "next" }[] =
+    [
+      ...(prevCard ? [{ menu: prevCard, role: "prev" as const }] : []),
+      ...(selected ? [{ menu: selected, role: "current" as const }] : []),
+      ...(nextCard ? [{ menu: nextCard, role: "next" as const }] : []),
+    ];
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -686,21 +698,21 @@ export default function TrainingBoardSupabase({
 
           {loadingMenus ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
-          ) : fixedCards.length === 0 ? (
+          ) : neighborCards.length === 0 ? (
             <p className="text-xs text-neutral-400">
               {locationLabel[activeLocation]}のメニューはまだありません。下のカレンダーから作成・確認できます。
             </p>
           ) : (
             <div
               className={`grid gap-2 ${
-                fixedCards.length === 1
+                neighborCards.length === 1
                   ? "grid-cols-1"
-                  : fixedCards.length === 2
+                  : neighborCards.length === 2
                   ? "grid-cols-2"
                   : "grid-cols-3"
               }`}
             >
-              {fixedCards.map((m) => {
+              {neighborCards.map(({ menu: m, role }) => {
                 const executed = !m.is_off && isReportOpen(m);
                 const total = m.is_joint
                   ? memberCounts.all
@@ -708,17 +720,21 @@ export default function TrainingBoardSupabase({
                 const responded =
                   submissionMap[m.id]?.respondedAuthors.size ?? 0;
                 const unsubmitted = executed && !m.is_off && responded < total;
+                const isCurrent = role === "current";
                 return (
-                  <button
+                  <div
                     key={m.id}
-                    onClick={() => selectMenu(m.id)}
                     className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                      m.id === selectedId
-                        ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
-                        : "border-neutral-200 bg-white text-neutral-600"
+                      isCurrent
+                        ? "border-blue-600 bg-blue-50 font-semibold text-blue-700 shadow-sm"
+                        : "border-neutral-100 bg-neutral-50 text-neutral-400"
                     }`}
                   >
-                    <span className="truncate text-[10px] text-neutral-400">
+                    <span
+                      className={`truncate text-[10px] ${
+                        isCurrent ? "text-neutral-400" : "text-neutral-300"
+                      }`}
+                    >
                       {m.date.slice(5)}
                       {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
                     </span>
@@ -726,7 +742,9 @@ export default function TrainingBoardSupabase({
                     {executed && (
                       <span
                         className={`mt-1 inline-block w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          unsubmitted
+                          !isCurrent
+                            ? "bg-neutral-100 text-neutral-400"
+                            : unsubmitted
                             ? "bg-red-100 text-red-600"
                             : "bg-neutral-100 text-neutral-500"
                         }`}
@@ -734,7 +752,7 @@ export default function TrainingBoardSupabase({
                         {unsubmitted ? "実施済み・未提出あり" : "実施済み"}
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1018,6 +1036,7 @@ export default function TrainingBoardSupabase({
           <MenuCalendar
             menus={menus}
             selectedId={selectedId}
+            viewDate={viewDate}
             onSelect={selectMenu}
             submissionMap={submissionMap}
             memberCounts={memberCounts}
@@ -1151,6 +1170,7 @@ function toDateKey(d: Date) {
 function MenuCalendar({
   menus,
   selectedId,
+  viewDate,
   onSelect,
   submissionMap,
   memberCounts,
@@ -1160,6 +1180,7 @@ function MenuCalendar({
 }: {
   menus: MenuRow[];
   selectedId: string | null;
+  viewDate: string;
   onSelect: (id: string) => void;
   submissionMap: Record<
     string,
@@ -1238,8 +1259,8 @@ function MenuCalendar({
           const isOff = dayMenus.some((m) => m.is_off);
           const jointInfo = !hasMenu ? jointElsewhere.get(key) : undefined;
           const isToday = key === todayKey;
+          const isViewDate = key === viewDate;
           const isPast = key < todayKey;
-          const isSelected = dayMenus.some((m) => m.id === selectedId);
           const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
           return (
             <button
@@ -1250,7 +1271,7 @@ function MenuCalendar({
                 else onSelectEmpty(key);
               }}
               className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
-                isSelected
+                isViewDate && hasMenu
                   ? "bg-blue-600 font-semibold text-white"
                   : isOff
                   ? "bg-neutral-200 font-medium text-neutral-500 active:bg-neutral-300"
@@ -1259,9 +1280,12 @@ function MenuCalendar({
                   : jointInfo
                   ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
                   : "text-neutral-300"
-              } ${isToday && !isSelected ? "ring-1 ring-neutral-400" : ""}`}
+              } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               {date.getDate()}
+              {isToday && (
+                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900" />
+              )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
@@ -1270,6 +1294,14 @@ function MenuCalendar({
         })}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900" />
+          今日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded ring-2 ring-blue-500" />
+          表示中の日
+        </span>
         <span className="flex items-center gap-1">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
           未提出の部員がいる日
