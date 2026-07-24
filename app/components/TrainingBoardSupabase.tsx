@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
@@ -80,7 +81,32 @@ export default function TrainingBoardSupabase({
   signOut: () => void;
 }) {
   const supabase = createClient();
-  const [activeLocation, setActiveLocation] = useState<Location>("tama");
+  const router = useRouter();
+  const [{ initialLocation, initialDate }] = useState<{
+    initialLocation: Location;
+    initialDate: string | null;
+  }>(() => {
+    if (typeof window === "undefined") {
+      return { initialLocation: "tama", initialDate: null };
+    }
+    try {
+      const raw = sessionStorage.getItem("jumpTo");
+      if (raw) {
+        sessionStorage.removeItem("jumpTo");
+        const parsed = JSON.parse(raw);
+        return {
+          initialLocation: parsed.location === "otsuka" ? "otsuka" : "tama",
+          initialDate: parsed.date ?? null,
+        };
+      }
+    } catch {
+      // 無視して通常起動にフォールバック
+    }
+    return { initialLocation: "tama", initialDate: null };
+  });
+  const usedInitialJump = useRef(false);
+  const [activeLocation, setActiveLocation] =
+    useState<Location>(initialLocation);
   const [menus, setMenus] = useState<MenuRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -144,8 +170,12 @@ export default function TrainingBoardSupabase({
         loadMenus(),
         loadJointElsewhere(),
       ]);
-      const todayStr = toDateKey(new Date());
-      applySelectionForDate(todayStr, rows, jointMap);
+      const targetDate =
+        !usedInitialJump.current && initialDate
+          ? initialDate
+          : toDateKey(new Date());
+      usedInitialJump.current = true;
+      applySelectionForDate(targetDate, rows, jointMap);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocation]);
@@ -516,6 +546,12 @@ export default function TrainingBoardSupabase({
           <span className="hidden sm:inline">
             {profile.display_name}（{roleLabel[profile.role]}）
           </span>
+          <button
+            onClick={() => router.push("/mypage")}
+            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+          >
+            マイページ
+          </button>
           <button
             onClick={signOut}
             className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
