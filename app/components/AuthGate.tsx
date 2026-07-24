@@ -92,7 +92,10 @@ export default function AuthGate({
       .insert({
         id: session.user.id,
         team_id: team.id,
-        display_name: session.user.email?.split("@")[0] ?? "名無し",
+        display_name:
+          (session.user.user_metadata?.display_name as string | undefined) ||
+          session.user.email?.split("@")[0] ||
+          "名無し",
         role: "member",
       })
       .select("id, team_id, display_name, role, home_location")
@@ -110,7 +113,11 @@ export default function AuthGate({
     setSubmitting(true);
     setErrorMsg(null);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: displayName } },
+      });
       if (error) {
         setErrorMsg(error.message);
       } else {
@@ -159,6 +166,16 @@ export default function AuthGate({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          {mode === "signup" && (
+            <input
+              type="text"
+              required
+              placeholder="氏名"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            />
+          )}
           <input
             type="email"
             required

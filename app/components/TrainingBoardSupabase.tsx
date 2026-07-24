@@ -386,7 +386,7 @@ export default function TrainingBoardSupabase({
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur">
-        <h1 className="text-base font-bold sm:text-lg">練習メニュー掲示板</h1>
+        <h1 className="text-base font-bold sm:text-lg">マット練習掲示板</h1>
         <div className="flex items-center gap-2 text-[11px] text-neutral-500">
           <span className="hidden sm:inline">
             {profile.display_name}（{roleLabel[profile.role]}）
