@@ -81,7 +81,6 @@ export default function TrainingBoardSupabase({
   const [confirmingNew, setConfirmingNew] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
-  const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
   const [reportText, setReportText] = useState("");
@@ -94,7 +93,6 @@ export default function TrainingBoardSupabase({
   const [editingMenu, setEditingMenu] = useState(false);
   const [editDate, setEditDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
-  const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberCounts, setMemberCounts] = useState<{
@@ -283,7 +281,7 @@ export default function TrainingBoardSupabase({
   async function handleCreateMenu(e: React.FormEvent) {
     e.preventDefault();
     if (!newDate) return;
-    if (newMenuType !== "off" && (!newTitle || !newContent)) return;
+    if (newMenuType !== "off" && !newContent) return;
 
     const otherLocation = locations.find((l) => l !== activeLocation)!;
     const basePayload = {
@@ -316,7 +314,7 @@ export default function TrainingBoardSupabase({
     } else {
       const res = await supabase.from("menus").insert({
         ...basePayload,
-        title: newTitle,
+        title: "",
         content: newContent,
         location: activeLocation,
         start_time: newStartTime || null,
@@ -332,7 +330,6 @@ export default function TrainingBoardSupabase({
     }
     setNewDate("");
     setNewStartTime("");
-    setNewTitle("");
     setNewContent("");
     setNewMenuType("normal");
     setNewOffBothLocations(false);
@@ -362,20 +359,18 @@ export default function TrainingBoardSupabase({
   function startEditingMenu(m: MenuRow) {
     setEditDate(m.date);
     setEditStartTime(m.start_time ?? "");
-    setEditTitle(m.title);
     setEditContent(m.content);
     setEditingMenu(true);
   }
 
   async function handleUpdateMenu(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedId || !editDate || !editTitle || !editContent) return;
+    if (!selectedId || !editDate || !editContent) return;
     const { error } = await supabase
       .from("menus")
       .update({
         date: editDate,
         start_time: editStartTime || null,
-        title: editTitle,
         content: editContent,
         last_edited_by: profile.id,
         last_edited_at: new Date().toISOString(),
@@ -575,7 +570,6 @@ export default function TrainingBoardSupabase({
                         {newStartTime && ` ${newStartTime}〜`}
                         {newMenuType === "joint" && "・全体練習"}
                       </p>
-                      <p className="font-bold">{newTitle}</p>
                       <p className="whitespace-pre-wrap text-neutral-800">
                         {newContent}
                       </p>
@@ -636,14 +630,6 @@ export default function TrainingBoardSupabase({
                           onChange={setNewStartTime}
                         />
                       </label>
-                      <input
-                        type="text"
-                        placeholder="タイトル（例：通常練習）"
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                        required
-                      />
                       <textarea
                         placeholder="メニュー詳細（自由記述）"
                         value={newContent}
@@ -684,7 +670,7 @@ export default function TrainingBoardSupabase({
                   onClick={() => {
                     if (
                       newDate &&
-                      (newMenuType === "off" || (newTitle && newContent))
+                      (newMenuType === "off" || newContent)
                     )
                       setConfirmingNew(true);
                   }}
@@ -738,7 +724,9 @@ export default function TrainingBoardSupabase({
                       {m.date.slice(5)}
                       {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
                     </span>
-                    <span className="truncate">{m.title}</span>
+                    <span className="truncate">
+                      {m.title || m.content.slice(0, 12) || "(内容未設定)"}
+                    </span>
                     {executed && (
                       <span
                         className={`mt-1 inline-block w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -821,13 +809,6 @@ export default function TrainingBoardSupabase({
                       onChange={setEditStartTime}
                     />
                   </label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
-                    required
-                  />
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
@@ -862,9 +843,11 @@ export default function TrainingBoardSupabase({
                       <>（編集: {selected.editor.display_name}）</>
                     )}
                   </div>
-                  <h2 className="mb-2 text-base font-bold">
-                    {selected.title}
-                  </h2>
+                  {selected.title && (
+                    <h2 className="mb-2 text-base font-bold">
+                      {selected.title}
+                    </h2>
+                  )}
                   <p className="whitespace-pre-wrap text-sm text-neutral-800">
                     {selected.content}
                   </p>
