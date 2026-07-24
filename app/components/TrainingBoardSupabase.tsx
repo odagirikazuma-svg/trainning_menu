@@ -711,7 +711,7 @@ export default function TrainingBoardSupabase({
             <p className="mb-3 text-base font-bold text-neutral-700">
               本日はオフです
             </p>
-            {(canCreateMenu(profile.role) || profile.role === "coach") && (
+            {canCreateMenu(profile.role) && (
               <button
                 onClick={() => handleDeleteMenu(selected.id)}
                 className="rounded-lg border border-neutral-400 px-3 py-2 text-xs text-neutral-600 active:bg-neutral-200"
@@ -783,8 +783,7 @@ export default function TrainingBoardSupabase({
                         </>
                       )}
                     </span>
-                    {(canCreateMenu(profile.role) ||
-                      profile.role === "coach") &&
+                    {canCreateMenu(profile.role) &&
                       !isReportOpen(selected) && (
                         <button
                           onClick={() => startEditingMenu(selected)}

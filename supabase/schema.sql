@@ -173,3 +173,15 @@ create policy "menus_delete_leader_coach" on menus
       where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
     )
   );
+
+-- ============================================
+-- 更新: コーチもメニュー作成できるようにする
+-- ============================================
+drop policy if exists "menus_insert_captain_only" on menus;
+create policy "menus_insert_captain_only" on menus
+  for insert with check (
+    team_id in (
+      select team_id from profiles
+      where id = auth.uid() and role in ('leader', 'vice_leader', 'captain', 'coach')
+    )
+  );

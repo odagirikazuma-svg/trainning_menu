@@ -46,4 +46,7 @@ export const roleLabel: Record<Role, string> = {
 // メニューを作成できる権限を持つロール
 // キャプテンはリーダーと同じ権限に加え、将来的に追加の権限を持つ想定
 export const canCreateMenu = (role: Role) =>
-  role === "leader" || role === "vice_leader" || role === "captain";
+  role === "leader" ||
+  role === "vice_leader" ||
+  role === "captain" ||
+  role === "coach";
