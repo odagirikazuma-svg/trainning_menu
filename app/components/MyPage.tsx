@@ -162,7 +162,7 @@ export default function MyPage({
     string | null
   >(null);
   const [popupRecord, setPopupRecord] = useState<
-    PopupRecordRow | null | undefined
+    PopupRecordRow[] | null | undefined
   >(undefined);
   const [loadingPopupRecord, setLoadingPopupRecord] = useState(false);
   // トレーニング記録（実施報告・未実施報告の代替メニュー）が存在する日付一覧（昇順）
@@ -649,18 +649,6 @@ export default function MyPage({
       return;
     }
 
-    if (logData) {
-      const row = logData as WeightLogRow;
-      setPopupRecord({
-        date: row.date,
-        content: row.content,
-        type: row.type,
-        isAlternative: false,
-      });
-      setLoadingPopupRecord(false);
-      return;
-    }
-
     const { data: absentData, error: absentError } = await supabase
       .from("comments")
       .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
@@ -683,16 +671,27 @@ export default function MyPage({
     }[];
     const match = absentRows.find((r) => r.menu && r.menu.date === dateStr);
 
+    // 通常のトレーニング記録を先に、未実施報告の代替メニューはその後に並べる
+    const records: PopupRecordRow[] = [];
+    if (logData) {
+      const row = logData as WeightLogRow;
+      records.push({
+        date: row.date,
+        content: row.content,
+        type: row.type,
+        isAlternative: false,
+      });
+    }
     if (match) {
-      setPopupRecord({
+      records.push({
         date: dateStr,
         content: match.text,
         type: match.alt_type,
         isAlternative: true,
       });
-    } else {
-      setPopupRecord(null);
     }
+
+    setPopupRecord(records.length > 0 ? records : null);
     setLoadingPopupRecord(false);
   }
 
@@ -1172,22 +1171,33 @@ export default function MyPage({
                       のトレーニング記録はありません
                     </p>
                   ) : popupRecord ? (
-                    <div className="pr-4">
-                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-500">
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[popupRecord.type]}`}
-                        />
-                        {formatMonthDay(popupRecord.date)}・
-                        {trainingTypeLabel[popupRecord.type]}
-                        {popupRecord.isAlternative && (
-                          <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
-                            代替メニュー
-                          </span>
-                        )}
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                        {popupRecord.content || "(記録なし)"}
-                      </p>
+                    <div className="flex max-h-80 flex-col gap-4 overflow-y-auto pr-4">
+                      {popupRecord.map((r, idx) => (
+                        <div
+                          key={idx}
+                          className={
+                            idx > 0
+                              ? "border-t border-neutral-100 pt-4"
+                              : undefined
+                          }
+                        >
+                          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
+                            />
+                            {formatMonthDay(r.date)}・
+                            {trainingTypeLabel[r.type]}
+                            {r.isAlternative && (
+                              <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                                代替メニュー
+                              </span>
+                            )}
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                            {r.content || "(記録なし)"}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>
