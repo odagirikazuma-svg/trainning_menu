@@ -349,3 +349,10 @@ create policy "comments_update_self" on comments
 
 create policy "comments_delete_self" on comments
   for delete using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: チームページから他の部員のマイページ（トレーニング記録）を
+-- 閲覧できるように、weight_logsを同じチーム内なら閲覧可能にする
+-- ============================================
+create policy "weight_logs_select_same_team" on weight_logs
+  for select using (team_id = get_my_team_id());

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
+  currentGrade,
   Location,
   locationLabel,
   locations,
@@ -32,6 +33,12 @@ type WeightMaxRow = {
   bench: number | null;
   squat: number | null;
   deadlift: number | null;
+};
+
+type PastMenuRow = {
+  id: string;
+  date: string;
+  location: Location;
 };
 
 const locationDotColor: Record<Location, string> = {
@@ -70,9 +77,14 @@ export default function TeamPage({
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
   const [loadingMaxes, setLoadingMaxes] = useState(true);
 
+  const [pastMenus, setPastMenus] = useState<PastMenuRow[]>([]);
+  const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
+  const [loadingCompliance, setLoadingCompliance] = useState(true);
+
   useEffect(() => {
     loadMembers();
     loadWeightMaxes();
+    loadCompliance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -132,7 +144,75 @@ export default function TeamPage({
     setLoadingMaxes(false);
   }
 
+  // 直近60日の「オフではない練習」のうち、実施報告・未実施報告が
+  // まだ提出されていないものがあるかどうかを部員ごとに調べる
+  async function loadCompliance() {
+    setLoadingCompliance(true);
+    const lookbackStart = new Date();
+    lookbackStart.setDate(lookbackStart.getDate() - 60);
+    const rangeStart = toDateKey(lookbackStart);
+    const todayStr = toDateKey(new Date());
+
+    const { data: menuData, error: menuError } = await supabase
+      .from("menus")
+      .select("id, date, location")
+      .eq("team_id", profile.team_id)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (menuError) {
+      setErrorMsg(menuError.message);
+      setLoadingCompliance(false);
+      return;
+    }
+
+    const menuRows = (menuData ?? []) as PastMenuRow[];
+    setPastMenus(menuRows);
+
+    if (menuRows.length === 0) {
+      setSubmittedKeys(new Set());
+      setLoadingCompliance(false);
+      return;
+    }
+
+    const { data: commentData, error: commentError } = await supabase
+      .from("comments")
+      .select("menu_id, author_id, kind")
+      .in(
+        "menu_id",
+        menuRows.map((m) => m.id)
+      )
+      .in("kind", ["report", "absent"])
+      .is("parent_id", null);
+
+    if (commentError) {
+      setErrorMsg(commentError.message);
+      setLoadingCompliance(false);
+      return;
+    }
+
+    const keys = new Set<string>();
+    for (const row of (commentData ?? []) as {
+      menu_id: string;
+      author_id: string | null;
+    }[]) {
+      if (row.author_id) keys.add(`${row.author_id}:${row.menu_id}`);
+    }
+    setSubmittedKeys(keys);
+    setLoadingCompliance(false);
+  }
+
   const maxByAuthor = new Map(weightMaxes.map((w) => [w.author_id, w]));
+
+  function hasMissingSubmission(memberId: string, homeLocation: Location | null) {
+    if (!homeLocation) return false;
+    return pastMenus.some(
+      (m) =>
+        m.location === homeLocation &&
+        !submittedKeys.has(`${memberId}:${m.id}`)
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -160,6 +240,75 @@ export default function TeamPage({
             {errorMsg}
           </p>
         )}
+
+        {/* 部員一覧 */}
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-neutral-700">部員一覧</h2>
+          <p className="text-[11px] text-neutral-400">
+            タップするとその部員のマイページを閲覧できます。「未提出あり」は直近60日で実施報告・未実施報告のどちらも提出されていない練習日があることを示します。
+          </p>
+          {loadingMembers ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : members.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              部員が登録されていません。
+            </p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-200">
+              <ul className="divide-y divide-neutral-100">
+                {members.map((m) => {
+                  const gradeLabel =
+                    m.entry_year != null
+                      ? `${currentGrade(m.entry_year)}年`
+                      : null;
+                  const missing = loadingCompliance
+                    ? null
+                    : hasMissingSubmission(m.id, m.home_location);
+                  return (
+                    <li key={m.id}>
+                      <button
+                        onClick={() => router.push(`/team/${m.id}`)}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-medium text-neutral-800">
+                            {m.display_name}
+                          </span>
+                          {gradeLabel && (
+                            <span className="shrink-0 text-neutral-400">
+                              {gradeLabel}
+                            </span>
+                          )}
+                          {m.home_location && (
+                            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                              {locationLabel[m.home_location]}
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          {missing === null ? (
+                            <span className="text-[10px] text-neutral-300">
+                              確認中…
+                            </span>
+                          ) : missing ? (
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                              未提出あり
+                            </span>
+                          ) : (
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                              提出OK
+                            </span>
+                          )}
+                          <span className="text-neutral-300">›</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
 
         {/* 月間の練習スケジュール */}
         <section className="flex flex-col gap-2">
