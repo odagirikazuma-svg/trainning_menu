@@ -21,13 +21,6 @@ type MemberRow = {
   entry_year: number | null;
 };
 
-type MatchRow = {
-  id: string;
-  name: string;
-  date: string;
-  member_id: string | null;
-};
-
 type MonthMenuRow = {
   id: string;
   date: string;
@@ -55,12 +48,6 @@ function toDateKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-// "YYYY-MM-DD" -> "7月24日"
-function formatMonthDay(dateStr: string) {
-  const [, m, d] = dateStr.split("-").map(Number);
-  return `${Number(m)}月${Number(d)}日`;
-}
-
 export default function TeamPage({
   profile,
   signOut,
@@ -70,16 +57,11 @@ export default function TeamPage({
 }) {
   const supabase = createClient();
   const router = useRouter();
-  const todayStr = toDateKey(new Date());
 
   const [teamName, setTeamName] = useState<string | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [loadingMatches, setLoadingMatches] = useState(true);
-  const [showPastMatches, setShowPastMatches] = useState(false);
 
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
@@ -94,7 +76,6 @@ export default function TeamPage({
   useEffect(() => {
     loadTeamInfo();
     loadMembers();
-    loadMatches();
     loadWeightMaxes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -130,21 +111,6 @@ export default function TeamPage({
       setMembers((data ?? []) as MemberRow[]);
     }
     setLoadingMembers(false);
-  }
-
-  async function loadMatches() {
-    setLoadingMatches(true);
-    const { data, error } = await supabase
-      .from("matches")
-      .select("id, name, date, member_id")
-      .eq("team_id", profile.team_id)
-      .order("date", { ascending: true });
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setMatches((data ?? []) as MatchRow[]);
-    }
-    setLoadingMatches(false);
   }
 
   async function loadMonthMenus() {
@@ -183,9 +149,6 @@ export default function TeamPage({
     setLoadingMaxes(false);
   }
 
-  const memberNameById = new Map(members.map((m) => [m.id, m.display_name]));
-  const upcomingMatches = matches.filter((m) => m.date >= todayStr);
-  const pastMatches = matches.filter((m) => m.date < todayStr);
   const maxByAuthor = new Map(weightMaxes.map((w) => [w.author_id, w]));
 
   return (
@@ -262,76 +225,6 @@ export default function TeamPage({
                 );
               })}
             </ul>
-          )}
-        </section>
-
-        {/* 試合スケジュール */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
-            試合スケジュール
-          </h2>
-          {loadingMatches ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
-          ) : upcomingMatches.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-              今後の試合予定はまだ登録されていません。
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {upcomingMatches.map((m) => (
-                <li
-                  key={m.id}
-                  className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs"
-                >
-                  <span className="font-medium text-red-700">{m.name}</span>
-                  <span className="flex items-center gap-2 text-red-500">
-                    {m.member_id ? (
-                      <span>
-                        {memberNameById.get(m.member_id) ?? "部員"}の試合
-                      </span>
-                    ) : (
-                      <span>チーム全体</span>
-                    )}
-                    <span>{formatMonthDay(m.date)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {pastMatches.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => setShowPastMatches((v) => !v)}
-                className="self-start text-[11px] font-medium text-neutral-500 active:text-neutral-700"
-              >
-                {showPastMatches
-                  ? "終了した試合を隠す"
-                  : `終了した試合を見る（${pastMatches.length}件）`}
-              </button>
-              {showPastMatches && (
-                <ul className="flex flex-col gap-2">
-                  {pastMatches.map((m) => (
-                    <li
-                      key={m.id}
-                      className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-500"
-                    >
-                      <span className="font-medium">{m.name}</span>
-                      <span className="flex items-center gap-2">
-                        {m.member_id ? (
-                          <span>
-                            {memberNameById.get(m.member_id) ?? "部員"}の試合
-                          </span>
-                        ) : (
-                          <span>チーム全体</span>
-                        )}
-                        <span>{formatMonthDay(m.date)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
           )}
         </section>
 

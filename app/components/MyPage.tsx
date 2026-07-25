@@ -165,6 +165,8 @@ export default function MyPage({
     PopupRecordRow | null | undefined
   >(undefined);
   const [loadingPopupRecord, setLoadingPopupRecord] = useState(false);
+  // トレーニング記録（実施報告・未実施報告の代替メニュー）が存在する日付一覧（昇順）
+  const [recordDates, setRecordDates] = useState<string[]>([]);
 
   // 日付が変わった瞬間（深夜0時）に「あと○○日」等の表示を自動で更新するための時計
   // ※試合日を編集した際は、その場でloadNextMatch()経由でstateが更新されて
@@ -200,6 +202,7 @@ export default function MyPage({
     loadTodayAbsent();
     loadRecentLogs();
     loadWeightMax();
+    loadRecordDates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -530,6 +533,7 @@ export default function MyPage({
       setErrorMsg(error.message);
     } else {
       setTodayLog(data as WeightLogRow);
+      await loadRecordDates();
     }
     setSavingLog(false);
   }
@@ -659,14 +663,10 @@ export default function MyPage({
 
     const { data: absentData, error: absentError } = await supabase
       .from("comments")
-      .select(
-        "id, text, alt_type, menu:menus!comments_menu_id_fkey!inner(date)"
-      )
+      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
       .eq("author_id", profile.id)
       .eq("kind", "absent")
-      .not("alt_type", "is", null)
-      .eq("menu.date", dateStr)
-      .maybeSingle();
+      .not("alt_type", "is", null);
 
     if (absentError) {
       setErrorMsg(absentError.message);
@@ -675,21 +675,66 @@ export default function MyPage({
       return;
     }
 
-    if (absentData) {
-      const row = absentData as unknown as {
-        text: string;
-        alt_type: TrainingType;
-      };
+    const absentRows = (absentData ?? []) as unknown as {
+      id: string;
+      text: string;
+      alt_type: TrainingType;
+      menu: { date: string } | null;
+    }[];
+    const match = absentRows.find((r) => r.menu && r.menu.date === dateStr);
+
+    if (match) {
       setPopupRecord({
         date: dateStr,
-        content: row.text,
-        type: row.alt_type,
+        content: match.text,
+        type: match.alt_type,
         isAlternative: true,
       });
     } else {
       setPopupRecord(null);
     }
     setLoadingPopupRecord(false);
+  }
+
+  // トレーニング記録（実施報告 or 未実施報告の代替メニュー）がある日付を
+  // 全期間分集めておく。カレンダーの矢印移動で「記録がある次/前の日」に
+  // ジャンプするために使う。
+  async function loadRecordDates() {
+    const { data: logData, error: logError } = await supabase
+      .from("weight_logs")
+      .select("date")
+      .eq("author_id", profile.id);
+
+    if (logError) {
+      setErrorMsg(logError.message);
+      return;
+    }
+
+    const { data: absentData, error: absentError } = await supabase
+      .from("comments")
+      .select("alt_type, menu:menus!comments_menu_id_fkey(date)")
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null);
+
+    if (absentError) {
+      setErrorMsg(absentError.message);
+      return;
+    }
+
+    const dateSet = new Set<string>();
+    for (const row of (logData ?? []) as { date: string }[]) {
+      dateSet.add(row.date);
+    }
+    const absentRows = (absentData ?? []) as unknown as {
+      alt_type: TrainingType;
+      menu: { date: string } | null;
+    }[];
+    for (const row of absentRows) {
+      if (row.menu) dateSet.add(row.menu.date);
+    }
+
+    setRecordDates(Array.from(dateSet).sort());
   }
 
   function handleSelectCalendarDate(dateStr: string) {
@@ -702,18 +747,23 @@ export default function MyPage({
     setPopupRecord(undefined);
   }
 
-  function handleShiftCalendarDate(diffDays: number) {
+  // 記録がある日付の中で、現在の選択日より前/後にある最も近い日付へジャンプする
+  function handleShiftCalendarDate(direction: 1 | -1) {
     if (!selectedCalendarDate) return;
-    const [y, m, d] = selectedCalendarDate.split("-").map(Number);
-    const next = new Date(y, m - 1, d + diffDays);
-    const nextKey = toDateKey(next);
-    setSelectedCalendarDate(nextKey);
-    loadDateRecord(nextKey);
+    const target =
+      direction === 1
+        ? recordDates.find((d) => d > selectedCalendarDate)
+        : [...recordDates].reverse().find((d) => d < selectedCalendarDate);
+    if (!target) return;
+
+    setSelectedCalendarDate(target);
+    loadDateRecord(target);
+    const [y, m] = target.split("-").map(Number);
     if (
-      next.getFullYear() !== calendarCursor.getFullYear() ||
-      next.getMonth() !== calendarCursor.getMonth()
+      y !== calendarCursor.getFullYear() ||
+      m - 1 !== calendarCursor.getMonth()
     ) {
-      setCalendarCursor(new Date(next.getFullYear(), next.getMonth(), 1));
+      setCalendarCursor(new Date(y, m - 1, 1));
     }
   }
 
@@ -1081,6 +1131,7 @@ export default function MyPage({
               weightLogs={calendarWeightLogs}
               absentLogs={calendarAbsentLogs}
               onSelectDate={handleSelectCalendarDate}
+              highlightDate={selectedCalendarDate}
             />
             {selectedCalendarDate && (
               <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
@@ -1092,20 +1143,24 @@ export default function MyPage({
                   >
                     ✕
                   </button>
-                  <button
-                    onClick={() => handleShiftCalendarDate(-1)}
-                    aria-label="前の日"
-                    className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
-                  >
-                    ◀
-                  </button>
-                  <button
-                    onClick={() => handleShiftCalendarDate(1)}
-                    aria-label="次の日"
-                    className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
-                  >
-                    ▶
-                  </button>
+                  {recordDates.some((d) => d < selectedCalendarDate) && (
+                    <button
+                      onClick={() => handleShiftCalendarDate(-1)}
+                      aria-label="前の記録"
+                      className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                    >
+                      ◀
+                    </button>
+                  )}
+                  {recordDates.some((d) => d > selectedCalendarDate) && (
+                    <button
+                      onClick={() => handleShiftCalendarDate(1)}
+                      aria-label="次の記録"
+                      className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                    >
+                      ▶
+                    </button>
+                  )}
 
                   {loadingPopupRecord ? (
                     <p className="py-6 text-center text-xs text-neutral-400">
@@ -1177,12 +1232,14 @@ function TrainingCalendar({
   weightLogs,
   absentLogs,
   onSelectDate,
+  highlightDate,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
   weightLogs: { date: string; type: TrainingType }[];
   absentLogs: { date: string; type: TrainingType }[];
   onSelectDate: (dateStr: string) => void;
+  highlightDate?: string | null;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
   for (const row of [...weightLogs, ...absentLogs]) {
@@ -1230,11 +1287,16 @@ function TrainingCalendar({
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
           const dots = dotsByDate.get(key) ?? [];
+          const isHighlighted = key === highlightDate;
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600 active:bg-neutral-100"
+              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
+                isHighlighted
+                  ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
+                  : "text-neutral-600"
+              }`}
             >
               <span>{date.getDate()}</span>
               {dots.length > 0 && (
@@ -1242,7 +1304,11 @@ function TrainingCalendar({
                   {dots.map((t, idx) => (
                     <span
                       key={idx}
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${trainingTypeDotColor[t]}`}
+                      className={`inline-block rounded-full ${trainingTypeDotColor[t]} ${
+                        isHighlighted
+                          ? "h-2.5 w-2.5 ring-2 ring-amber-300 ring-offset-1"
+                          : "h-1.5 w-1.5"
+                      }`}
                     />
                   ))}
                 </span>
