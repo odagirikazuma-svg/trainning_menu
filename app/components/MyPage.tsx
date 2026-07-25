@@ -51,15 +51,11 @@ type WeightMaxRow = {
   deadlift: number | null;
 };
 
-type PopupMenuRow = {
-  id: string;
+type PopupRecordRow = {
   date: string;
-  title: string;
   content: string;
-  location: Location;
-  start_time: string | null;
-  is_off: boolean;
-  creator: { display_name: string } | null;
+  type: TrainingType;
+  isAlternative: boolean;
 };
 
 function toDateKey(d: Date) {
@@ -165,10 +161,10 @@ export default function MyPage({
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
-  const [popupMenu, setPopupMenu] = useState<PopupMenuRow | null | undefined>(
-    undefined
-  );
-  const [loadingPopupMenu, setLoadingPopupMenu] = useState(false);
+  const [popupRecord, setPopupRecord] = useState<
+    PopupRecordRow | null | undefined
+  >(undefined);
+  const [loadingPopupRecord, setLoadingPopupRecord] = useState(false);
 
   // 日付が変わった瞬間（深夜0時）に「あと○○日」等の表示を自動で更新するための時計
   // ※試合日を編集した際は、その場でloadNextMatch()経由でstateが更新されて
@@ -624,40 +620,78 @@ export default function MyPage({
     }
   }
 
-  async function loadDateMenu(dateStr: string) {
-    setLoadingPopupMenu(true);
-    if (!profile.home_location) {
-      setPopupMenu(null);
-      setLoadingPopupMenu(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("menus")
-      .select(
-        "id, date, title, content, location, start_time, is_off, creator:profiles!menus_created_by_fkey(display_name)"
-      )
-      .eq("team_id", profile.team_id)
-      .eq("location", profile.home_location)
+  async function loadDateRecord(dateStr: string) {
+    setLoadingPopupRecord(true);
+
+    const { data: logData, error: logError } = await supabase
+      .from("weight_logs")
+      .select("id, date, content, type")
+      .eq("author_id", profile.id)
       .eq("date", dateStr)
       .maybeSingle();
 
-    if (error) {
-      setErrorMsg(error.message);
-      setPopupMenu(null);
-    } else {
-      setPopupMenu((data as unknown as PopupMenuRow | null) ?? null);
+    if (logError) {
+      setErrorMsg(logError.message);
+      setPopupRecord(null);
+      setLoadingPopupRecord(false);
+      return;
     }
-    setLoadingPopupMenu(false);
+
+    if (logData) {
+      const row = logData as WeightLogRow;
+      setPopupRecord({
+        date: row.date,
+        content: row.content,
+        type: row.type,
+        isAlternative: false,
+      });
+      setLoadingPopupRecord(false);
+      return;
+    }
+
+    const { data: absentData, error: absentError } = await supabase
+      .from("comments")
+      .select(
+        "id, text, alt_type, menu:menus!comments_menu_id_fkey!inner(date)"
+      )
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null)
+      .eq("menu.date", dateStr)
+      .maybeSingle();
+
+    if (absentError) {
+      setErrorMsg(absentError.message);
+      setPopupRecord(null);
+      setLoadingPopupRecord(false);
+      return;
+    }
+
+    if (absentData) {
+      const row = absentData as unknown as {
+        text: string;
+        alt_type: TrainingType;
+      };
+      setPopupRecord({
+        date: dateStr,
+        content: row.text,
+        type: row.alt_type,
+        isAlternative: true,
+      });
+    } else {
+      setPopupRecord(null);
+    }
+    setLoadingPopupRecord(false);
   }
 
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
-    loadDateMenu(dateStr);
+    loadDateRecord(dateStr);
   }
 
   function handleCloseCalendarPopup() {
     setSelectedCalendarDate(null);
-    setPopupMenu(undefined);
+    setPopupRecord(undefined);
   }
 
   function handleShiftCalendarDate(diffDays: number) {
@@ -666,7 +700,7 @@ export default function MyPage({
     const next = new Date(y, m - 1, d + diffDays);
     const nextKey = toDateKey(next);
     setSelectedCalendarDate(nextKey);
-    loadDateMenu(nextKey);
+    loadDateRecord(nextKey);
     if (
       next.getFullYear() !== calendarCursor.getFullYear() ||
       next.getMonth() !== calendarCursor.getMonth()
@@ -1065,38 +1099,32 @@ export default function MyPage({
                     ▶
                   </button>
 
-                  {loadingPopupMenu ? (
+                  {loadingPopupRecord ? (
                     <p className="py-6 text-center text-xs text-neutral-400">
                       読み込み中…
                     </p>
-                  ) : popupMenu === null ? (
+                  ) : popupRecord === null ? (
                     <p className="py-6 text-center text-xs text-neutral-400">
                       {formatMonthDay(selectedCalendarDate)}
-                      の練習はまだ作成されていません
+                      のトレーニング記録はありません
                     </p>
-                  ) : popupMenu ? (
+                  ) : popupRecord ? (
                     <div className="pr-4">
-                      <div className="mb-1 text-xs text-neutral-400">
-                        {locationLabel[popupMenu.location]}・{popupMenu.date}
-                        {popupMenu.start_time &&
-                          `・${popupMenu.start_time.slice(0, 5)}〜`}
-                        ・作成者:{" "}
-                        {popupMenu.creator?.display_name ?? "不明"}
+                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[popupRecord.type]}`}
+                        />
+                        {formatMonthDay(popupRecord.date)}・
+                        {trainingTypeLabel[popupRecord.type]}
+                        {popupRecord.isAlternative && (
+                          <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                            代替メニュー
+                          </span>
+                        )}
                       </div>
-                      <h3 className="mb-2 text-base font-bold">
-                        {popupMenu.is_off
-                          ? "オフ"
-                          : popupMenu.title ||
-                            formatShortDateTime(
-                              popupMenu.date,
-                              popupMenu.start_time
-                            )}
-                      </h3>
-                      {!popupMenu.is_off && (
-                        <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                          {popupMenu.content}
-                        </p>
-                      )}
+                      <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                        {popupRecord.content || "(記録なし)"}
+                      </p>
                     </div>
                   ) : null}
                 </div>
