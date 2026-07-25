@@ -619,10 +619,10 @@ export default function TrainingBoardSupabase({
             マイページ
           </button>
           <button
-            onClick={signOut}
+            onClick={() => router.push("/team")}
             className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
           >
-            ログアウト
+            チームページ
           </button>
         </div>
       </header>

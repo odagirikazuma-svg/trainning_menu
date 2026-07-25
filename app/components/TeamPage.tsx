@@ -338,49 +338,50 @@ export default function TeamPage({
               部員が登録されていません。
             </p>
           ) : (
-            <div className="max-h-[70vh] overflow-y-auto overflow-x-auto rounded-lg border border-neutral-200">
-              <table className="w-full min-w-[420px] text-xs">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
-                    <th className="px-3 py-2 text-left font-medium">氏名</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      ベンチ
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      スクワット
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      デッドリフト
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {members.map((m, idx) => {
-                    const max = maxByAuthor.get(m.id);
-                    const fmt = (v: number | null | undefined) =>
-                      v != null ? `${v}kg` : "未登録";
-                    return (
-                      <tr
-                        key={m.id}
-                        className={idx % 2 === 1 ? "bg-neutral-50/60" : undefined}
-                      >
-                        <td className="px-3 py-1.5 font-medium text-neutral-800">
-                          {m.display_name}
-                        </td>
-                        <td className="px-3 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.bench)}
-                        </td>
-                        <td className="px-3 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.squat)}
-                        </td>
-                        <td className="px-3 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.deadlift)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-neutral-200">
+              <ul className="divide-y divide-neutral-100">
+                {members.map((m) => {
+                  const max = maxByAuthor.get(m.id);
+                  const fmt = (v: number | null | undefined) =>
+                    v != null ? `${v}kg` : "未登録";
+                  return (
+                    <li
+                      key={m.id}
+                      className="flex flex-col gap-1.5 px-3 py-2.5 text-xs"
+                    >
+                      <span className="font-medium text-neutral-800">
+                        {m.display_name}
+                      </span>
+                      <span className="grid grid-cols-3 gap-2 text-center">
+                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
+                          <span className="text-[10px] text-neutral-400">
+                            ベンチ
+                          </span>
+                          <span className="font-semibold text-neutral-700">
+                            {fmt(max?.bench)}
+                          </span>
+                        </span>
+                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
+                          <span className="text-[10px] text-neutral-400">
+                            スクワット
+                          </span>
+                          <span className="font-semibold text-neutral-700">
+                            {fmt(max?.squat)}
+                          </span>
+                        </span>
+                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
+                          <span className="text-[10px] text-neutral-400">
+                            デッドリフト
+                          </span>
+                          <span className="font-semibold text-neutral-700">
+                            {fmt(max?.deadlift)}
+                          </span>
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
         </section>
