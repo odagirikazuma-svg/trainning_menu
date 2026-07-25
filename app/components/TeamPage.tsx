@@ -4,12 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
-  currentGrade,
   Location,
   locationLabel,
   locations,
   Role,
-  roleLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
@@ -58,7 +56,6 @@ export default function TeamPage({
   const supabase = createClient();
   const router = useRouter();
 
-  const [teamName, setTeamName] = useState<string | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -74,7 +71,6 @@ export default function TeamPage({
   const [loadingMaxes, setLoadingMaxes] = useState(true);
 
   useEffect(() => {
-    loadTeamInfo();
     loadMembers();
     loadWeightMaxes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,19 +80,6 @@ export default function TeamPage({
     loadMonthMenus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarCursor]);
-
-  async function loadTeamInfo() {
-    const { data, error } = await supabase
-      .from("teams")
-      .select("name")
-      .eq("id", profile.team_id)
-      .maybeSingle();
-    if (error) {
-      setErrorMsg(error.message);
-    } else if (data) {
-      setTeamName((data as { name: string }).name);
-    }
-  }
 
   async function loadMembers() {
     setLoadingMembers(true);
@@ -178,58 +161,8 @@ export default function TeamPage({
           </p>
         )}
 
-        {/* チーム全体の情報 */}
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-700">
-            チーム情報
-          </h2>
-          <div className="rounded-lg border border-neutral-200 p-4">
-            <p className="text-base font-bold text-neutral-800">
-              {teamName ?? "読み込み中…"}
-            </p>
-            <p className="mt-1 text-xs text-neutral-400">
-              部員数 {members.length}人
-            </p>
-          </div>
-          {loadingMembers ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
-          ) : (
-            <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
-              {members.map((m) => {
-                const gradeLabel =
-                  m.entry_year != null ? `${currentGrade(m.entry_year)}年` : null;
-                return (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
-                  >
-                    <span className="font-medium text-neutral-800">
-                      {m.display_name}
-                      {gradeLabel && (
-                        <span className="ml-1 text-neutral-400">
-                          {gradeLabel}
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex items-center gap-2 text-neutral-500">
-                      {m.home_location && (
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5">
-                          {locationLabel[m.home_location]}
-                        </span>
-                      )}
-                      <span className="rounded bg-neutral-100 px-1.5 py-0.5">
-                        {roleLabel[m.role]}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
         {/* 月間の練習スケジュール */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+        <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">
             月間の練習スケジュール
           </h2>
@@ -244,14 +177,21 @@ export default function TeamPage({
         {/* 全員のウェイトMAX */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            ウェイトMAX（自己ベスト）一覧
+            ウェイトMAX一覧
           </h2>
+          <p className="text-[11px] text-neutral-400">
+            コーチが計測イベントを作成すると、部員が提出した記録がここに反映される予定です（準備中）。
+          </p>
           {loadingMembers || loadingMaxes ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : members.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              部員が登録されていません。
+            </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-neutral-200">
+            <div className="max-h-[70vh] overflow-y-auto overflow-x-auto rounded-lg border border-neutral-200">
               <table className="w-full min-w-[420px] text-xs">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b border-neutral-200 bg-neutral-50 text-neutral-500">
                     <th className="px-3 py-2 text-left font-medium">氏名</th>
                     <th className="px-3 py-2 text-right font-medium">
@@ -266,22 +206,25 @@ export default function TeamPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {members.map((m) => {
+                  {members.map((m, idx) => {
                     const max = maxByAuthor.get(m.id);
                     const fmt = (v: number | null | undefined) =>
                       v != null ? `${v}kg` : "未登録";
                     return (
-                      <tr key={m.id}>
-                        <td className="px-3 py-2 font-medium text-neutral-800">
+                      <tr
+                        key={m.id}
+                        className={idx % 2 === 1 ? "bg-neutral-50/60" : undefined}
+                      >
+                        <td className="px-3 py-1.5 font-medium text-neutral-800">
                           {m.display_name}
                         </td>
-                        <td className="px-3 py-2 text-right text-neutral-600">
+                        <td className="px-3 py-1.5 text-right text-neutral-600">
                           {fmt(max?.bench)}
                         </td>
-                        <td className="px-3 py-2 text-right text-neutral-600">
+                        <td className="px-3 py-1.5 text-right text-neutral-600">
                           {fmt(max?.squat)}
                         </td>
-                        <td className="px-3 py-2 text-right text-neutral-600">
+                        <td className="px-3 py-1.5 text-right text-neutral-600">
                           {fmt(max?.deadlift)}
                         </td>
                       </tr>
