@@ -51,6 +51,17 @@ type WeightMaxRow = {
   deadlift: number | null;
 };
 
+type PopupMenuRow = {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  location: Location;
+  start_time: string | null;
+  is_off: boolean;
+  creator: { display_name: string } | null;
+};
+
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -151,6 +162,20 @@ export default function MyPage({
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
     { date: string; type: TrainingType }[]
   >([]);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<
+    string | null
+  >(null);
+  const [popupMenu, setPopupMenu] = useState<PopupMenuRow | null | undefined>(
+    undefined
+  );
+  const [loadingPopupMenu, setLoadingPopupMenu] = useState(false);
+
+  // 日付をまたいだときに「あと○○日」等の表示を自動で更新するための時計
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forceTick((n) => n + 1), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (profile.home_location) loadTodo();
@@ -377,10 +402,11 @@ export default function MyPage({
   async function loadRecentLogs() {
     setLoadingRecentLogs(true);
 
-    // 「今日を含めて3日間」のうち、今日以外＝昨日・おとといの範囲を対象にする
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    const rangeStart = toDateKey(twoDaysAgo);
+    // 直近60日をさかのぼって、実際にトレーニングを行った（実施報告 or 未実施報告の代替メニュー）
+    // 日を新しい順に検索し、そのうち3日間分を表示する
+    const lookbackStart = new Date();
+    lookbackStart.setDate(lookbackStart.getDate() - 60);
+    const rangeStart = toDateKey(lookbackStart);
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const rangeEnd = toDateKey(yesterday);
@@ -443,7 +469,18 @@ export default function MyPage({
       b.date.localeCompare(a.date)
     );
 
-    setRecentLogs(merged);
+    // 新しい順に見ていき、日付が重複しないよう3日間分だけ抽出する
+    const seenDates = new Set<string>();
+    const limited: RecentRecord[] = [];
+    for (const r of merged) {
+      if (!seenDates.has(r.date)) {
+        if (seenDates.size >= 3) break;
+        seenDates.add(r.date);
+      }
+      limited.push(r);
+    }
+
+    setRecentLogs(limited);
     setLoadingRecentLogs(false);
   }
 
@@ -565,6 +602,57 @@ export default function MyPage({
         )
         .map((r) => ({ date: r.menu!.date, type: r.alt_type }));
       setCalendarAbsentLogs(filtered);
+    }
+  }
+
+  async function loadDateMenu(dateStr: string) {
+    setLoadingPopupMenu(true);
+    if (!profile.home_location) {
+      setPopupMenu(null);
+      setLoadingPopupMenu(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("menus")
+      .select(
+        "id, date, title, content, location, start_time, is_off, creator:profiles!menus_created_by_fkey(display_name)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", profile.home_location)
+      .eq("date", dateStr)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+      setPopupMenu(null);
+    } else {
+      setPopupMenu((data as unknown as PopupMenuRow | null) ?? null);
+    }
+    setLoadingPopupMenu(false);
+  }
+
+  function handleSelectCalendarDate(dateStr: string) {
+    setSelectedCalendarDate(dateStr);
+    loadDateMenu(dateStr);
+  }
+
+  function handleCloseCalendarPopup() {
+    setSelectedCalendarDate(null);
+    setPopupMenu(undefined);
+  }
+
+  function handleShiftCalendarDate(diffDays: number) {
+    if (!selectedCalendarDate) return;
+    const [y, m, d] = selectedCalendarDate.split("-").map(Number);
+    const next = new Date(y, m - 1, d + diffDays);
+    const nextKey = toDateKey(next);
+    setSelectedCalendarDate(nextKey);
+    loadDateMenu(nextKey);
+    if (
+      next.getFullYear() !== calendarCursor.getFullYear() ||
+      next.getMonth() !== calendarCursor.getMonth()
+    ) {
+      setCalendarCursor(new Date(next.getFullYear(), next.getMonth(), 1));
     }
   }
 
@@ -925,12 +1013,77 @@ export default function MyPage({
           <h2 className="text-sm font-semibold text-neutral-700">
             トレーニングカレンダー
           </h2>
-          <TrainingCalendar
-            cursor={calendarCursor}
-            onCursorChange={setCalendarCursor}
-            weightLogs={calendarWeightLogs}
-            absentLogs={calendarAbsentLogs}
-          />
+          <div className="relative">
+            <TrainingCalendar
+              cursor={calendarCursor}
+              onCursorChange={setCalendarCursor}
+              weightLogs={calendarWeightLogs}
+              absentLogs={calendarAbsentLogs}
+              onSelectDate={handleSelectCalendarDate}
+            />
+            {selectedCalendarDate && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
+                <div className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
+                  <button
+                    onClick={handleCloseCalendarPopup}
+                    aria-label="閉じる"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-neutral-400 active:bg-neutral-100"
+                  >
+                    ✕
+                  </button>
+                  <button
+                    onClick={() => handleShiftCalendarDate(-1)}
+                    aria-label="前の日"
+                    className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    onClick={() => handleShiftCalendarDate(1)}
+                    aria-label="次の日"
+                    className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                  >
+                    ▶
+                  </button>
+
+                  {loadingPopupMenu ? (
+                    <p className="py-6 text-center text-xs text-neutral-400">
+                      読み込み中…
+                    </p>
+                  ) : popupMenu === null ? (
+                    <p className="py-6 text-center text-xs text-neutral-400">
+                      {formatMonthDay(selectedCalendarDate)}
+                      の練習はまだ作成されていません
+                    </p>
+                  ) : popupMenu ? (
+                    <div className="pr-4">
+                      <div className="mb-1 text-xs text-neutral-400">
+                        {locationLabel[popupMenu.location]}・{popupMenu.date}
+                        {popupMenu.start_time &&
+                          `・${popupMenu.start_time.slice(0, 5)}〜`}
+                        ・作成者:{" "}
+                        {popupMenu.creator?.display_name ?? "不明"}
+                      </div>
+                      <h3 className="mb-2 text-base font-bold">
+                        {popupMenu.is_off
+                          ? "オフ"
+                          : popupMenu.title ||
+                            formatShortDateTime(
+                              popupMenu.date,
+                              popupMenu.start_time
+                            )}
+                      </h3>
+                      {!popupMenu.is_off && (
+                        <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                          {popupMenu.content}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
@@ -968,11 +1121,13 @@ function TrainingCalendar({
   onCursorChange,
   weightLogs,
   absentLogs,
+  onSelectDate,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
   weightLogs: { date: string; type: TrainingType }[];
   absentLogs: { date: string; type: TrainingType }[];
+  onSelectDate: (dateStr: string) => void;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
   for (const row of [...weightLogs, ...absentLogs]) {
@@ -1021,9 +1176,10 @@ function TrainingCalendar({
           const key = toDateKey(date);
           const dots = dotsByDate.get(key) ?? [];
           return (
-            <div
+            <button
               key={i}
-              className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600"
+              onClick={() => onSelectDate(key)}
+              className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600 active:bg-neutral-100"
             >
               <span>{date.getDate()}</span>
               {dots.length > 0 && (
@@ -1036,7 +1192,7 @@ function TrainingCalendar({
                   ))}
                 </span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
