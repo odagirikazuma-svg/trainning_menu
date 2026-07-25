@@ -170,11 +170,30 @@ export default function MyPage({
   );
   const [loadingPopupMenu, setLoadingPopupMenu] = useState(false);
 
-  // 日付をまたいだときに「あと○○日」等の表示を自動で更新するための時計
+  // 日付が変わった瞬間（深夜0時）に「あと○○日」等の表示を自動で更新するための時計
+  // ※試合日を編集した際は、その場でloadNextMatch()経由でstateが更新されて
+  //   即座に再計算されるので、ここでは日付が変わる瞬間だけに絞ってスケジュールする
   const [, forceTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => forceTick((n) => n + 1), 60 * 1000);
-    return () => clearInterval(id);
+    let timeoutId: ReturnType<typeof setTimeout>;
+    function scheduleNextMidnightTick() {
+      const now = new Date();
+      const nextMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        5 // 日付切り替え直後を確実に捉えるため5秒の余裕を持たせる
+      );
+      const delay = nextMidnight.getTime() - now.getTime();
+      timeoutId = setTimeout(() => {
+        forceTick((n) => n + 1);
+        scheduleNextMidnightTick();
+      }, delay);
+    }
+    scheduleNextMidnightTick();
+    return () => clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
