@@ -311,8 +311,11 @@ create policy "matches_delete" on matches
 -- ============================================
 -- 追加: 自分の試合の日付を更新できるようにする
 -- ============================================
+drop policy if exists "matches_update_self" on matches;
 create policy "matches_update_self" on matches
-  for update using (member_id = auth.uid());
+  for update
+  using (member_id = auth.uid())
+  with check (member_id = auth.uid());
 
 -- ============================================
 -- 追加: 部員全員のウェイトMAX（自己ベスト）記録
