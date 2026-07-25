@@ -336,12 +336,20 @@ export default function MyPage({
   async function handleUpdateMatchDate(e: React.FormEvent) {
     e.preventDefault();
     if (!nextMatch || !editMatchDate) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("matches")
       .update({ date: editMatchDate })
-      .eq("id", nextMatch.id);
+      .eq("id", nextMatch.id)
+      .select("id");
     if (error) {
       setErrorMsg(error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      // RLSの権限不足などで実際には0件しか更新されなかった場合はここに来る
+      setErrorMsg(
+        "試合日を更新できませんでした。データベース側の権限設定（matches_update_selfポリシー）が未反映の可能性があります。"
+      );
       return;
     }
     setEditingMatch(false);
