@@ -1299,12 +1299,13 @@ export default function TrainingBoardSupabase({
         ) : (
           <div className="rounded-lg border border-neutral-200 p-4">
             <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
+            <div className="mt-2 mb-1 text-xs text-neutral-400">
+              {locationLabel[activeLocation]}・{viewDate}
+              {matSessionForViewDate &&
+                `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
+            </div>
             {matSessionForViewDate ? (
-              <div className="mt-2">
-                <div className="mb-1 text-xs text-neutral-400">
-                  {locationLabel[activeLocation]}・{viewDate}・
-                  {matSessionForViewDate.start_time.slice(0, 5)}〜
-                </div>
+              <div>
                 <p className="mb-3 text-sm text-neutral-500">
                   このセッションのメニューはまだ作成されていません
                 </p>
@@ -1318,7 +1319,7 @@ export default function TrainingBoardSupabase({
                 )}
               </div>
             ) : (
-              <p className="mt-2 text-center text-sm text-neutral-400">
+              <p className="py-2 text-center text-sm text-neutral-400">
                 まだスケジュールは作成されていません。
               </p>
             )}
@@ -1615,6 +1616,16 @@ function MenuCalendar({
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+
+  // 上部の◀▶で日付を移動して月をまたいだ場合、下のカレンダーの表示月も追従させる
+  useEffect(() => {
+    const [y, m] = viewDate.split("-").map(Number);
+    if (y !== cursor.getFullYear() || m - 1 !== cursor.getMonth()) {
+      setCursor(new Date(y, m - 1, 1));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewDate]);
+
   const [scheduleByDate, setScheduleByDate] = useState<
     Map<
       string,

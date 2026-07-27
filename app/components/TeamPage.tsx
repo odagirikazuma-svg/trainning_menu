@@ -170,6 +170,26 @@ export default function TeamPage({
   >([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
 
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStartDate, setBulkStartDate] = useState("");
+  const [bulkEndDate, setBulkEndDate] = useState("");
+  const [bulkCategory, setBulkCategory] = useState<"off" | "camp" | "match">(
+    "off"
+  );
+  const [bulkIncludeSessions, setBulkIncludeSessions] = useState(false);
+  const [bulkSessions, setBulkSessions] = useState<
+    {
+      type: SessionType;
+      time: string;
+      isJoint: boolean;
+      jointLocation: Location;
+    }[]
+  >([
+    { type: "mat", time: "10:00", isJoint: false, jointLocation: "tama" },
+  ]);
+  const [savingBulk, setSavingBulk] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+
   const canEditMatMenu =
     profile.role === "captain" ||
     profile.role === "leader" ||
@@ -450,16 +470,127 @@ export default function TeamPage({
     );
   }
 
-  async function handleSaveSchedule() {
-    if (!selectedScheduleDate) return;
-    setSavingSchedule(true);
+  function updateBulkSession(
+    idx: number,
+    patch: Partial<{
+      type: SessionType;
+      time: string;
+      isJoint: boolean;
+      jointLocation: Location;
+    }>
+  ) {
+    setBulkSessions((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s))
+    );
+  }
 
-    const isOff = editCategory === "off";
-    const dayType: DayType = isOff
-      ? "practice"
-      : (editCategory as DayType);
-    const includeSessions =
-      isOff ? false : dayType === "practice" ? true : editIncludeSessions;
+  function addBulkSession() {
+    setBulkSessions((prev) =>
+      prev.length >= 2
+        ? prev
+        : [
+            ...prev,
+            {
+              type: "weight",
+              time: "17:00",
+              isJoint: false,
+              jointLocation: scheduleLocation,
+            },
+          ]
+    );
+  }
+
+  function removeBulkSession(idx: number) {
+    setBulkSessions((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
+    );
+  }
+
+  function handleOpenBulk() {
+    setBulkStartDate(selectedScheduleDate ?? todayStr);
+    setBulkEndDate(selectedScheduleDate ?? todayStr);
+    setBulkCategory("off");
+    setBulkIncludeSessions(false);
+    setBulkSessions([
+      {
+        type: "mat",
+        time: "10:00",
+        isJoint: false,
+        jointLocation: scheduleLocation,
+      },
+    ]);
+    setBulkResult(null);
+    setBulkOpen(true);
+  }
+
+  async function handleSaveBulk() {
+    if (!bulkStartDate || !bulkEndDate) return;
+    if (bulkEndDate < bulkStartDate) {
+      setErrorMsg("終了日は開始日より後の日付にしてください。");
+      return;
+    }
+
+    setSavingBulk(true);
+    setBulkResult(null);
+
+    const dates: string[] = [];
+    const cursorDate = new Date(
+      Number(bulkStartDate.slice(0, 4)),
+      Number(bulkStartDate.slice(5, 7)) - 1,
+      Number(bulkStartDate.slice(8, 10))
+    );
+    const endDateObj = new Date(
+      Number(bulkEndDate.slice(0, 4)),
+      Number(bulkEndDate.slice(5, 7)) - 1,
+      Number(bulkEndDate.slice(8, 10))
+    );
+    while (cursorDate <= endDateObj) {
+      dates.push(toDateKey(cursorDate));
+      cursorDate.setDate(cursorDate.getDate() + 1);
+    }
+
+    let failCount = 0;
+    for (const d of dates) {
+      const errorMessage = await saveScheduleForDate(
+        d,
+        bulkCategory,
+        bulkSessions,
+        bulkIncludeSessions
+      );
+      if (errorMessage) failCount++;
+    }
+
+    setSavingBulk(false);
+    if (failCount > 0) {
+      setBulkResult(
+        `${dates.length}日中${dates.length - failCount}日を設定しました（${failCount}日は失敗しました）。`
+      );
+    } else {
+      setBulkResult(`${dates.length}日分をまとめて設定しました。`);
+    }
+    await loadMonthSchedule();
+    if (selectedScheduleDate) await loadDayDetail(selectedScheduleDate);
+  }
+
+  // 1日分の時間割を保存する共通処理（単日編集・期間一括設定の両方から使う）
+  async function saveScheduleForDate(
+    dateStr: string,
+    category: "off" | DayType,
+    sessions: {
+      type: SessionType;
+      time: string;
+      isJoint: boolean;
+      jointLocation: Location;
+    }[],
+    includeSessionsFlag: boolean
+  ): Promise<string | null> {
+    const isOff = category === "off";
+    const dayType: DayType = isOff ? "practice" : (category as DayType);
+    const includeSessions = isOff
+      ? false
+      : dayType === "practice"
+        ? true
+        : includeSessionsFlag;
 
     const { data: dayRow, error: dayError } = await supabase
       .from("schedule_days")
@@ -467,7 +598,7 @@ export default function TeamPage({
         {
           team_id: profile.team_id,
           location: scheduleLocation,
-          date: selectedScheduleDate,
+          date: dateStr,
           is_off: isOff,
           day_type: dayType,
           created_by: profile.id,
@@ -479,9 +610,7 @@ export default function TeamPage({
       .single();
 
     if (dayError || !dayRow) {
-      setErrorMsg(dayError?.message ?? "時間割の保存に失敗しました。");
-      setSavingSchedule(false);
-      return;
+      return dayError?.message ?? "時間割の保存に失敗しました。";
     }
 
     const dayId = (dayRow as { id: string }).id;
@@ -491,14 +620,10 @@ export default function TeamPage({
       .delete()
       .eq("schedule_day_id", dayId);
 
-    if (delError) {
-      setErrorMsg(delError.message);
-      setSavingSchedule(false);
-      return;
-    }
+    if (delError) return delError.message;
 
-    if (!isOff && includeSessions && editSessions.length > 0) {
-      const rows = editSessions.map((s, idx) => ({
+    if (!isOff && includeSessions && sessions.length > 0) {
+      const rows = sessions.map((s, idx) => ({
         schedule_day_id: dayId,
         session_no: idx + 1,
         session_type: s.type,
@@ -509,33 +634,40 @@ export default function TeamPage({
       const { error: insError } = await supabase
         .from("schedule_sessions")
         .insert(rows);
-      if (insError) {
-        setErrorMsg(insError.message);
-        setSavingSchedule(false);
-        return;
-      }
+      if (insError) return insError.message;
 
-      // 全体練習として登録された場合、もう一方の拠点のカレンダーにも
-      // 自動で反映する（どちらの拠点を編集していても反映されるようにする）
-      for (const s of editSessions) {
+      for (const s of sessions) {
         if (s.isJoint) {
-          await propagateJointSession(
-            selectedScheduleDate,
-            scheduleLocation,
-            s.jointLocation,
-            {
-              type: s.type,
-              time: s.time,
-            }
-          );
+          await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
+            type: s.type,
+            time: s.time,
+          });
         }
       }
     }
 
-    // 合宿・試合は基本的にチーム全体の予定なので、もう一方の拠点にも
-    // 区分（合宿/試合）だけ自動で反映する（セッションの有無は拠点ごとに個別設定のまま）
     if (!isOff && (dayType === "camp" || dayType === "match")) {
-      await propagateDayType(selectedScheduleDate, scheduleLocation, dayType);
+      await propagateDayType(dateStr, scheduleLocation, dayType);
+    }
+
+    return null;
+  }
+
+  async function handleSaveSchedule() {
+    if (!selectedScheduleDate) return;
+    setSavingSchedule(true);
+
+    const errorMessage = await saveScheduleForDate(
+      selectedScheduleDate,
+      editCategory,
+      editSessions,
+      editIncludeSessions
+    );
+
+    if (errorMessage) {
+      setErrorMsg(errorMessage);
+      setSavingSchedule(false);
+      return;
     }
 
     setEditingSchedule(false);
@@ -778,6 +910,154 @@ export default function TeamPage({
               </button>
             ))}
           </div>
+          {isCoach && (
+            <button
+              onClick={handleOpenBulk}
+              className="self-start text-xs font-medium text-neutral-500 underline"
+            >
+              期間でまとめて設定する（オフ・合宿・試合）
+            </button>
+          )}
+          {bulkOpen && (
+            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-neutral-600">
+                  {locationLabel[scheduleLocation]}の期間をまとめて設定
+                </p>
+                <button
+                  onClick={() => setBulkOpen(false)}
+                  aria-label="閉じる"
+                  className="text-neutral-400"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col text-[11px] text-neutral-500">
+                  開始日
+                  <input
+                    type="date"
+                    value={bulkStartDate}
+                    onChange={(e) => setBulkStartDate(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                  />
+                </label>
+                <label className="flex flex-col text-[11px] text-neutral-500">
+                  終了日
+                  <input
+                    type="date"
+                    value={bulkEndDate}
+                    onChange={(e) => setBulkEndDate(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] text-neutral-500">区分</span>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-200 p-1 text-[11px]">
+                  {(
+                    [
+                      { v: "off", label: "オフ" },
+                      { v: "camp", label: "合宿" },
+                      { v: "match", label: "試合" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setBulkCategory(opt.v)}
+                      className={`rounded-md py-2 font-medium ${
+                        bulkCategory === opt.v
+                          ? "bg-white text-neutral-900 shadow"
+                          : "text-neutral-500"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {(bulkCategory === "camp" || bulkCategory === "match") && (
+                <label className="flex items-center gap-2 text-xs text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={bulkIncludeSessions}
+                    onChange={(e) => setBulkIncludeSessions(e.target.checked)}
+                  />
+                  期間中すべての日に同じ練習セクションも設定する
+                </label>
+              )}
+
+              {bulkCategory !== "off" && bulkIncludeSessions && (
+                <div className="flex flex-col gap-3">
+                  {bulkSessions.map((s, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-neutral-500">
+                          第{idx + 1}セッション
+                        </span>
+                        {bulkSessions.length > 1 && (
+                          <button
+                            onClick={() => removeBulkSession(idx)}
+                            className="text-[11px] text-red-500"
+                          >
+                            削除
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={s.type}
+                          onChange={(e) =>
+                            updateBulkSession(idx, {
+                              type: e.target.value as SessionType,
+                            })
+                          }
+                          className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                        >
+                          <option value="mat">マット</option>
+                          <option value="running">ラン</option>
+                          <option value="weight">ウェイト</option>
+                        </select>
+                        <ScheduleTimeSelect
+                          value={s.time}
+                          onChange={(v) => updateBulkSession(idx, { time: v })}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {bulkSessions.length < 2 && (
+                    <button
+                      onClick={addBulkSession}
+                      className="self-start text-xs font-medium text-neutral-600"
+                    >
+                      ＋ セッションを追加
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveBulk}
+                  disabled={savingBulk}
+                  className="flex-1 rounded-lg bg-neutral-900 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+                >
+                  {savingBulk ? "設定中…" : "この内容でまとめて設定する"}
+                </button>
+              </div>
+              {bulkResult && (
+                <p className="rounded bg-emerald-50 p-2 text-[11px] text-emerald-700">
+                  {bulkResult}
+                </p>
+              )}
+            </div>
+          )}
           <div className="relative">
             <MonthlyCalendar
               cursor={calendarCursor}
