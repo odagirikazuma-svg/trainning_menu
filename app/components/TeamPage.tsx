@@ -1127,13 +1127,6 @@ export default function TeamPage({
               </div>
             )}
           </div>
-
-          {/* 一覧表示（セッション内容・時間を一目で見れるように） */}
-          <ScheduleAgenda
-            scheduleDays={monthScheduleDays}
-            loading={loadingMonthSchedule}
-            onSelectDate={handleSelectScheduleDate}
-          />
         </section>
 
         {/* 部員一覧 */}
@@ -1367,85 +1360,6 @@ function ScheduleTimeSelect({
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-function ScheduleAgenda({
-  scheduleDays,
-  loading,
-  onSelectDate,
-}: {
-  scheduleDays: Map<string, ScheduleDayRow>;
-  loading: boolean;
-  onSelectDate: (dateStr: string) => void;
-}) {
-  if (loading) {
-    return <p className="text-xs text-neutral-400">読み込み中…</p>;
-  }
-
-  const days = Array.from(scheduleDays.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
-
-  if (days.length === 0) {
-    return (
-      <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-        この月の時間割はまだ設定されていません。
-      </p>
-    );
-  }
-
-  return (
-    <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
-      <ul className="divide-y divide-neutral-100">
-        {days.map((day) => (
-          <li key={day.id}>
-            <button
-              onClick={() => onSelectDate(day.date)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-            >
-              <span className="flex shrink-0 items-center gap-1.5 font-semibold text-neutral-600">
-                {formatMonthDay(day.date)}
-                {(day.day_type === "camp" || day.day_type === "match") && (
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${dayTypeFillColor[day.day_type]}`}
-                  >
-                    {dayTypeLabel[day.day_type]}
-                  </span>
-                )}
-              </span>
-              {day.is_off ? (
-                <span className="flex-1 text-right text-neutral-400">オフ</span>
-              ) : day.sessions.length === 0 ? (
-                <span className="flex-1 text-right text-neutral-300">
-                  セクション設定なし
-                </span>
-              ) : (
-                <span className="flex flex-1 flex-wrap justify-end gap-x-3 gap-y-1">
-                  {day.sessions.map((s) => (
-                    <span
-                      key={s.id}
-                      className="flex items-center gap-1 text-neutral-600"
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[s.session_type]}`}
-                      />
-                      {sessionTypeLabel[s.session_type]}
-                      {" "}
-                      {s.start_time.slice(0, 5)}〜
-                      {s.is_joint && (
-                        <span className="text-purple-500">(全体)</span>
-                      )}
-                    </span>
-                  ))}
-                </span>
-              )}
-              <span className="shrink-0 text-neutral-300">›</span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
