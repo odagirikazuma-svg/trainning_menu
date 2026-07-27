@@ -21,7 +21,11 @@ type MemberRow = {
   role: Role;
   home_location: Location | null;
   entry_year: number | null;
+  isPending?: boolean;
 };
+
+// member_rosterテーブルのroleカラムに入り得る値
+type RosterRoleForMember = "captain" | "vice_captain" | "coach" | "member";
 
 type ScheduleSessionRow = {
   id: string;
@@ -195,9 +199,49 @@ export default function TeamPage({
       .order("display_name", { ascending: true });
     if (error) {
       setErrorMsg(error.message);
-    } else {
-      setMembers((data ?? []) as MemberRow[]);
+      setLoadingMembers(false);
+      return;
     }
+
+    const realMembers = (data ?? []) as MemberRow[];
+
+    // まだ本人がサインアップしていない「事前登録」の部員も、
+    // 参考として一覧に含める（案内中であることが分かるようにする）
+    const { data: rosterData, error: rosterError } = await supabase
+      .from("member_roster")
+      .select("id, display_name, role, home_location, entry_year")
+      .eq("team_id", profile.team_id)
+      .is("claimed_by", null);
+
+    if (rosterError) {
+      setErrorMsg(rosterError.message);
+      setMembers(realMembers);
+      setLoadingMembers(false);
+      return;
+    }
+
+    const pendingMembers: MemberRow[] = (
+      (rosterData ?? []) as {
+        id: string;
+        display_name: string;
+        role: RosterRoleForMember;
+        home_location: Location | null;
+        entry_year: number | null;
+      }[]
+    ).map((r) => ({
+      id: `pending:${r.id}`,
+      display_name: r.display_name,
+      role: (r.role === "vice_captain" ? "vice_leader" : r.role) as Role,
+      home_location: r.home_location,
+      entry_year: r.entry_year,
+      isPending: true,
+    }));
+
+    setMembers(
+      [...realMembers, ...pendingMembers].sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, "ja")
+      )
+    );
     setLoadingMembers(false);
   }
 
@@ -679,42 +723,60 @@ export default function TeamPage({
                   <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
                     <ul className="divide-y divide-neutral-100">
                       {group.members.map((m) => {
-                        const missing = loadingCompliance
-                          ? null
-                          : hasMissingSubmission(m.id, m.home_location);
+                        const missing =
+                          m.isPending || loadingCompliance
+                            ? null
+                            : hasMissingSubmission(m.id, m.home_location);
+                        const content = (
+                          <>
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-medium text-neutral-800">
+                                {m.display_name}
+                              </span>
+                              {m.home_location && (
+                                <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                                  {locationLabel[m.home_location]}
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              {m.isPending ? (
+                                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                  招待中（未登録）
+                                </span>
+                              ) : missing === null ? (
+                                <span className="text-[10px] text-neutral-300">
+                                  確認中…
+                                </span>
+                              ) : missing ? (
+                                <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                                  未提出あり
+                                </span>
+                              ) : (
+                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                                  提出OK
+                                </span>
+                              )}
+                              {!m.isPending && (
+                                <span className="text-neutral-300">›</span>
+                              )}
+                            </span>
+                          </>
+                        );
                         return (
                           <li key={m.id}>
-                            <button
-                              onClick={() => router.push(`/team/${m.id}`)}
-                              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span className="truncate font-medium text-neutral-800">
-                                  {m.display_name}
-                                </span>
-                                {m.home_location && (
-                                  <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
-                                    {locationLabel[m.home_location]}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="flex shrink-0 items-center gap-2">
-                                {missing === null ? (
-                                  <span className="text-[10px] text-neutral-300">
-                                    確認中…
-                                  </span>
-                                ) : missing ? (
-                                  <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
-                                    未提出あり
-                                  </span>
-                                ) : (
-                                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                                    提出OK
-                                  </span>
-                                )}
-                                <span className="text-neutral-300">›</span>
-                              </span>
-                            </button>
+                            {m.isPending ? (
+                              <div className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs">
+                                {content}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => router.push(`/team/${m.id}`)}
+                                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+                              >
+                                {content}
+                              </button>
+                            )}
                           </li>
                         );
                       })}

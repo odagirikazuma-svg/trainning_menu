@@ -538,121 +538,6 @@ export default function CoachAdminPage({
             氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
           </p>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3">
-            <p className="text-xs font-semibold text-neutral-600">
-              CSVから一括登録
-            </p>
-            <p className="text-[11px] text-neutral-400">
-              1行目に見出し、2行目以降に「氏名, メールアドレス, 役職,
-              拠点, 入学年」の順で入力したCSVファイルを選んでください。
-              <br />
-              メールアドレスはまだ分からなければ空欄でも登録できます(あとで一覧から個別に追加できます)。
-              <br />
-              役職は「主将・副主将・コーチ・役職なし」、拠点は「多摩・大塚」で入力できます(空欄は「役職なし」「多摩」として扱われます)。コーチの場合、拠点・入学年は空欄でかまいません。
-              <br />
-              例: <code>田中太郎,tanaka@example.com,役職なし,多摩,2024</code>
-              <br />
-              例(メール未定): <code>田中太郎,,役職なし,多摩,2024</code>
-            </p>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-              className="text-xs"
-            />
-            <button
-              onClick={handleImportCsv}
-              disabled={!csvFile || importingCsv}
-              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
-            >
-              {importingCsv ? "インポート中…" : "インポートする"}
-            </button>
-            {csvResult && (
-              <p className="rounded bg-emerald-50 p-2 text-[11px] text-emerald-700">
-                {csvResult}
-              </p>
-            )}
-          </div>
-
-          <form
-            onSubmit={handleAddRoster}
-            className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
-          >
-            <p className="text-xs font-semibold text-neutral-600">
-              1件ずつ登録
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                required
-                placeholder="氏名"
-                value={rosterName}
-                onChange={(e) => setRosterName(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-              />
-              <input
-                type="email"
-                placeholder="メールアドレス（あとで追加可）"
-                value={rosterEmail}
-                onChange={(e) => setRosterEmail(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={rosterRole}
-                onChange={(e) =>
-                  setRosterRole(e.target.value as RosterRoleChoice)
-                }
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-              >
-                {(
-                  Object.keys(rosterRoleLabel) as RosterRoleChoice[]
-                ).map((r) => (
-                  <option key={r} value={r}>
-                    {rosterRoleLabel[r]}
-                  </option>
-                ))}
-              </select>
-              {rosterRole !== "coach" && (
-                <select
-                  value={rosterLocation}
-                  onChange={(e) =>
-                    setRosterLocation(e.target.value as Location)
-                  }
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc} value={loc}>
-                      {locationLabel[loc]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {rosterRole !== "coach" && (
-              <select
-                value={rosterEntryYear}
-                onChange={(e) => setRosterEntryYear(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
-              >
-                <option value="">入学年を選択</option>
-                {rosterEntryYearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}年入学（現在{currentGrade(y)}年）
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              type="submit"
-              disabled={savingRoster}
-              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
-            >
-              追加する
-            </button>
-          </form>
-
           {loadingRoster ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : roster.length === 0 ? (
@@ -747,6 +632,121 @@ export default function CoachAdminPage({
               ))}
             </ul>
           )}
+
+          <form
+            onSubmit={handleAddRoster}
+            className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
+          >
+            <p className="text-xs font-semibold text-neutral-600">
+              1件ずつ登録
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                required
+                placeholder="氏名"
+                value={rosterName}
+                onChange={(e) => setRosterName(e.target.value)}
+                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+              />
+              <input
+                type="email"
+                placeholder="メールアドレス（あとで追加可）"
+                value={rosterEmail}
+                onChange={(e) => setRosterEmail(e.target.value)}
+                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={rosterRole}
+                onChange={(e) =>
+                  setRosterRole(e.target.value as RosterRoleChoice)
+                }
+                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+              >
+                {(
+                  Object.keys(rosterRoleLabel) as RosterRoleChoice[]
+                ).map((r) => (
+                  <option key={r} value={r}>
+                    {rosterRoleLabel[r]}
+                  </option>
+                ))}
+              </select>
+              {rosterRole !== "coach" && (
+                <select
+                  value={rosterLocation}
+                  onChange={(e) =>
+                    setRosterLocation(e.target.value as Location)
+                  }
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                >
+                  {locations.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {locationLabel[loc]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {rosterRole !== "coach" && (
+              <select
+                value={rosterEntryYear}
+                onChange={(e) => setRosterEntryYear(e.target.value)}
+                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+              >
+                <option value="">入学年を選択</option>
+                {rosterEntryYearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}年入学（現在{currentGrade(y)}年）
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="submit"
+              disabled={savingRoster}
+              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+            >
+              追加する
+            </button>
+          </form>
+
+          <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3">
+            <p className="text-xs font-semibold text-neutral-600">
+              CSVから一括登録
+            </p>
+            <p className="text-[11px] text-neutral-400">
+              1行目に見出し、2行目以降に「氏名, メールアドレス, 役職,
+              拠点, 入学年」の順で入力したCSVファイルを選んでください。
+              <br />
+              メールアドレスはまだ分からなければ空欄でも登録できます(あとで一覧から個別に追加できます)。
+              <br />
+              役職は「主将・副主将・コーチ・役職なし」、拠点は「多摩・大塚」で入力できます(空欄は「役職なし」「多摩」として扱われます)。コーチの場合、拠点・入学年は空欄でかまいません。
+              <br />
+              例: <code>田中太郎,tanaka@example.com,役職なし,多摩,2024</code>
+              <br />
+              例(メール未定): <code>田中太郎,,役職なし,多摩,2024</code>
+            </p>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+              className="text-xs"
+            />
+            <button
+              onClick={handleImportCsv}
+              disabled={!csvFile || importingCsv}
+              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+            >
+              {importingCsv ? "インポート中…" : "インポートする"}
+            </button>
+            {csvResult && (
+              <p className="rounded bg-emerald-50 p-2 text-[11px] text-emerald-700">
+                {csvResult}
+              </p>
+            )}
+          </div>
         </section>
 
         <div className="border-t border-neutral-200 pt-4">
