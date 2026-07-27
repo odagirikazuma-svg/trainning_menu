@@ -305,12 +305,16 @@ export default function TeamPage({
     setEditingSchedule(false);
   }
 
-  function handleGoToMatMenu() {
+  function handleGoToMatMenu(startTime?: string) {
     if (!selectedScheduleDate) return;
     try {
       sessionStorage.setItem(
         "jumpTo",
-        JSON.stringify({ location: scheduleLocation, date: selectedScheduleDate })
+        JSON.stringify({
+          location: scheduleLocation,
+          date: selectedScheduleDate,
+          startTime: startTime ?? null,
+        })
       );
     } catch {
       // sessionStorageが使えない環境では何もしない
@@ -563,7 +567,9 @@ export default function TeamPage({
             </p>
           ) : (
             <div className="flex flex-col gap-4">
-              {groupMembersByGrade(members).map((group) => (
+              {groupMembersByGrade(
+                members.filter((m) => m.role !== "coach")
+              ).map((group) => (
                 <div key={group.label} className="flex flex-col gap-1.5">
                   <h3 className="text-[11px] font-semibold text-neutral-400">
                     {group.label}（{group.members.length}人）
@@ -707,15 +713,11 @@ export default function TeamPage({
                                   <option value="running">ラン</option>
                                   <option value="weight">ウェイト</option>
                                 </select>
-                                <input
-                                  type="time"
+                                <ScheduleTimeSelect
                                   value={s.time}
-                                  onChange={(e) =>
-                                    updateEditSession(idx, {
-                                      time: e.target.value,
-                                    })
+                                  onChange={(v) =>
+                                    updateEditSession(idx, { time: v })
                                   }
-                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
                                 />
                               </div>
                               <label className="flex items-center gap-2 text-[11px] text-neutral-500">
@@ -856,7 +858,9 @@ export default function TeamPage({
                                     s.start_time
                                   ) && (
                                     <button
-                                      onClick={handleGoToMatMenu}
+                                      onClick={() =>
+                                        handleGoToMatMenu(s.start_time)
+                                      }
                                       className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-700"
                                     >
                                       このセッションの練習メニューを作成する
@@ -877,7 +881,7 @@ export default function TeamPage({
                                     matMenuDetail.start_time
                                   ) && (
                                     <button
-                                      onClick={handleGoToMatMenu}
+                                      onClick={() => handleGoToMatMenu()}
                                       className="mt-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
                                     >
                                       掲示板で編集する
@@ -906,6 +910,13 @@ export default function TeamPage({
               </div>
             )}
           </div>
+
+          {/* 一覧表示（セッション内容・時間を一目で見れるように） */}
+          <ScheduleAgenda
+            scheduleDays={monthScheduleDays}
+            loading={loadingMonthSchedule}
+            onSelectDate={handleSelectScheduleDate}
+          />
         </section>
 
         {/* 全員のウェイトMAX */}
@@ -971,6 +982,115 @@ export default function TeamPage({
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function ScheduleAgenda({
+  scheduleDays,
+  loading,
+  onSelectDate,
+}: {
+  scheduleDays: Map<string, ScheduleDayRow>;
+  loading: boolean;
+  onSelectDate: (dateStr: string) => void;
+}) {
+  if (loading) {
+    return <p className="text-xs text-neutral-400">読み込み中…</p>;
+  }
+
+  const days = Array.from(scheduleDays.values()).sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+
+  if (days.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+        この月の時間割はまだ設定されていません。
+      </p>
+    );
+  }
+
+  return (
+    <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
+      <ul className="divide-y divide-neutral-100">
+        {days.map((day) => (
+          <li key={day.id}>
+            <button
+              onClick={() => onSelectDate(day.date)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+            >
+              <span className="shrink-0 font-semibold text-neutral-600">
+                {formatMonthDay(day.date)}
+              </span>
+              {day.is_off ? (
+                <span className="flex-1 text-right text-neutral-400">オフ</span>
+              ) : (
+                <span className="flex flex-1 flex-wrap justify-end gap-x-3 gap-y-1">
+                  {day.sessions.map((s) => (
+                    <span
+                      key={s.id}
+                      className="flex items-center gap-1 text-neutral-600"
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                      />
+                      {sessionTypeLabel[s.session_type]}
+                      {" "}
+                      {s.start_time.slice(0, 5)}〜
+                      {s.is_joint && (
+                        <span className="text-purple-500">(全体)</span>
+                      )}
+                    </span>
+                  ))}
+                </span>
+              )}
+              <span className="shrink-0 text-neutral-300">›</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ScheduleTimeSelect({
+  value,
+  onChange,
+}: {
+  value: string; // "HH:MM"
+  onChange: (value: string) => void;
+}) {
+  const [hour, minute] = value ? value.split(":") : ["10", "00"];
+  const hours = Array.from({ length: 24 }, (_, i) =>
+    String(i).padStart(2, "0")
+  );
+  const minutes = ["00", "10", "20", "30", "40", "50"];
+
+  return (
+    <div className="flex gap-1">
+      <select
+        value={hour}
+        onChange={(e) => onChange(`${e.target.value}:${minute || "00"}`)}
+        className="flex-1 rounded border border-neutral-300 px-1.5 py-1.5 text-xs"
+      >
+        {hours.map((h) => (
+          <option key={h} value={h}>
+            {h}時
+          </option>
+        ))}
+      </select>
+      <select
+        value={minute}
+        onChange={(e) => onChange(`${hour || "10"}:${e.target.value}`)}
+        className="flex-1 rounded border border-neutral-300 px-1.5 py-1.5 text-xs"
+      >
+        {minutes.map((m) => (
+          <option key={m} value={m}>
+            {m}分
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

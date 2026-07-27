@@ -83,12 +83,13 @@ export default function TrainingBoardSupabase({
 }) {
   const supabase = createClient();
   const router = useRouter();
-  const [{ initialLocation, initialDate }] = useState<{
+  const [{ initialLocation, initialDate, initialStartTime }] = useState<{
     initialLocation: Location;
     initialDate: string | null;
+    initialStartTime: string | null;
   }>(() => {
     if (typeof window === "undefined") {
-      return { initialLocation: "tama", initialDate: null };
+      return { initialLocation: "tama", initialDate: null, initialStartTime: null };
     }
     try {
       const raw = sessionStorage.getItem("jumpTo");
@@ -98,12 +99,13 @@ export default function TrainingBoardSupabase({
         return {
           initialLocation: parsed.location === "otsuka" ? "otsuka" : "tama",
           initialDate: parsed.date ?? null,
+          initialStartTime: parsed.startTime ?? null,
         };
       }
     } catch {
       // 無視して通常起動にフォールバック
     }
-    return { initialLocation: "tama", initialDate: null };
+    return { initialLocation: "tama", initialDate: null, initialStartTime: null };
   });
   const usedInitialJump = useRef(false);
   const [activeLocation, setActiveLocation] =
@@ -171,12 +173,22 @@ export default function TrainingBoardSupabase({
         loadMenus(),
         loadJointElsewhere(),
       ]);
-      const targetDate =
-        !usedInitialJump.current && initialDate
-          ? initialDate
-          : toDateKey(new Date());
+      const isInitialJump = !usedInitialJump.current && !!initialDate;
+      const targetDate = isInitialJump
+        ? (initialDate as string)
+        : toDateKey(new Date());
       usedInitialJump.current = true;
       applySelectionForDate(targetDate, rows, jointMap);
+
+      if (isInitialJump) {
+        const hasMenu = rows.some((m) => m.date === targetDate);
+        if (!hasMenu && canCreateMenu(profile.role)) {
+          setNewMenuType("normal");
+          setNewDate(targetDate);
+          setNewStartTime(initialStartTime ?? "");
+          setShowNewForm(true);
+        }
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocation]);
