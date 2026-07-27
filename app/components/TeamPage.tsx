@@ -652,6 +652,7 @@ export default function TeamPage({
               loading={loadingMonthSchedule}
               onSelectDate={handleSelectScheduleDate}
               highlightDate={selectedScheduleDate}
+              viewLocation={scheduleLocation}
             />
             {selectedScheduleDate && (
               <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
@@ -1102,6 +1103,7 @@ function MonthlyCalendar({
   loading,
   onSelectDate,
   highlightDate,
+  viewLocation,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -1109,6 +1111,7 @@ function MonthlyCalendar({
   loading: boolean;
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
+  viewLocation: Location;
 }) {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -1158,28 +1161,45 @@ function MonthlyCalendar({
                 <button
                   key={i}
                   onClick={() => onSelectDate(key)}
-                  className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
-                    isHighlighted
-                      ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
-                      : "text-neutral-600"
+                  className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
+                    day?.is_off
+                      ? "border-neutral-200 bg-neutral-200"
+                      : isHighlighted
+                        ? "border-amber-400 bg-amber-50 ring-1 ring-amber-400"
+                        : "border-neutral-200 active:bg-neutral-50"
                   }`}
                 >
-                  <span>{date.getDate()}</span>
-                  {day && !day.is_off && day.sessions.length > 0 && (
-                    <span className="flex flex-wrap justify-center gap-0.5">
-                      {day.sessions.map((s) => (
-                        <span
-                          key={s.id}
-                          className={`inline-block rounded-full ${sessionTypeDotColor[s.session_type]} ${
-                            isHighlighted ? "h-2.5 w-2.5" : "h-1.5 w-1.5"
-                          }`}
-                        />
-                      ))}
-                    </span>
-                  )}
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      day?.is_off ? "text-neutral-400" : "text-neutral-700"
+                    }`}
+                  >
+                    {date.getDate()}
+                  </span>
                   {day?.is_off && (
-                    <span className="text-[9px] text-neutral-300">off</span>
+                    <span className="text-[9px] text-neutral-400">オフ</span>
                   )}
+                  {day &&
+                    !day.is_off &&
+                    day.sessions.map((s) => (
+                      <span
+                        key={s.id}
+                        className="flex w-full items-start gap-0.5 leading-tight"
+                      >
+                        <span
+                          className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                        />
+                        <span className="break-words text-[9px] text-neutral-600">
+                          {sessionTypeLabel[s.session_type]}
+                          {s.start_time.slice(0, 5)}〜
+                          {s.is_joint &&
+                            (s.joint_location &&
+                            s.joint_location !== viewLocation
+                              ? `（${locationLabel[s.joint_location]}）`
+                              : "（全体）")}
+                        </span>
+                      </span>
+                    ))}
                 </button>
               );
             })}
@@ -1193,6 +1213,10 @@ function MonthlyCalendar({
                 {sessionTypeLabel[t]}
               </span>
             ))}
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200" />
+              オフ
+            </span>
           </p>
         </>
       )}
