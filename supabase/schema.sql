@@ -484,17 +484,20 @@ create policy "member_roster_delete_coach" on member_roster
 
 -- サインアップ時に自分のメールアドレスに一致する未紐付けの事前登録があれば、
 -- claimed_byを自分自身に更新できるようにする（プロフィール作成時に使用）
+-- ※auth.usersテーブルへの直接参照は権限エラーになるため、auth.email()を使う
+drop policy if exists "member_roster_update_self_claim" on member_roster;
 create policy "member_roster_update_self_claim" on member_roster
   for update using (
     claimed_by is null
-    and lower(email) = lower((select email from auth.users where id = auth.uid()))
+    and lower(email) = lower(auth.email())
   );
 
 -- 新規サインアップ時（まだ自分のprofilesが存在しない段階）でも、
 -- 自分のメールアドレスに一致する事前登録だけは検索できるようにする
+drop policy if exists "member_roster_select_self_email" on member_roster;
 create policy "member_roster_select_self_email" on member_roster
   for select using (
-    lower(email) = lower((select email from auth.users where id = auth.uid()))
+    lower(email) = lower(auth.email())
   );
 
 -- ============================================

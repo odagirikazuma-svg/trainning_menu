@@ -334,9 +334,11 @@ export default function CoachAdminPage({
       const role = rosterRoleFromLabel[roleRaw] ?? "member";
       const location =
         role === "coach" ? null : locationFromLabel[locationRaw] ?? "tama";
-      const entryYearNum = Number(entryYearRaw);
+      // 「2023年」のように「年」が付いていても数字だけ取り出せるようにする
+      const entryYearDigits = entryYearRaw.match(/\d+/)?.[0];
+      const entryYearNum = entryYearDigits ? Number(entryYearDigits) : NaN;
       const entryYear =
-        role === "coach" || !entryYearRaw || Number.isNaN(entryYearNum)
+        role === "coach" || !entryYearDigits || Number.isNaN(entryYearNum)
           ? null
           : entryYearNum;
 
