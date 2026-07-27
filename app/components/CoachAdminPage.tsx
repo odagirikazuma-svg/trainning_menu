@@ -37,6 +37,7 @@ type RosterRow = {
   home_location: Location | null;
   entry_year: number | null;
   claimed_by: string | null;
+  token: string;
 };
 
 function toDateKey(d: Date) {
@@ -99,6 +100,7 @@ export default function CoachAdminPage({
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [editingEmailValue, setEditingEmailValue] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
 
   const rosterEntryYearOptions: number[] = (() => {
     const now = new Date();
@@ -193,7 +195,7 @@ export default function CoachAdminPage({
     const { data, error } = await supabase
       .from("member_roster")
       .select(
-        "id, display_name, email, role, home_location, entry_year, claimed_by"
+        "id, display_name, email, role, home_location, entry_year, claimed_by, token"
       )
       .eq("team_id", profile.team_id)
       .order("display_name", { ascending: true });
@@ -397,6 +399,17 @@ export default function CoachAdminPage({
       await loadRoster();
     }
     setSavingEmail(false);
+  }
+
+  async function handleCopyInviteLink(row: RosterRow) {
+    const url = `${window.location.origin}/?invite=${row.token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedTokenId(row.id);
+      setTimeout(() => setCopiedTokenId(null), 2000);
+    } catch {
+      window.prompt("このリンクをコピーしてください", url);
+    }
   }
 
   async function handleDeleteRoster(id: string) {
@@ -621,12 +634,24 @@ export default function CoachAdminPage({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => handleStartEditEmail(r)}
-                      className="self-start text-[11px] font-medium text-neutral-500 underline"
-                    >
-                      {r.email ? "メールを編集" : "メールを追加"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleStartEditEmail(r)}
+                        className="text-[11px] font-medium text-neutral-500 underline"
+                      >
+                        {r.email ? "メールを編集" : "メールを追加"}
+                      </button>
+                      {!r.claimed_by && (
+                        <button
+                          onClick={() => handleCopyInviteLink(r)}
+                          className="text-[11px] font-medium text-blue-600 underline"
+                        >
+                          {copiedTokenId === r.id
+                            ? "コピーしました！"
+                            : "招待リンクをコピー"}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </li>
               ))}

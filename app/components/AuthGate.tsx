@@ -51,6 +51,17 @@ export default function AuthGate({
     useState<SignupRoleChoice>("member");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("invite");
+    if (token) {
+      setInviteToken(token);
+      setMode("signup");
+    }
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -91,10 +102,12 @@ export default function AuthGate({
       return;
     }
 
-    // 初回ログイン時：まず自分のメールアドレスに一致する「部員の事前登録」が
-    // ないか確認する。あれば、その内容（氏名・拠点・入学年・役職・チーム）を
-    // 優先的に使ってプロフィールを作成する。
+    // 初回ログイン時：まず「招待リンク」のトークン、次に自分のメールアドレスに
+    // 一致する「部員の事前登録」がないか確認する。あれば、その内容
+    // （氏名・拠点・入学年・役職・チーム）を優先的に使ってプロフィールを作成する。
     const userEmail = session.user.email ?? null;
+    const meta0 = session.user.user_metadata as Record<string, unknown>;
+    const inviteToken = (meta0?.invite_token as string | undefined) ?? null;
     type RosterMatch = {
       id: string;
       team_id: string;
@@ -105,7 +118,19 @@ export default function AuthGate({
     };
     let rosterMatch: RosterMatch | null = null;
 
-    if (userEmail) {
+    if (inviteToken) {
+      const { data: rosterRow } = await supabase
+        .from("member_roster")
+        .select("id, team_id, display_name, role, home_location, entry_year")
+        .eq("token", inviteToken)
+        .is("claimed_by", null)
+        .maybeSingle();
+      if (rosterRow) {
+        rosterMatch = rosterRow as unknown as RosterMatch;
+      }
+    }
+
+    if (!rosterMatch && userEmail) {
       const { data: rosterRow } = await supabase
         .from("member_roster")
         .select("id, team_id, display_name, role, home_location, entry_year")
@@ -224,6 +249,7 @@ export default function AuthGate({
             entry_year:
               signupCategory === "member" ? Number(signupEntryYear) : null,
             role_choice: signupCategory === "member" ? signupRoleChoice : null,
+            invite_token: inviteToken,
           },
         },
       });
@@ -256,6 +282,11 @@ export default function AuthGate({
     return (
       <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
         <h1 className="text-lg font-bold">練習ノート ログイン</h1>
+        {inviteToken && (
+          <p className="rounded bg-emerald-50 p-2 text-xs text-emerald-700">
+            招待リンクから開いています。新規登録すると、事前に登録された氏名・拠点・学年・役職が自動で反映されます。
+          </p>
+        )}
         <div className="flex gap-2 text-xs">
           <button
             className={`rounded px-3 py-1 ${

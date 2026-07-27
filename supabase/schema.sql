@@ -505,3 +505,22 @@ create policy "member_roster_select_self_email" on member_roster
 -- member_roster.emailを必須ではなくする
 -- ============================================
 alter table member_roster alter column email drop not null;
+
+-- ============================================
+-- 追加: 部員の事前登録に「招待リンク」を持たせる
+-- （メールアドレスが分からなくても、リンク経由で確実に紐付けできるようにする）
+-- ============================================
+alter table member_roster add column if not exists token uuid not null default gen_random_uuid();
+alter table member_roster drop constraint if exists member_roster_token_key;
+alter table member_roster add constraint member_roster_token_key unique (token);
+
+-- 新規サインアップ時（まだ自分のprofilesが存在しない段階）でも、
+-- 招待リンクのトークンで事前登録を検索・紐付けできるようにする
+-- （未紐付けの行だけを対象にするため、閲覧できる情報は限定的）
+drop policy if exists "member_roster_select_unclaimed" on member_roster;
+create policy "member_roster_select_unclaimed" on member_roster
+  for select using (claimed_by is null);
+
+drop policy if exists "member_roster_update_unclaimed_self" on member_roster;
+create policy "member_roster_update_unclaimed_self" on member_roster
+  for update using (claimed_by is null);
