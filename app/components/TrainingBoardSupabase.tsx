@@ -683,7 +683,7 @@ export default function TrainingBoardSupabase({
             onClick={() => router.push("/mypage")}
             className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
           >
-            マイページ
+            {profile.role === "coach" ? "管理ページ" : "マイページ"}
           </button>
           <button
             onClick={() => router.push("/team")}
