@@ -434,12 +434,98 @@ export default function TeamPage({
         setSavingSchedule(false);
         return;
       }
+
+      // このセッションが「ここで全体練習」として登録された場合、
+      // もう一方の拠点のカレンダーにも自動で反映する
+      for (const s of editSessions) {
+        if (s.isJoint && s.jointLocation === scheduleLocation) {
+          await propagateJointSession(selectedScheduleDate, scheduleLocation, {
+            type: s.type,
+            time: s.time,
+          });
+        }
+      }
     }
 
     setEditingSchedule(false);
     setSavingSchedule(false);
     await loadMonthSchedule();
     await loadDayDetail(selectedScheduleDate);
+  }
+
+  // 全体練習のセッションを、もう一方の拠点のカレンダーにも自動で反映する
+  // （既に同じ内容の通知セッションがあれば時刻だけ更新し、無ければ空いている
+  //   セッション枠に追加する。すでに2セッション埋まっている場合は反映できない）
+  async function propagateJointSession(
+    dateStr: string,
+    hostLocation: Location,
+    session: { type: SessionType; time: string }
+  ) {
+    const otherLocation: Location =
+      hostLocation === "tama" ? "otsuka" : "tama";
+
+    const { data: existingDay } = await supabase
+      .from("schedule_days")
+      .select(
+        "id, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", otherLocation)
+      .eq("date", dateStr)
+      .maybeSingle();
+
+    const { data: dayRow, error: dayError } = await supabase
+      .from("schedule_days")
+      .upsert(
+        {
+          team_id: profile.team_id,
+          location: otherLocation,
+          date: dateStr,
+          is_off: false,
+          created_by: profile.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "team_id,location,date" }
+      )
+      .select("id")
+      .single();
+
+    if (dayError || !dayRow) return;
+
+    const dayId = (dayRow as { id: string }).id;
+    const existingSessions =
+      ((existingDay as unknown as { sessions: ScheduleSessionRow[] } | null)
+        ?.sessions ?? []);
+
+    const mirrored = existingSessions.find(
+      (s) =>
+        s.is_joint &&
+        s.joint_location === hostLocation &&
+        s.session_type === session.type
+    );
+
+    if (mirrored) {
+      if (mirrored.start_time.slice(0, 5) !== session.time) {
+        await supabase
+          .from("schedule_sessions")
+          .update({ start_time: session.time })
+          .eq("id", mirrored.id);
+      }
+      return;
+    }
+
+    const usedNos = new Set(existingSessions.map((s) => s.session_no));
+    const sessionNo = !usedNos.has(1) ? 1 : !usedNos.has(2) ? 2 : null;
+    if (sessionNo === null) return; // 既に2セッション分埋まっている場合は反映できない
+
+    await supabase.from("schedule_sessions").insert({
+      schedule_day_id: dayId,
+      session_no: sessionNo,
+      session_type: session.type,
+      start_time: session.time,
+      is_joint: true,
+      joint_location: hostLocation,
+    });
   }
 
   async function loadWeightMaxes() {
@@ -911,13 +997,6 @@ export default function TeamPage({
               </div>
             )}
           </div>
-
-          {/* 一覧表示（セッション内容・時間を一目で見れるように） */}
-          <ScheduleAgenda
-            scheduleDays={monthScheduleDays}
-            loading={loadingMonthSchedule}
-            onSelectDate={handleSelectScheduleDate}
-          />
         </section>
 
         {/* 全員のウェイトMAX */}
@@ -983,74 +1062,6 @@ export default function TeamPage({
           )}
         </section>
       </div>
-    </div>
-  );
-}
-
-function ScheduleAgenda({
-  scheduleDays,
-  loading,
-  onSelectDate,
-}: {
-  scheduleDays: Map<string, ScheduleDayRow>;
-  loading: boolean;
-  onSelectDate: (dateStr: string) => void;
-}) {
-  if (loading) {
-    return <p className="text-xs text-neutral-400">読み込み中…</p>;
-  }
-
-  const days = Array.from(scheduleDays.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
-
-  if (days.length === 0) {
-    return (
-      <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-        この月の時間割はまだ設定されていません。
-      </p>
-    );
-  }
-
-  return (
-    <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
-      <ul className="divide-y divide-neutral-100">
-        {days.map((day) => (
-          <li key={day.id}>
-            <button
-              onClick={() => onSelectDate(day.date)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-            >
-              <span className="shrink-0 font-semibold text-neutral-600">
-                {formatMonthDay(day.date)}
-              </span>
-              {day.is_off ? (
-                <span className="flex-1 text-right text-neutral-400">オフ</span>
-              ) : (
-                <span className="flex flex-1 flex-wrap justify-end gap-x-3 gap-y-1">
-                  {day.sessions.map((s) => (
-                    <span
-                      key={s.id}
-                      className="flex items-center gap-1 text-neutral-600"
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[s.session_type]}`}
-                      />
-                      {sessionTypeLabel[s.session_type]}
-                      {" "}
-                      {s.start_time.slice(0, 5)}〜
-                      {s.is_joint && (
-                        <span className="text-purple-500">(全体)</span>
-                      )}
-                    </span>
-                  ))}
-                </span>
-              )}
-              <span className="shrink-0 text-neutral-300">›</span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

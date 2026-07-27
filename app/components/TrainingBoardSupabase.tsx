@@ -11,6 +11,9 @@ import {
   locationLabel,
   locations,
   roleLabel,
+  SessionType,
+  sessionTypeDotColor,
+  sessionTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
@@ -114,6 +117,15 @@ export default function TrainingBoardSupabase({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loadingMenus, setLoadingMenus] = useState(true);
+  const [viewDateSchedule, setViewDateSchedule] = useState<{
+    is_off: boolean;
+    sessions: {
+      session_type: SessionType;
+      start_time: string;
+      is_joint: boolean;
+      joint_location: Location | null;
+    }[];
+  } | null>(null);
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [confirmingNew, setConfirmingNew] = useState(false);
@@ -198,9 +210,27 @@ export default function TrainingBoardSupabase({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("schedule_days")
+        .select(
+          "is_off, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("location", activeLocation)
+        .eq("date", viewDate)
+        .maybeSingle();
+      setViewDateSchedule(
+        (data as unknown as typeof viewDateSchedule) ?? null
+      );
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewDate, activeLocation]);
+
   // 「＋ メニューを作成」ボタン：閉じている場合は開き、
   // コーチが設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
-  async function handleOpenNewForm() {
+  function handleOpenNewForm() {
     if (showNewForm) {
       setShowNewForm(false);
       return;
@@ -209,36 +239,12 @@ export default function TrainingBoardSupabase({
     setNewMenuType("normal");
     setNewOffBothLocations(false);
     setNewDate(viewDate);
-    setNewStartTime("");
 
-    try {
-      const { data } = await supabase
-        .from("schedule_days")
-        .select(
-          "is_off, sessions:schedule_sessions(session_type, start_time)"
-        )
-        .eq("team_id", profile.team_id)
-        .eq("location", activeLocation)
-        .eq("date", viewDate)
-        .maybeSingle();
-
-      if (data) {
-        const row = data as unknown as {
-          is_off: boolean;
-          sessions: { session_type: string; start_time: string }[];
-        };
-        if (!row.is_off) {
-          const matSession = row.sessions.find(
-            (s) => s.session_type === "mat"
-          );
-          if (matSession) {
-            setNewStartTime(matSession.start_time.slice(0, 5));
-          }
-        }
-      }
-    } catch {
-      // 時間割が未取得でも通常通りフォームは開く
-    }
+    const matSession =
+      viewDateSchedule && !viewDateSchedule.is_off
+        ? viewDateSchedule.sessions.find((s) => s.session_type === "mat")
+        : undefined;
+    setNewStartTime(matSession ? matSession.start_time.slice(0, 5) : "");
 
     setShowNewForm(true);
   }
@@ -1243,14 +1249,7 @@ export default function TrainingBoardSupabase({
               )}
             </section>
           </>
-        ) : (
-          <div className="rounded-lg border border-dashed border-neutral-300 p-4">
-            <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
-            <p className="text-center text-sm text-neutral-400">
-              {formatMonthDay(viewDate)}のメニューはまだ作成されていません
-            </p>
-          </div>
-        )}
+        ) : null}
 
         {/* すべてのメニューを見るカレンダー */}
         <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
@@ -1269,6 +1268,8 @@ export default function TrainingBoardSupabase({
             onSelectEmpty={(date) =>
               applySelectionForDate(date, menus, jointElsewhere)
             }
+            teamId={profile.team_id}
+            location={activeLocation}
           />
         </section>
       </div>
@@ -1517,6 +1518,8 @@ function MenuCalendar({
   jointElsewhere,
   onSelectJoint,
   onSelectEmpty,
+  teamId,
+  location,
 }: {
   menus: MenuRow[];
   selectedId: string | null;
@@ -1530,11 +1533,74 @@ function MenuCalendar({
   jointElsewhere: Map<string, { menuId: string; location: Location }>;
   onSelectJoint: (date: string) => void;
   onSelectEmpty: (date: string) => void;
+  teamId: string;
+  location: Location;
 }) {
+  const supabase = createClient();
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  const [scheduleByDate, setScheduleByDate] = useState<
+    Map<
+      string,
+      {
+        is_off: boolean;
+        sessions: {
+          session_type: SessionType;
+          start_time: string;
+          is_joint: boolean;
+          joint_location: Location | null;
+        }[];
+      }
+    >
+  >(new Map());
+
+  useEffect(() => {
+    (async () => {
+      const year = cursor.getFullYear();
+      const month = cursor.getMonth();
+      const rangeStart = toDateKey(new Date(year, month, 1));
+      const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+      const { data } = await supabase
+        .from("schedule_days")
+        .select(
+          "date, is_off, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+        )
+        .eq("team_id", teamId)
+        .eq("location", location)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+
+      const map = new Map<
+        string,
+        {
+          is_off: boolean;
+          sessions: {
+            session_type: SessionType;
+            start_time: string;
+            is_joint: boolean;
+            joint_location: Location | null;
+          }[];
+        }
+      >();
+      for (const row of (data ?? []) as unknown as {
+        date: string;
+        is_off: boolean;
+        sessions: {
+          session_type: SessionType;
+          start_time: string;
+          is_joint: boolean;
+          joint_location: Location | null;
+        }[];
+      }[]) {
+        map.set(row.date, { is_off: row.is_off, sessions: row.sessions });
+      }
+      setScheduleByDate(map);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, location]);
 
   const menusByDate = new Map<string, MenuRow[]>();
   for (const m of menus) {
@@ -1598,6 +1664,7 @@ function MenuCalendar({
           const hasMenu = dayMenus.length > 0;
           const isOff = dayMenus.some((m) => m.is_off);
           const jointInfo = !hasMenu ? jointElsewhere.get(key) : undefined;
+          const schedule = !hasMenu ? scheduleByDate.get(key) : undefined;
           const isToday = key === todayKey;
           const isViewDate = key === viewDate;
           const isPast = key < todayKey;
@@ -1610,16 +1677,16 @@ function MenuCalendar({
                 else if (jointInfo) onSelectJoint(key);
                 else onSelectEmpty(key);
               }}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs ${
                 isViewDate && hasMenu
                   ? "bg-blue-600 font-semibold text-white"
-                  : isOff
-                  ? "bg-neutral-200 font-medium text-neutral-500 active:bg-neutral-300"
-                  : hasMenu
-                  ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
-                  : jointInfo
-                  ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
-                  : "text-neutral-300"
+                  : isOff || schedule?.is_off
+                    ? "bg-neutral-200 font-medium text-neutral-500 active:bg-neutral-300"
+                    : hasMenu
+                      ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
+                      : jointInfo
+                        ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
+                        : "text-neutral-300 active:bg-neutral-50"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               {date.getDate()}
@@ -1629,6 +1696,26 @@ function MenuCalendar({
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
+              {!hasMenu &&
+                schedule &&
+                !schedule.is_off &&
+                schedule.sessions.length > 0 && (
+                  <span className="flex flex-col items-center gap-0.5 px-0.5">
+                    {[...schedule.sessions]
+                      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+                      .map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500"
+                        >
+                          <span
+                            className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                          />
+                          {s.start_time.slice(0, 5)}
+                        </span>
+                      ))}
+                  </span>
+                )}
             </button>
           );
         })}
