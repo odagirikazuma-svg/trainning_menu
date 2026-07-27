@@ -101,7 +101,7 @@ function groupMembersByGrade(
 
   const knownGrades = Array.from(groups.keys())
     .filter((g): g is number => g !== null)
-    .sort((a, b) => a - b);
+    .sort((a, b) => b - a);
 
   const result = knownGrades.map((grade) => ({
     label: `${grade}年`,
@@ -602,12 +602,12 @@ export default function TeamPage({
     setLoadingMaxes(false);
   }
 
-  // 直近60日の「オフではない練習」のうち、実施報告・未実施報告が
+  // 直近1週間の「オフではない練習」のうち、実施報告・未実施報告が
   // まだ提出されていないものがあるかどうかを部員ごとに調べる
   async function loadCompliance() {
     setLoadingCompliance(true);
     const lookbackStart = new Date();
-    lookbackStart.setDate(lookbackStart.getDate() - 60);
+    lookbackStart.setDate(lookbackStart.getDate() - 7);
     const rangeStart = toDateKey(lookbackStart);
     const todayStr = toDateKey(new Date());
 
@@ -663,13 +663,18 @@ export default function TeamPage({
 
   const maxByAuthor = new Map(weightMaxes.map((w) => [w.author_id, w]));
 
-  function hasMissingSubmission(memberId: string, homeLocation: Location | null) {
-    if (!homeLocation) return false;
-    return pastMenus.some(
-      (m) =>
-        m.location === homeLocation &&
-        !submittedKeys.has(`${memberId}:${m.id}`)
-    );
+  function getMissingSubmissions(
+    memberId: string,
+    homeLocation: Location | null
+  ): PastMenuRow[] {
+    if (!homeLocation) return [];
+    return pastMenus
+      .filter(
+        (m) =>
+          m.location === homeLocation &&
+          !submittedKeys.has(`${memberId}:${m.id}`)
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
 
   return (
@@ -703,7 +708,7 @@ export default function TeamPage({
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">部員一覧</h2>
           <p className="text-[11px] text-neutral-400">
-            タップするとその部員のマイページを閲覧できます。「未提出あり」は直近60日で実施報告・未実施報告のどちらも提出されていない練習日があることを示します。
+            タップするとその部員のマイページを閲覧できます。「未提出あり」は直近1週間で実施報告・未実施報告のどちらも提出されていない練習日があることを示し、その日付も表示されます。
           </p>
           {loadingMembers ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
@@ -715,72 +720,113 @@ export default function TeamPage({
             <div className="flex flex-col gap-4">
               {groupMembersByGrade(
                 members.filter((m) => m.role !== "coach")
-              ).map((group) => (
-                <div key={group.label} className="flex flex-col gap-1.5">
-                  <h3 className="text-[11px] font-semibold text-neutral-400">
-                    {group.label}（{group.members.length}人）
-                  </h3>
-                  <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
-                    <ul className="divide-y divide-neutral-100">
-                      {group.members.map((m) => {
-                        const missing =
-                          m.isPending || loadingCompliance
-                            ? null
-                            : hasMissingSubmission(m.id, m.home_location);
-                        const content = (
-                          <>
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span className="truncate font-medium text-neutral-800">
-                                {m.display_name}
-                              </span>
-                              {m.home_location && (
-                                <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
-                                  {locationLabel[m.home_location]}
-                                </span>
-                              )}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              {m.isPending ? (
-                                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                                  招待中（未登録）
-                                </span>
-                              ) : missing === null ? (
-                                <span className="text-[10px] text-neutral-300">
-                                  確認中…
-                                </span>
-                              ) : missing ? (
-                                <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
-                                  未提出あり
-                                </span>
-                              ) : (
-                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                                  提出OK
-                                </span>
-                              )}
-                            </span>
-                          </>
+              ).map((group) => {
+                const columns: { label: string; loc: Location | null }[] = [
+                  { label: locationLabel.tama, loc: "tama" },
+                  { label: locationLabel.otsuka, loc: "otsuka" },
+                ];
+                return (
+                  <div key={group.label} className="flex flex-col gap-1.5">
+                    <h3 className="text-[11px] font-semibold text-neutral-400">
+                      {group.label}（{group.members.length}人）
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {columns.map((col) => {
+                        const colMembers = group.members.filter(
+                          (m) =>
+                            m.home_location === col.loc ||
+                            (col.loc === "tama" && m.home_location == null)
                         );
                         return (
-                          <li key={m.id}>
-                            {m.isPending ? (
-                              <div className="flex w-full flex-col gap-1 px-3 py-2.5 text-left text-xs">
-                                {content}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => router.push(`/team/${m.id}`)}
-                                className="flex w-full flex-col gap-1 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-                              >
-                                {content}
-                              </button>
-                            )}
-                          </li>
+                          <div
+                            key={col.label}
+                            className="flex flex-col gap-1"
+                          >
+                            <p className="text-[10px] text-neutral-400">
+                              {col.label}（{colMembers.length}人）
+                            </p>
+                            <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
+                              {colMembers.length === 0 ? (
+                                <p className="p-2 text-[10px] text-neutral-300">
+                                  なし
+                                </p>
+                              ) : (
+                                <ul className="divide-y divide-neutral-100">
+                                  {colMembers.map((m) => {
+                                    const missingList =
+                                      m.isPending || loadingCompliance
+                                        ? null
+                                        : getMissingSubmissions(
+                                            m.id,
+                                            m.home_location
+                                          );
+                                    const missing =
+                                      missingList !== null &&
+                                      missingList.length > 0;
+                                    const content = (
+                                      <>
+                                        <span className="truncate font-medium text-neutral-800">
+                                          {m.display_name}
+                                        </span>
+                                        <span className="flex flex-col gap-0.5">
+                                          {m.isPending ? (
+                                            <span className="self-start rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                              招待中（未登録）
+                                            </span>
+                                          ) : missingList === null ? (
+                                            <span className="text-[10px] text-neutral-300">
+                                              確認中…
+                                            </span>
+                                          ) : missing ? (
+                                            <>
+                                              <span className="self-start rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                                                未提出あり
+                                              </span>
+                                              <span className="text-[10px] leading-tight text-red-500">
+                                                {missingList
+                                                  .map((mm) =>
+                                                    formatMonthDay(mm.date)
+                                                  )
+                                                  .join("、")}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <span className="self-start rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                                              提出OK
+                                            </span>
+                                          )}
+                                        </span>
+                                      </>
+                                    );
+                                    return (
+                                      <li key={m.id}>
+                                        {m.isPending ? (
+                                          <div className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px]">
+                                            {content}
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() =>
+                                              router.push(`/team/${m.id}`)
+                                            }
+                                            className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px] active:bg-neutral-50"
+                                          >
+                                            {content}
+                                          </button>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
-                    </ul>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
