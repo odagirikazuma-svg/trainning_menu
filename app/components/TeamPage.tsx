@@ -739,7 +739,7 @@ export default function TeamPage({
                                 </span>
                               )}
                             </span>
-                            <span className="flex shrink-0 items-center gap-2">
+                            <span className="flex items-center gap-2">
                               {m.isPending ? (
                                 <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
                                   招待中（未登録）
@@ -757,22 +757,19 @@ export default function TeamPage({
                                   提出OK
                                 </span>
                               )}
-                              {!m.isPending && (
-                                <span className="text-neutral-300">›</span>
-                              )}
                             </span>
                           </>
                         );
                         return (
                           <li key={m.id}>
                             {m.isPending ? (
-                              <div className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs">
+                              <div className="flex w-full flex-col gap-1 px-3 py-2.5 text-left text-xs">
                                 {content}
                               </div>
                             ) : (
                               <button
                                 onClick={() => router.push(`/team/${m.id}`)}
-                                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+                                className="flex w-full flex-col gap-1 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
                               >
                                 {content}
                               </button>
