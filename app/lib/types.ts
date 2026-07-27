@@ -47,6 +47,21 @@ export const sessionTypeDotColor: Record<SessionType, string> = {
   weight: "bg-blue-500",
 };
 
+// 月間の時間割における日の区分（練習・合宿・試合）
+export type DayType = "practice" | "camp" | "match";
+
+export const dayTypeLabel: Record<DayType, string> = {
+  practice: "練習",
+  camp: "合宿",
+  match: "試合",
+};
+
+export const dayTypeFillColor: Record<DayType, string> = {
+  practice: "",
+  camp: "bg-pink-100 text-pink-700",
+  match: "bg-red-100 text-red-700",
+};
+
 // 入学年から現在の学年を計算する（4月1日で繰り上がる）
 export function currentGrade(entryYear: number): number {
   const now = new Date();

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   currentGrade,
+  getTitleColor,
   Location,
   locationLabel,
   roleLabel,
@@ -34,6 +35,7 @@ type WeightLogRow = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
 };
 
 type RecentRecord = {
@@ -41,6 +43,7 @@ type RecentRecord = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
   isAlternative: boolean;
 };
 
@@ -48,6 +51,7 @@ type PopupRecordRow = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
   isAlternative: boolean;
 };
 
@@ -98,10 +102,10 @@ export default function MemberDetailPage({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [calendarWeightLogs, setCalendarWeightLogs] = useState<
-    { date: string; type: TrainingType }[]
+    { date: string; type: TrainingType; title: string | null }[]
   >([]);
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
-    { date: string; type: TrainingType }[]
+    { date: string; type: TrainingType; title: string | null }[]
   >([]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
@@ -176,7 +180,7 @@ export default function MemberDetailPage({
 
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .eq("author_id", memberId)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
@@ -207,6 +211,7 @@ export default function MemberDetailPage({
       date: l.date,
       content: l.content,
       type: l.type,
+      title: l.title,
       isAlternative: false,
     }));
 
@@ -225,6 +230,7 @@ export default function MemberDetailPage({
         date: r.menu!.date,
         content: r.text,
         type: r.alt_type,
+        title: null,
         isAlternative: true,
       }));
 
@@ -254,7 +260,7 @@ export default function MemberDetailPage({
 
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
-      .select("date, type")
+      .select("date, type, title")
       .eq("author_id", memberId)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
@@ -263,7 +269,11 @@ export default function MemberDetailPage({
       setErrorMsg(logError.message);
     } else {
       setCalendarWeightLogs(
-        (logData ?? []) as { date: string; type: TrainingType }[]
+        (logData ?? []) as {
+          date: string;
+          type: TrainingType;
+          title: string | null;
+        }[]
       );
     }
 
@@ -287,7 +297,7 @@ export default function MemberDetailPage({
         .filter(
           (r) => r.menu && r.menu.date >= rangeStart && r.menu.date <= rangeEnd
         )
-        .map((r) => ({ date: r.menu!.date, type: r.alt_type }))
+        .map((r) => ({ date: r.menu!.date, type: r.alt_type, title: null }))
     );
   }
 
@@ -331,7 +341,7 @@ export default function MemberDetailPage({
 
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .eq("author_id", memberId)
       .eq("date", dateStr)
       .maybeSingle();
@@ -372,6 +382,7 @@ export default function MemberDetailPage({
         date: row.date,
         content: row.content,
         type: row.type,
+        title: row.title,
         isAlternative: false,
       });
     }
@@ -380,6 +391,7 @@ export default function MemberDetailPage({
         date: dateStr,
         content: match.text,
         type: match.alt_type,
+        title: null,
         isAlternative: true,
       });
     }
@@ -515,27 +527,39 @@ export default function MemberDetailPage({
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {recentLogs.map((log) => (
-                <li
-                  key={log.id}
-                  className="rounded-lg border border-neutral-200 p-3"
-                >
-                  <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
-                    />
-                    {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
-                    {log.isAlternative && (
-                      <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
-                        代替メニュー
-                      </span>
-                    )}
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                    {log.content}
-                  </p>
-                </li>
-              ))}
+              {recentLogs.map((log) => {
+                const titleColor = log.title ? getTitleColor(log.title) : null;
+                return (
+                  <li
+                    key={log.id}
+                    className={`rounded-lg p-3 ${
+                      titleColor ? titleColor.fill : "border border-neutral-200"
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
+                      />
+                      {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
+                      {log.title && (
+                        <span
+                          className={`rounded bg-white/60 px-1.5 py-0.5 text-[10px] font-medium ${titleColor?.text}`}
+                        >
+                          {log.title}
+                        </span>
+                      )}
+                      {log.isAlternative && (
+                        <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                          代替メニュー
+                        </span>
+                      )}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                      {log.content}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -615,6 +639,13 @@ export default function MemberDetailPage({
                             />
                             {formatMonthDay(r.date)}・
                             {trainingTypeLabel[r.type]}
+                            {r.title && (
+                              <span
+                                className={`rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium ${getTitleColor(r.title).text}`}
+                              >
+                                {r.title}
+                              </span>
+                            )}
                             {r.isAlternative && (
                               <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
                                 代替メニュー
@@ -655,16 +686,20 @@ function MemberTrainingCalendar({
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
-  weightLogs: { date: string; type: TrainingType }[];
-  absentLogs: { date: string; type: TrainingType }[];
+  weightLogs: { date: string; type: TrainingType; title: string | null }[];
+  absentLogs: { date: string; type: TrainingType; title: string | null }[];
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
+  const titleByDate = new Map<string, string>();
   for (const row of [...weightLogs, ...absentLogs]) {
     const list = dotsByDate.get(row.date) ?? [];
     list.push(row.type);
     dotsByDate.set(row.date, list);
+    if (row.title && !titleByDate.has(row.date)) {
+      titleByDate.set(row.date, row.title);
+    }
   }
 
   const year = cursor.getFullYear();
@@ -706,6 +741,8 @@ function MemberTrainingCalendar({
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
           const dots = dotsByDate.get(key) ?? [];
+          const title = titleByDate.get(key);
+          const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
           return (
             <button
@@ -714,8 +751,11 @@ function MemberTrainingCalendar({
               className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
                 isHighlighted
                   ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
-                  : "text-neutral-600"
+                  : titleColor
+                    ? `${titleColor.fill} text-neutral-700`
+                    : "text-neutral-600"
               }`}
+              title={title ?? undefined}
             >
               <span>{date.getDate()}</span>
               {dots.length > 0 && (

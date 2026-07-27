@@ -7,6 +7,9 @@ import {
   canCreateMenu,
   CommentKind,
   commentKindLabel,
+  DayType,
+  dayTypeFillColor,
+  dayTypeLabel,
   Location,
   locationLabel,
   locations,
@@ -1617,6 +1620,7 @@ function MenuCalendar({
       string,
       {
         is_off: boolean;
+        day_type: DayType;
         sessions: {
           session_type: SessionType;
           start_time: string;
@@ -1637,7 +1641,7 @@ function MenuCalendar({
       const { data } = await supabase
         .from("schedule_days")
         .select(
-          "date, is_off, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+          "date, is_off, day_type, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
         )
         .eq("team_id", teamId)
         .eq("location", location)
@@ -1648,6 +1652,7 @@ function MenuCalendar({
         string,
         {
           is_off: boolean;
+          day_type: DayType;
           sessions: {
             session_type: SessionType;
             start_time: string;
@@ -1659,6 +1664,7 @@ function MenuCalendar({
       for (const row of (data ?? []) as unknown as {
         date: string;
         is_off: boolean;
+        day_type: DayType;
         sessions: {
           session_type: SessionType;
           start_time: string;
@@ -1666,7 +1672,11 @@ function MenuCalendar({
           joint_location: Location | null;
         }[];
       }[]) {
-        map.set(row.date, { is_off: row.is_off, sessions: row.sessions });
+        map.set(row.date, {
+          is_off: row.is_off,
+          day_type: row.day_type,
+          sessions: row.sessions,
+        });
       }
       setScheduleByDate(map);
     })();
@@ -1753,11 +1763,15 @@ function MenuCalendar({
                   ? "bg-blue-600 font-semibold text-white"
                   : isOff || schedule?.is_off
                     ? "bg-neutral-200 font-medium text-neutral-500 active:bg-neutral-300"
-                    : hasMenu
-                      ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
-                      : jointInfo
-                        ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
-                        : "text-neutral-300 active:bg-neutral-50"
+                    : schedule?.day_type === "camp"
+                      ? "bg-pink-50 font-medium text-pink-700 active:bg-pink-100"
+                      : schedule?.day_type === "match"
+                        ? "bg-red-50 font-medium text-red-700 active:bg-red-100"
+                        : hasMenu
+                          ? "bg-blue-50 font-medium text-blue-700 active:bg-blue-100"
+                          : jointInfo
+                            ? "bg-purple-50 font-medium text-purple-600 active:bg-purple-100"
+                            : "text-neutral-300 active:bg-neutral-50"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               {date.getDate()}
@@ -1767,6 +1781,16 @@ function MenuCalendar({
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
+              {schedule &&
+                !schedule.is_off &&
+                (schedule.day_type === "camp" ||
+                  schedule.day_type === "match") && (
+                  <span
+                    className={`rounded px-1 text-[8px] font-semibold ${dayTypeFillColor[schedule.day_type]}`}
+                  >
+                    {dayTypeLabel[schedule.day_type]}
+                  </span>
+                )}
               {schedule &&
                 !schedule.is_off &&
                 schedule.sessions.length > 0 && (

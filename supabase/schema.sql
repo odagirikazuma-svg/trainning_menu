@@ -529,3 +529,10 @@ create policy "member_roster_update_unclaimed_self" on member_roster
 -- 追加: ウェイトのトレーニング記録にタイトルをつけられるようにする
 -- ============================================
 alter table weight_logs add column if not exists title text;
+
+-- ============================================
+-- 追加: 月間の時間割に「合宿」「試合」の区分を追加
+-- （オフ/練習に加えて、合宿・試合の日を設定できるようにする。
+-- 　合宿・試合の日は、練習セクションを入れるかどうかを任意で選べる）
+-- ============================================
+alter table schedule_days add column if not exists day_type text not null default 'practice' check (day_type in ('practice', 'camp', 'match'));

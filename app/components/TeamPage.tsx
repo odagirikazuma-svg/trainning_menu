@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   currentGrade,
+  DayType,
+  dayTypeFillColor,
+  dayTypeLabel,
   Location,
   locationLabel,
   locations,
@@ -41,6 +44,7 @@ type ScheduleDayRow = {
   date: string;
   location: Location;
   is_off: boolean;
+  day_type: DayType;
   sessions: ScheduleSessionRow[];
 };
 
@@ -152,7 +156,10 @@ export default function TeamPage({
   const [loadingDayDetail, setLoadingDayDetail] = useState(false);
 
   const [editingSchedule, setEditingSchedule] = useState(false);
-  const [editIsOff, setEditIsOff] = useState(false);
+  const [editCategory, setEditCategory] = useState<"off" | DayType>(
+    "practice"
+  );
+  const [editIncludeSessions, setEditIncludeSessions] = useState(true);
   const [editSessions, setEditSessions] = useState<
     {
       type: SessionType;
@@ -255,7 +262,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -305,7 +312,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -383,8 +390,14 @@ export default function TeamPage({
   }
 
   function handleStartEditSchedule() {
+    const category: "off" | DayType = dayDetail?.is_off
+      ? "off"
+      : (dayDetail?.day_type ?? "practice");
+    setEditCategory(category);
+    setEditIncludeSessions(
+      category === "practice" || (dayDetail?.sessions.length ?? 0) > 0
+    );
     if (dayDetail && dayDetail.sessions.length > 0) {
-      setEditIsOff(dayDetail.is_off);
       setEditSessions(
         dayDetail.sessions.map((s) => ({
           type: s.session_type,
@@ -394,7 +407,6 @@ export default function TeamPage({
         }))
       );
     } else {
-      setEditIsOff(dayDetail?.is_off ?? false);
       setEditSessions([
         { type: "mat", time: "10:00", isJoint: false, jointLocation: scheduleLocation },
       ]);
@@ -442,6 +454,13 @@ export default function TeamPage({
     if (!selectedScheduleDate) return;
     setSavingSchedule(true);
 
+    const isOff = editCategory === "off";
+    const dayType: DayType = isOff
+      ? "practice"
+      : (editCategory as DayType);
+    const includeSessions =
+      isOff ? false : dayType === "practice" ? true : editIncludeSessions;
+
     const { data: dayRow, error: dayError } = await supabase
       .from("schedule_days")
       .upsert(
@@ -449,7 +468,8 @@ export default function TeamPage({
           team_id: profile.team_id,
           location: scheduleLocation,
           date: selectedScheduleDate,
-          is_off: editIsOff,
+          is_off: isOff,
+          day_type: dayType,
           created_by: profile.id,
           updated_at: new Date().toISOString(),
         },
@@ -477,7 +497,7 @@ export default function TeamPage({
       return;
     }
 
-    if (!editIsOff && editSessions.length > 0) {
+    if (!isOff && includeSessions && editSessions.length > 0) {
       const rows = editSessions.map((s, idx) => ({
         schedule_day_id: dayId,
         session_no: idx + 1,
@@ -495,16 +515,27 @@ export default function TeamPage({
         return;
       }
 
-      // このセッションが「ここで全体練習」として登録された場合、
-      // もう一方の拠点のカレンダーにも自動で反映する
+      // 全体練習として登録された場合、もう一方の拠点のカレンダーにも
+      // 自動で反映する（どちらの拠点を編集していても反映されるようにする）
       for (const s of editSessions) {
-        if (s.isJoint && s.jointLocation === scheduleLocation) {
-          await propagateJointSession(selectedScheduleDate, scheduleLocation, {
-            type: s.type,
-            time: s.time,
-          });
+        if (s.isJoint) {
+          await propagateJointSession(
+            selectedScheduleDate,
+            scheduleLocation,
+            s.jointLocation,
+            {
+              type: s.type,
+              time: s.time,
+            }
+          );
         }
       }
+    }
+
+    // 合宿・試合は基本的にチーム全体の予定なので、もう一方の拠点にも
+    // 区分（合宿/試合）だけ自動で反映する（セッションの有無は拠点ごとに個別設定のまま）
+    if (!isOff && (dayType === "camp" || dayType === "match")) {
+      await propagateDayType(selectedScheduleDate, scheduleLocation, dayType);
     }
 
     setEditingSchedule(false);
@@ -513,16 +544,39 @@ export default function TeamPage({
     await loadDayDetail(selectedScheduleDate);
   }
 
+  async function propagateDayType(
+    dateStr: string,
+    editingLocation: Location,
+    dayType: DayType
+  ) {
+    const otherLocation: Location =
+      editingLocation === "tama" ? "otsuka" : "tama";
+
+    await supabase.from("schedule_days").upsert(
+      {
+        team_id: profile.team_id,
+        location: otherLocation,
+        date: dateStr,
+        is_off: false,
+        day_type: dayType,
+        created_by: profile.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "team_id,location,date", ignoreDuplicates: false }
+    );
+  }
+
   // 全体練習のセッションを、もう一方の拠点のカレンダーにも自動で反映する
   // （既に同じ内容の通知セッションがあれば時刻だけ更新し、無ければ空いている
   //   セッション枠に追加する。すでに2セッション埋まっている場合は反映できない）
   async function propagateJointSession(
     dateStr: string,
+    editingLocation: Location,
     hostLocation: Location,
     session: { type: SessionType; time: string }
   ) {
     const otherLocation: Location =
-      hostLocation === "tama" ? "otsuka" : "tama";
+      editingLocation === "tama" ? "otsuka" : "tama";
 
     const { data: existingDay } = await supabase
       .from("schedule_days")
@@ -775,16 +829,51 @@ export default function TeamPage({
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(selectedScheduleDate)}の時間割
                       </h3>
-                      <label className="flex items-center gap-2 text-xs text-neutral-600">
-                        <input
-                          type="checkbox"
-                          checked={editIsOff}
-                          onChange={(e) => setEditIsOff(e.target.checked)}
-                        />
-                        オフの日にする
-                      </label>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[11px] text-neutral-500">
+                          区分
+                        </span>
+                        <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-200 p-1 text-[11px]">
+                          {(
+                            [
+                              { v: "off", label: "オフ" },
+                              { v: "practice", label: "練習" },
+                              { v: "camp", label: "合宿" },
+                              { v: "match", label: "試合" },
+                            ] as const
+                          ).map((opt) => (
+                            <button
+                              key={opt.v}
+                              type="button"
+                              onClick={() => setEditCategory(opt.v)}
+                              className={`rounded-md py-2 font-medium ${
+                                editCategory === opt.v
+                                  ? "bg-white text-neutral-900 shadow"
+                                  : "text-neutral-500"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                      {!editIsOff && (
+                      {(editCategory === "camp" || editCategory === "match") && (
+                        <label className="flex items-center gap-2 text-xs text-neutral-600">
+                          <input
+                            type="checkbox"
+                            checked={editIncludeSessions}
+                            onChange={(e) =>
+                              setEditIncludeSessions(e.target.checked)
+                            }
+                          />
+                          この日も練習セクションを設定する
+                        </label>
+                      )}
+
+                      {editCategory !== "off" &&
+                        (editCategory === "practice" ||
+                          editIncludeSessions) && (
                         <div className="flex flex-col gap-3">
                           {editSessions.map((s, idx) => (
                             <div
@@ -927,6 +1016,29 @@ export default function TeamPage({
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(dayDetail.date)}
                       </p>
+                      {(dayDetail.day_type === "camp" ||
+                        dayDetail.day_type === "match") && (
+                        <span
+                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColor[dayDetail.day_type]}`}
+                        >
+                          {dayTypeLabel[dayDetail.day_type]}
+                        </span>
+                      )}
+                      {dayDetail.sessions.length === 0 && (
+                        <div className="flex flex-col items-start gap-2 py-2">
+                          <p className="text-xs text-neutral-400">
+                            この日は練習セクションの設定はありません。
+                          </p>
+                          {isCoach && (
+                            <button
+                              onClick={handleStartEditSchedule}
+                              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                            >
+                              時間割を編集する
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {dayDetail.sessions.map((s) => (
                         <div
                           key={s.id}
@@ -1320,9 +1432,13 @@ function MonthlyCalendar({
                   className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
                       ? "border-neutral-200 bg-neutral-200"
-                      : isHighlighted
-                        ? "border-amber-400 bg-amber-50 ring-1 ring-amber-400"
-                        : "border-neutral-200 active:bg-neutral-50"
+                      : day?.day_type === "camp"
+                        ? "border-pink-200 bg-pink-50"
+                        : day?.day_type === "match"
+                          ? "border-red-200 bg-red-50"
+                          : isHighlighted
+                            ? "border-amber-400 bg-amber-50 ring-1 ring-amber-400"
+                            : "border-neutral-200 active:bg-neutral-50"
                   }`}
                 >
                   <span
@@ -1335,6 +1451,15 @@ function MonthlyCalendar({
                   {day?.is_off && (
                     <span className="text-[9px] text-neutral-400">オフ</span>
                   )}
+                  {day &&
+                    !day.is_off &&
+                    (day.day_type === "camp" || day.day_type === "match") && (
+                      <span
+                        className={`rounded px-1 text-[9px] font-semibold ${dayTypeFillColor[day.day_type]}`}
+                      >
+                        {dayTypeLabel[day.day_type]}
+                      </span>
+                    )}
                   {day &&
                     !day.is_off &&
                     day.sessions.map((s) => (
