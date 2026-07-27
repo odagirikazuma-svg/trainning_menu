@@ -305,6 +305,22 @@ export default function TeamPage({
     setEditingSchedule(false);
   }
 
+  function handleShiftScheduleDate(diffDays: number) {
+    if (!selectedScheduleDate) return;
+    const [y, m, d] = selectedScheduleDate.split("-").map(Number);
+    const next = new Date(y, m - 1, d + diffDays);
+    const nextKey = toDateKey(next);
+    setSelectedScheduleDate(nextKey);
+    setEditingSchedule(false);
+    loadDayDetail(nextKey);
+    if (
+      next.getFullYear() !== calendarCursor.getFullYear() ||
+      next.getMonth() !== calendarCursor.getMonth()
+    ) {
+      setCalendarCursor(new Date(next.getFullYear(), next.getMonth(), 1));
+    }
+  }
+
   function handleGoToMatMenu(startTime?: string) {
     if (!selectedScheduleDate) return;
     try {
@@ -741,15 +757,32 @@ export default function TeamPage({
               viewLocation={scheduleLocation}
             />
             {selectedScheduleDate && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
-                <div className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
-                  <button
-                    onClick={handleCloseScheduleDetail}
-                    aria-label="閉じる"
-                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-neutral-400 active:bg-neutral-100"
-                  >
-                    ✕
-                  </button>
+              <div
+                className="absolute inset-0 z-20 flex items-center justify-center p-2"
+                onClick={handleCloseScheduleDetail}
+              >
+                <div
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {!editingSchedule && (
+                    <>
+                      <button
+                        onClick={() => handleShiftScheduleDate(-1)}
+                        aria-label="前の日"
+                        className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                      >
+                        ◀
+                      </button>
+                      <button
+                        onClick={() => handleShiftScheduleDate(1)}
+                        aria-label="次の日"
+                        className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                      >
+                        ▶
+                      </button>
+                    </>
+                  )}
 
                   {editingSchedule ? (
                     <div className="flex flex-col gap-3 pr-5">

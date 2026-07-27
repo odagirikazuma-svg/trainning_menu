@@ -588,6 +588,7 @@ export default function TrainingBoardSupabase({
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
+  const isCoach = profile.role === "coach";
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
   const reportSubmittedCount = selectedSubmission
@@ -1136,7 +1137,27 @@ export default function TrainingBoardSupabase({
                 ))}
               </ul>
 
-              {myReport ? (
+              {isCoach ? (
+                <div className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-600">
+                  <p className="mb-1.5 font-semibold text-neutral-500">
+                    実施報告を提出したメンバー
+                  </p>
+                  {reports.length === 0 ? (
+                    <p className="text-neutral-400">まだいません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {reports.map((r) => (
+                        <span
+                          key={r.id}
+                          className="rounded border border-neutral-200 bg-white px-2 py-1"
+                        >
+                          {r.author?.display_name ?? "不明"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : myReport ? (
                 <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
                   実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1194,7 +1215,27 @@ export default function TrainingBoardSupabase({
                   />
                 ))}
               </ul>
-              {myAbsent ? (
+              {isCoach ? (
+                <div className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-600">
+                  <p className="mb-1.5 font-semibold text-neutral-500">
+                    未実施報告を提出したメンバー
+                  </p>
+                  {absentReports.length === 0 ? (
+                    <p className="text-neutral-400">まだいません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {absentReports.map((c) => (
+                        <span
+                          key={c.id}
+                          className="rounded border border-neutral-200 bg-white px-2 py-1"
+                        >
+                          {c.author?.display_name ?? "不明"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : myAbsent ? (
                 <p className="rounded-lg bg-neutral-100 p-3 text-xs text-neutral-600">
                   未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>

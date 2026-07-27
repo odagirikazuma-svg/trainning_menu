@@ -1009,15 +1009,14 @@ export default function MyPage({
               highlightDate={selectedCalendarDate}
             />
             {selectedCalendarDate && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
-                <div className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
-                  <button
-                    onClick={handleCloseCalendarPopup}
-                    aria-label="閉じる"
-                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-neutral-400 active:bg-neutral-100"
-                  >
-                    ✕
-                  </button>
+              <div
+                className="absolute inset-0 z-20 flex items-center justify-center p-2"
+                onClick={handleCloseCalendarPopup}
+              >
+                <div
+                  className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {recordDates.some((d) => d < selectedCalendarDate) && (
                     <button
                       onClick={() => handleShiftCalendarDate(-1)}
