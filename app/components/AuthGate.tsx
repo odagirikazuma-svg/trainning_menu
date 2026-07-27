@@ -24,6 +24,14 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
   member: "役職なし",
 };
 
+// member_rosterテーブルのroleカラムの値を表示用に変換する
+const rosterRoleDisplayLabel: Record<string, string> = {
+  captain: "主将",
+  vice_captain: "副主将",
+  coach: "コーチ",
+  member: "役職なし",
+};
+
 // 直近4年分を入学年の候補にする
 const entryYearOptions: number[] = (() => {
   const now = new Date();
@@ -52,6 +60,16 @@ export default function AuthGate({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [rosterPreview, setRosterPreview] = useState<
+    | {
+        display_name: string;
+        role: string;
+        home_location: Location | null;
+        entry_year: number | null;
+      }
+    | null
+    | undefined
+  >(undefined);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -62,6 +80,20 @@ export default function AuthGate({
       setMode("signup");
     }
   }, []);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    (async () => {
+      const { data } = await supabase
+        .from("member_roster")
+        .select("display_name, role, home_location, entry_year")
+        .eq("token", inviteToken)
+        .is("claimed_by", null)
+        .maybeSingle();
+      setRosterPreview(data ?? null);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteToken]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -223,34 +255,44 @@ export default function AuthGate({
     setSubmitting(true);
     setErrorMsg(null);
     if (mode === "signup") {
-      if (!signupCategory) {
-        setErrorMsg("部員かコーチかを選択してください。");
-        setSubmitting(false);
-        return;
-      }
-      if (signupCategory === "member" && !signupLocation) {
-        setErrorMsg("所属拠点を選択してください。");
-        setSubmitting(false);
-        return;
-      }
-      if (signupCategory === "member" && !signupEntryYear) {
-        setErrorMsg("入学年を選択してください。");
-        setSubmitting(false);
-        return;
+      const usingRosterPreview = Boolean(inviteToken && rosterPreview);
+      if (!usingRosterPreview) {
+        if (!signupCategory) {
+          setErrorMsg("部員かコーチかを選択してください。");
+          setSubmitting(false);
+          return;
+        }
+        if (signupCategory === "member" && !signupLocation) {
+          setErrorMsg("所属拠点を選択してください。");
+          setSubmitting(false);
+          return;
+        }
+        if (signupCategory === "member" && !signupEntryYear) {
+          setErrorMsg("入学年を選択してください。");
+          setSubmitting(false);
+          return;
+        }
       }
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            display_name: displayName,
-            category: signupCategory,
-            home_location: signupCategory === "member" ? signupLocation : null,
-            entry_year:
-              signupCategory === "member" ? Number(signupEntryYear) : null,
-            role_choice: signupCategory === "member" ? signupRoleChoice : null,
-            invite_token: inviteToken,
-          },
+          data: usingRosterPreview
+            ? {
+                display_name: rosterPreview!.display_name,
+                invite_token: inviteToken,
+              }
+            : {
+                display_name: displayName,
+                category: signupCategory,
+                home_location:
+                  signupCategory === "member" ? signupLocation : null,
+                entry_year:
+                  signupCategory === "member" ? Number(signupEntryYear) : null,
+                role_choice:
+                  signupCategory === "member" ? signupRoleChoice : null,
+                invite_token: inviteToken,
+              },
         },
       });
       if (error) {
@@ -282,9 +324,14 @@ export default function AuthGate({
     return (
       <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
         <h1 className="text-lg font-bold">練習ノート ログイン</h1>
-        {inviteToken && (
+        {inviteToken && rosterPreview && (
           <p className="rounded bg-emerald-50 p-2 text-xs text-emerald-700">
-            招待リンクから開いています。新規登録すると、事前に登録された氏名・拠点・学年・役職が自動で反映されます。
+            招待リンクから開いています。以下の内容で登録されます。
+          </p>
+        )}
+        {inviteToken && rosterPreview === null && (
+          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+            この招待リンクは無効か、すでに使用されています。通常の新規登録を行ってください。
           </p>
         )}
         <div className="flex gap-2 text-xs">
@@ -306,108 +353,149 @@ export default function AuthGate({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {mode === "signup" && (
-            <>
-              <input
-                type="text"
-                required
-                placeholder="氏名"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-              />
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-neutral-500">区分</span>
-                <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
-                  {(
-                    [
-                      { v: "member", label: "部員" },
-                      { v: "coach", label: "コーチ" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.v}
-                      type="button"
-                      onClick={() => setSignupCategory(opt.v)}
-                      className={`flex-1 rounded-md py-2 font-medium ${
-                        signupCategory === opt.v
-                          ? "bg-white text-neutral-900 shadow"
-                          : "text-neutral-500"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {signupCategory === "member" && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-neutral-500">
-                      所属拠点
-                    </span>
-                    <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
-                      {locations.map((loc) => (
-                        <button
-                          key={loc}
-                          type="button"
-                          onClick={() => setSignupLocation(loc)}
-                          className={`flex-1 rounded-md py-2 font-medium ${
-                            signupLocation === loc
-                              ? "bg-white text-neutral-900 shadow"
-                              : "text-neutral-500"
-                          }`}
-                        >
-                          {locationLabel[loc]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-neutral-500">
-                      入学年（学年は自動計算されます）
-                    </span>
-                    <select
-                      value={signupEntryYear}
-                      onChange={(e) => setSignupEntryYear(e.target.value)}
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                    >
-                      <option value="">選択してください</option>
-                      {entryYearOptions.map((y) => (
-                        <option key={y} value={y}>
-                          {y}年入学（現在{currentGrade(y)}年）
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-neutral-500">役職</span>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
-                      {(
-                        Object.keys(roleChoiceLabel) as SignupRoleChoice[]
-                      ).map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setSignupRoleChoice(v)}
-                          className={`rounded-md py-2 font-medium ${
-                            signupRoleChoice === v
-                              ? "bg-white text-neutral-900 shadow"
-                              : "text-neutral-500"
-                          }`}
-                        >
-                          {roleChoiceLabel[v]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
+          {mode === "signup" && inviteToken && rosterPreview ? (
+            <div className="flex flex-col gap-1 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-xs text-neutral-700">
+              <p>
+                氏名: <span className="font-medium">{rosterPreview.display_name}</span>
+              </p>
+              <p>
+                区分:{" "}
+                <span className="font-medium">
+                  {rosterRoleDisplayLabel[rosterPreview.role] === "コーチ"
+                    ? "コーチ"
+                    : "部員"}
+                </span>
+              </p>
+              {rosterPreview.home_location && (
+                <p>
+                  所属拠点:{" "}
+                  <span className="font-medium">
+                    {locationLabel[rosterPreview.home_location]}
+                  </span>
+                </p>
               )}
-            </>
+              {rosterPreview.entry_year && (
+                <p>
+                  入学年:{" "}
+                  <span className="font-medium">
+                    {rosterPreview.entry_year}年（現在
+                    {currentGrade(rosterPreview.entry_year)}年）
+                  </span>
+                </p>
+              )}
+              <p>
+                役職:{" "}
+                <span className="font-medium">
+                  {rosterRoleDisplayLabel[rosterPreview.role] ?? "役職なし"}
+                </span>
+              </p>
+            </div>
+          ) : (
+            mode === "signup" && (
+              <>
+                <input
+                  type="text"
+                  required
+                  placeholder="氏名"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] text-neutral-500">区分</span>
+                  <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                    {(
+                      [
+                        { v: "member", label: "部員" },
+                        { v: "coach", label: "コーチ" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setSignupCategory(opt.v)}
+                        className={`flex-1 rounded-md py-2 font-medium ${
+                          signupCategory === opt.v
+                            ? "bg-white text-neutral-900 shadow"
+                            : "text-neutral-500"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {signupCategory === "member" && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] text-neutral-500">
+                        所属拠点
+                      </span>
+                      <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                        {locations.map((loc) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={() => setSignupLocation(loc)}
+                            className={`flex-1 rounded-md py-2 font-medium ${
+                              signupLocation === loc
+                                ? "bg-white text-neutral-900 shadow"
+                                : "text-neutral-500"
+                            }`}
+                          >
+                            {locationLabel[loc]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] text-neutral-500">
+                        入学年（学年は自動計算されます）
+                      </span>
+                      <select
+                        value={signupEntryYear}
+                        onChange={(e) => setSignupEntryYear(e.target.value)}
+                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      >
+                        <option value="">選択してください</option>
+                        {entryYearOptions.map((y) => (
+                          <option key={y} value={y}>
+                            {y}年入学（現在{currentGrade(y)}年）
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] text-neutral-500">
+                        役職
+                      </span>
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                        {(
+                          Object.keys(roleChoiceLabel) as SignupRoleChoice[]
+                        ).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setSignupRoleChoice(v)}
+                            className={`rounded-md py-2 font-medium ${
+                              signupRoleChoice === v
+                                ? "bg-white text-neutral-900 shadow"
+                                : "text-neutral-500"
+                            }`}
+                          >
+                            {roleChoiceLabel[v]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )
           )}
           <input
             type="email"
