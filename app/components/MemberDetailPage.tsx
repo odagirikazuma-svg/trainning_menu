@@ -560,9 +560,16 @@ export default function MemberDetailPage({
                 onClick={handleCloseCalendarPopup}
               >
                 <div
-                  className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  <button
+                    onClick={handleCloseCalendarPopup}
+                    aria-label="閉じる"
+                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+                  >
+                    ✕
+                  </button>
                   {recordDates.some((d) => d < selectedCalendarDate) && (
                     <button
                       onClick={() => handleShiftCalendarDate(-1)}

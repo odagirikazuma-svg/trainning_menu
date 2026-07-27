@@ -88,3 +88,25 @@ export const canCreateMenu = (role: Role) =>
   role === "vice_leader" ||
   role === "captain" ||
   role === "coach";
+
+// ウェイトのトレーニングタイトルごとに、常に同じ色を割り当てるためのパレット。
+// 文字列をハッシュ化してパレットのインデックスを決めるので、
+// 同じタイトルは常に同じ色になる（DBに色を保存する必要がない）。
+const titleColorPalette: { border: string; text: string; dot: string }[] = [
+  { border: "border-blue-400", text: "text-blue-600", dot: "bg-blue-500" },
+  { border: "border-emerald-400", text: "text-emerald-600", dot: "bg-emerald-500" },
+  { border: "border-amber-400", text: "text-amber-600", dot: "bg-amber-500" },
+  { border: "border-purple-400", text: "text-purple-600", dot: "bg-purple-500" },
+  { border: "border-pink-400", text: "text-pink-600", dot: "bg-pink-500" },
+  { border: "border-cyan-400", text: "text-cyan-600", dot: "bg-cyan-500" },
+  { border: "border-orange-400", text: "text-orange-600", dot: "bg-orange-500" },
+  { border: "border-lime-400", text: "text-lime-600", dot: "bg-lime-500" },
+];
+
+export function getTitleColor(title: string) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = (hash * 31 + title.charCodeAt(i)) % 997;
+  }
+  return titleColorPalette[hash % titleColorPalette.length];
+}

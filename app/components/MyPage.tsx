@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   currentGrade,
+  getTitleColor,
   Location,
   locationLabel,
   TrainingType,
@@ -35,6 +36,7 @@ type WeightLogRow = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
 };
 
 type RecentRecord = {
@@ -42,6 +44,7 @@ type RecentRecord = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
   isAlternative: boolean; // 未実施報告の代替メニューかどうか
 };
 
@@ -49,6 +52,7 @@ type PopupRecordRow = {
   date: string;
   content: string;
   type: TrainingType;
+  title: string | null;
   isAlternative: boolean;
 };
 
@@ -121,6 +125,8 @@ export default function MyPage({
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [todayLogText, setTodayLogText] = useState("");
   const [todayLogType, setTodayLogType] = useState<TrainingType>("weight");
+  const [todayLogTitle, setTodayLogTitle] = useState("");
+  const [titleOptions, setTitleOptions] = useState<string[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
   const [todayAbsentRecords, setTodayAbsentRecords] = useState<RecentRecord[]>(
@@ -136,10 +142,10 @@ export default function MyPage({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [calendarWeightLogs, setCalendarWeightLogs] = useState<
-    { date: string; type: TrainingType }[]
+    { date: string; type: TrainingType; title: string | null }[]
   >([]);
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
-    { date: string; type: TrainingType }[]
+    { date: string; type: TrainingType; title: string | null }[]
   >([]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
@@ -185,6 +191,7 @@ export default function MyPage({
     loadTodayAbsent();
     loadRecentLogs();
     loadRecordDates();
+    loadTitleOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -355,11 +362,33 @@ export default function MyPage({
     await loadNextMatch();
   }
 
+  async function loadTitleOptions() {
+    const { data, error } = await supabase
+      .from("weight_logs")
+      .select("title")
+      .eq("author_id", profile.id)
+      .eq("type", "weight")
+      .not("title", "is", null);
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    const titles = Array.from(
+      new Set(
+        ((data ?? []) as { title: string | null }[])
+          .map((r) => r.title)
+          .filter((t): t is string => !!t && t.trim() !== "")
+      )
+    ).sort((a, b) => a.localeCompare(b, "ja"));
+    setTitleOptions(titles);
+  }
+
   async function loadTodayLog() {
     setLoadingLog(true);
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .eq("author_id", profile.id)
       .eq("date", todayStr)
       .maybeSingle();
@@ -371,6 +400,7 @@ export default function MyPage({
       setTodayLog(row);
       setTodayLogText(row.content);
       setTodayLogType(row.type);
+      setTodayLogTitle(row.title ?? "");
     }
     setLoadingLog(false);
   }
@@ -402,6 +432,7 @@ export default function MyPage({
         date: r.menu!.date,
         content: r.text,
         type: r.alt_type,
+        title: null,
         isAlternative: true,
       }));
     setTodayAbsentRecords(todayRecords);
@@ -421,7 +452,7 @@ export default function MyPage({
 
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .eq("author_id", profile.id)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
@@ -452,6 +483,7 @@ export default function MyPage({
       date: l.date,
       content: l.content,
       type: l.type,
+      title: l.title,
       isAlternative: false,
     }));
 
@@ -470,6 +502,7 @@ export default function MyPage({
         date: r.menu!.date,
         content: r.text,
         type: r.alt_type,
+        title: null,
         isAlternative: true,
       }));
 
@@ -494,6 +527,7 @@ export default function MyPage({
 
   async function handleSaveLog() {
     setSavingLog(true);
+    const trimmedTitle = todayLogTitle.trim();
     const { data, error } = await supabase
       .from("weight_logs")
       .upsert(
@@ -504,11 +538,12 @@ export default function MyPage({
           date: todayStr,
           content: todayLogText,
           type: todayLogType,
+          title: todayLogType === "weight" && trimmedTitle ? trimmedTitle : null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "author_id,date" }
       )
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .single();
 
     if (error) {
@@ -516,6 +551,7 @@ export default function MyPage({
     } else {
       setTodayLog(data as WeightLogRow);
       await loadRecordDates();
+      await loadTitleOptions();
     }
     setSavingLog(false);
   }
@@ -528,7 +564,7 @@ export default function MyPage({
 
     const { data: weightData, error: weightError } = await supabase
       .from("weight_logs")
-      .select("date, type")
+      .select("date, type, title")
       .eq("author_id", profile.id)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
@@ -537,7 +573,11 @@ export default function MyPage({
       setErrorMsg(weightError.message);
     } else {
       setCalendarWeightLogs(
-        (weightData ?? []) as { date: string; type: TrainingType }[]
+        (weightData ?? []) as {
+          date: string;
+          type: TrainingType;
+          title: string | null;
+        }[]
       );
     }
 
@@ -562,7 +602,7 @@ export default function MyPage({
             r.menu.date >= rangeStart &&
             r.menu.date <= rangeEnd
         )
-        .map((r) => ({ date: r.menu!.date, type: r.alt_type }));
+        .map((r) => ({ date: r.menu!.date, type: r.alt_type, title: null }));
       setCalendarAbsentLogs(filtered);
     }
   }
@@ -572,7 +612,7 @@ export default function MyPage({
 
     const { data: logData, error: logError } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type")
+      .select("id, date, content, type, title")
       .eq("author_id", profile.id)
       .eq("date", dateStr)
       .maybeSingle();
@@ -614,6 +654,7 @@ export default function MyPage({
         date: row.date,
         content: row.content,
         type: row.type,
+        title: row.title,
         isAlternative: false,
       });
     }
@@ -622,6 +663,7 @@ export default function MyPage({
         date: dateStr,
         content: match.text,
         type: match.alt_type,
+        title: null,
         isAlternative: true,
       });
     }
@@ -936,6 +978,24 @@ export default function MyPage({
                   </button>
                 ))}
               </div>
+              {todayLogType === "weight" && (
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  タイトル（種目名など。任意）
+                  <input
+                    type="text"
+                    list="weight-title-options"
+                    value={todayLogTitle}
+                    onChange={(e) => setTodayLogTitle(e.target.value)}
+                    placeholder="例：BIG3、上半身の日 など"
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+                  />
+                  <datalist id="weight-title-options">
+                    {titleOptions.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                </label>
+              )}
               <textarea
                 value={todayLogText}
                 onChange={(e) => setTodayLogText(e.target.value)}
@@ -969,27 +1029,39 @@ export default function MyPage({
             </p>
           ) : (
             <div className="flex flex-col gap-2">
-              {recentLogs.map((log) => (
-                <details
-                  key={log.id}
-                  className="rounded-lg border border-neutral-200 p-3"
-                >
-                  <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-500">
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
-                    />
-                    {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
-                    {log.isAlternative && (
-                      <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
-                        代替メニュー
-                      </span>
-                    )}
-                  </summary>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
-                    {log.content || "(記録なし)"}
-                  </p>
-                </details>
-              ))}
+              {recentLogs.map((log) => {
+                const titleColor = log.title ? getTitleColor(log.title) : null;
+                return (
+                  <details
+                    key={log.id}
+                    className={`rounded-lg border p-3 ${
+                      titleColor ? titleColor.border : "border-neutral-200"
+                    }`}
+                  >
+                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-500">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
+                      />
+                      {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
+                      {log.title && (
+                        <span
+                          className={`rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium ${titleColor?.text}`}
+                        >
+                          {log.title}
+                        </span>
+                      )}
+                      {log.isAlternative && (
+                        <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                          代替メニュー
+                        </span>
+                      )}
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
+                      {log.content || "(記録なし)"}
+                    </p>
+                  </details>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1014,9 +1086,16 @@ export default function MyPage({
                 onClick={handleCloseCalendarPopup}
               >
                 <div
-                  className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  <button
+                    onClick={handleCloseCalendarPopup}
+                    aria-label="閉じる"
+                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+                  >
+                    ✕
+                  </button>
                   {recordDates.some((d) => d < selectedCalendarDate) && (
                     <button
                       onClick={() => handleShiftCalendarDate(-1)}
@@ -1062,6 +1141,13 @@ export default function MyPage({
                             />
                             {formatMonthDay(r.date)}・
                             {trainingTypeLabel[r.type]}
+                            {r.title && (
+                              <span
+                                className={`rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium ${getTitleColor(r.title).text}`}
+                              >
+                                {r.title}
+                              </span>
+                            )}
                             {r.isAlternative && (
                               <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
                                 代替メニュー
@@ -1121,16 +1207,20 @@ function TrainingCalendar({
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
-  weightLogs: { date: string; type: TrainingType }[];
-  absentLogs: { date: string; type: TrainingType }[];
+  weightLogs: { date: string; type: TrainingType; title: string | null }[];
+  absentLogs: { date: string; type: TrainingType; title: string | null }[];
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
+  const titleByDate = new Map<string, string>();
   for (const row of [...weightLogs, ...absentLogs]) {
     const list = dotsByDate.get(row.date) ?? [];
     list.push(row.type);
     dotsByDate.set(row.date, list);
+    if (row.title && !titleByDate.has(row.date)) {
+      titleByDate.set(row.date, row.title);
+    }
   }
 
   const year = cursor.getFullYear();
@@ -1172,16 +1262,21 @@ function TrainingCalendar({
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
           const dots = dotsByDate.get(key) ?? [];
+          const title = titleByDate.get(key);
+          const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
+              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs active:bg-neutral-100 ${
                 isHighlighted
-                  ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
-                  : "text-neutral-600"
+                  ? "border-amber-400 bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
+                  : titleColor
+                    ? `${titleColor.border} text-neutral-600`
+                    : "border-transparent text-neutral-600"
               }`}
+              title={title ?? undefined}
             >
               <span>{date.getDate()}</span>
               {dots.length > 0 && (

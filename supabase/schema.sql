@@ -524,3 +524,8 @@ create policy "member_roster_select_unclaimed" on member_roster
 drop policy if exists "member_roster_update_unclaimed_self" on member_roster;
 create policy "member_roster_update_unclaimed_self" on member_roster
   for update using (claimed_by is null);
+
+-- ============================================
+-- 追加: ウェイトのトレーニング記録にタイトルをつけられるようにする
+-- ============================================
+alter table weight_logs add column if not exists title text;
