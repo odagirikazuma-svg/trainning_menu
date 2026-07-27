@@ -239,12 +239,9 @@ export default function TrainingBoardSupabase({
     setNewMenuType("normal");
     setNewOffBothLocations(false);
     setNewDate(viewDate);
-
-    const matSession =
-      viewDateSchedule && !viewDateSchedule.is_off
-        ? viewDateSchedule.sessions.find((s) => s.session_type === "mat")
-        : undefined;
-    setNewStartTime(matSession ? matSession.start_time.slice(0, 5) : "");
+    setNewStartTime(
+      matSessionForViewDate ? matSessionForViewDate.start_time.slice(0, 5) : ""
+    );
 
     setShowNewForm(true);
   }
@@ -666,6 +663,12 @@ export default function TrainingBoardSupabase({
       ...(centerItem ? [{ item: centerItem, role: "current" as const }] : []),
       ...(nextItem ? [{ item: nextItem, role: "next" as const }] : []),
     ];
+
+  // 表示中の日付にコーチが設定した「マット」セッションがあれば、その時刻を取得
+  const matSessionForViewDate =
+    viewDateSchedule && !viewDateSchedule.is_off
+      ? viewDateSchedule.sessions.find((s) => s.session_type === "mat")
+      : undefined;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
@@ -1249,7 +1252,34 @@ export default function TrainingBoardSupabase({
               )}
             </section>
           </>
-        ) : null}
+        ) : (
+          <div className="rounded-lg border border-neutral-200 p-4">
+            <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
+            {matSessionForViewDate ? (
+              <div className="mt-2">
+                <div className="mb-1 text-xs text-neutral-400">
+                  {locationLabel[activeLocation]}・{viewDate}・
+                  {matSessionForViewDate.start_time.slice(0, 5)}〜
+                </div>
+                <p className="mb-3 text-sm text-neutral-500">
+                  このセッションのメニューはまだ作成されていません
+                </p>
+                {canCreateMenu(profile.role) && (
+                  <button
+                    onClick={handleOpenNewForm}
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700"
+                  >
+                    このセッションのメニューを作成する
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-center text-sm text-neutral-400">
+                まだスケジュールは作成されていません。
+              </p>
+            )}
+          </div>
+        )}
 
         {/* すべてのメニューを見るカレンダー */}
         <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
