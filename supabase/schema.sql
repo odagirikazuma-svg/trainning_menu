@@ -356,3 +356,84 @@ create policy "comments_delete_self" on comments
 -- ============================================
 create policy "weight_logs_select_same_team" on weight_logs
   for select using (team_id = get_my_team_id());
+
+-- ============================================
+-- 追加: 月間の時間割（コーチが月末までに来月分を設定する、
+-- 拠点・日付ごとの「オフ or 練習（1〜2セッション、各セッションの種類・開始時刻）」）
+-- ============================================
+create table if not exists schedule_days (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  location text not null check (location in ('tama', 'otsuka')),
+  date date not null,
+  is_off boolean not null default false,
+  created_by uuid references profiles(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  unique (team_id, location, date)
+);
+alter table schedule_days enable row level security;
+
+create policy "schedule_days_select_same_team" on schedule_days
+  for select using (team_id = get_my_team_id());
+
+create policy "schedule_days_insert_coach" on schedule_days
+  for insert with check (
+    team_id = get_my_team_id()
+    and exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "schedule_days_update_coach" on schedule_days
+  for update using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "schedule_days_delete_coach" on schedule_days
+  for delete using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create table if not exists schedule_sessions (
+  id uuid primary key default gen_random_uuid(),
+  schedule_day_id uuid not null references schedule_days(id) on delete cascade,
+  session_no smallint not null check (session_no in (1, 2)),
+  session_type text not null check (session_type in ('mat', 'running', 'weight')),
+  start_time time not null,
+  is_joint boolean not null default false,
+  joint_location text check (joint_location in ('tama', 'otsuka')),
+  unique (schedule_day_id, session_no)
+);
+alter table schedule_sessions enable row level security;
+
+create policy "schedule_sessions_select_same_team" on schedule_sessions
+  for select using (
+    schedule_day_id in (
+      select id from schedule_days where team_id = get_my_team_id()
+    )
+  );
+
+create policy "schedule_sessions_insert_coach" on schedule_sessions
+  for insert with check (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "schedule_sessions_update_coach" on schedule_sessions
+  for update using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "schedule_sessions_delete_coach" on schedule_sessions
+  for delete using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );

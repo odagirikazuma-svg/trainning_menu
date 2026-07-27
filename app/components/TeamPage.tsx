@@ -9,6 +9,9 @@ import {
   locationLabel,
   locations,
   Role,
+  SessionType,
+  sessionTypeDotColor,
+  sessionTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
@@ -20,12 +23,21 @@ type MemberRow = {
   entry_year: number | null;
 };
 
-type MonthMenuRow = {
+type ScheduleSessionRow = {
+  id: string;
+  session_no: number;
+  session_type: SessionType;
+  start_time: string;
+  is_joint: boolean;
+  joint_location: Location | null;
+};
+
+type ScheduleDayRow = {
   id: string;
   date: string;
   location: Location;
   is_off: boolean;
-  is_joint: boolean;
+  sessions: ScheduleSessionRow[];
 };
 
 type ScheduleDetailRow = {
@@ -57,6 +69,13 @@ function toDateKey(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// "掲示板"側の仕様と合わせ、練習開始時刻を過ぎた（＝過去の）メニューは編集不可とする
+function isPastSession(dateStr: string, startTime: string | null): boolean {
+  if (!startTime) return true;
+  const threshold = new Date(`${dateStr}T${startTime}`);
+  return new Date() >= threshold;
 }
 
 // "YYYY-MM-DD" -> "7月24日"
@@ -110,24 +129,43 @@ export default function TeamPage({
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [monthMenus, setMonthMenus] = useState<MonthMenuRow[]>([]);
-  const [loadingMonthMenus, setLoadingMonthMenus] = useState(true);
+  const [monthScheduleDays, setMonthScheduleDays] = useState<
+    Map<string, ScheduleDayRow>
+  >(new Map());
+  const [loadingMonthSchedule, setLoadingMonthSchedule] = useState(true);
   const [scheduleLocation, setScheduleLocation] = useState<Location>(
     profile.home_location ?? "tama"
   );
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<
     string | null
   >(null);
-  const [scheduleDetail, setScheduleDetail] = useState<
+  const [dayDetail, setDayDetail] = useState<
+    ScheduleDayRow | null | undefined
+  >(undefined);
+  const [matMenuDetail, setMatMenuDetail] = useState<
     ScheduleDetailRow | null | undefined
   >(undefined);
-  const [loadingScheduleDetail, setLoadingScheduleDetail] = useState(false);
+  const [loadingDayDetail, setLoadingDayDetail] = useState(false);
 
-  const canEditSchedule =
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [editIsOff, setEditIsOff] = useState(false);
+  const [editSessions, setEditSessions] = useState<
+    {
+      type: SessionType;
+      time: string;
+      isJoint: boolean;
+      jointLocation: Location;
+    }[]
+  >([]);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  const canEditMatMenu =
     profile.role === "captain" ||
     profile.role === "leader" ||
     profile.role === "vice_leader" ||
     profile.role === "coach";
+  const isCoach = profile.role === "coach";
+  const todayStr = toDateKey(new Date());
 
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
   const [loadingMaxes, setLoadingMaxes] = useState(true);
@@ -144,7 +182,7 @@ export default function TeamPage({
   }, []);
 
   useEffect(() => {
-    loadMonthMenus();
+    loadMonthSchedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarCursor, scheduleLocation]);
 
@@ -163,16 +201,18 @@ export default function TeamPage({
     setLoadingMembers(false);
   }
 
-  async function loadMonthMenus() {
-    setLoadingMonthMenus(true);
+  async function loadMonthSchedule() {
+    setLoadingMonthSchedule(true);
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
     const rangeStart = toDateKey(new Date(year, month, 1));
     const rangeEnd = toDateKey(new Date(year, month + 1, 0));
 
     const { data, error } = await supabase
-      .from("menus")
-      .select("id, date, location, is_off, is_joint")
+      .from("schedule_days")
+      .select(
+        "id, date, location, is_off, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+      )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
       .gte("date", rangeStart)
@@ -180,14 +220,22 @@ export default function TeamPage({
 
     if (error) {
       setErrorMsg(error.message);
-    } else {
-      setMonthMenus((data ?? []) as MonthMenuRow[]);
+      setLoadingMonthSchedule(false);
+      return;
     }
-    setLoadingMonthMenus(false);
+
+    const map = new Map<string, ScheduleDayRow>();
+    for (const row of (data ?? []) as unknown as ScheduleDayRow[]) {
+      map.set(row.date, {
+        ...row,
+        sessions: [...row.sessions].sort((a, b) => a.session_no - b.session_no),
+      });
+    }
+    setMonthScheduleDays(map);
+    setLoadingMonthSchedule(false);
   }
 
-  async function loadScheduleDetail(dateStr: string) {
-    setLoadingScheduleDetail(true);
+  async function loadMatMenu(dateStr: string) {
     const { data, error } = await supabase
       .from("menus")
       .select(
@@ -200,24 +248,64 @@ export default function TeamPage({
 
     if (error) {
       setErrorMsg(error.message);
-      setScheduleDetail(null);
+      setMatMenuDetail(null);
     } else {
-      setScheduleDetail((data as unknown as ScheduleDetailRow | null) ?? null);
+      setMatMenuDetail((data as unknown as ScheduleDetailRow | null) ?? null);
     }
-    setLoadingScheduleDetail(false);
+  }
+
+  async function loadDayDetail(dateStr: string) {
+    setLoadingDayDetail(true);
+    setMatMenuDetail(undefined);
+
+    const { data, error } = await supabase
+      .from("schedule_days")
+      .select(
+        "id, date, location, is_off, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", scheduleLocation)
+      .eq("date", dateStr)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+      setDayDetail(null);
+      setLoadingDayDetail(false);
+      return;
+    }
+
+    if (!data) {
+      setDayDetail(null);
+      setLoadingDayDetail(false);
+      return;
+    }
+
+    const row = data as unknown as ScheduleDayRow;
+    row.sessions = [...row.sessions].sort((a, b) => a.session_no - b.session_no);
+    setDayDetail(row);
+    setLoadingDayDetail(false);
+
+    const hasMat = row.sessions.some((s) => s.session_type === "mat");
+    if (!row.is_off && hasMat) {
+      await loadMatMenu(dateStr);
+    }
   }
 
   function handleSelectScheduleDate(dateStr: string) {
     setSelectedScheduleDate(dateStr);
-    loadScheduleDetail(dateStr);
+    setEditingSchedule(false);
+    loadDayDetail(dateStr);
   }
 
   function handleCloseScheduleDetail() {
     setSelectedScheduleDate(null);
-    setScheduleDetail(undefined);
+    setDayDetail(undefined);
+    setMatMenuDetail(undefined);
+    setEditingSchedule(false);
   }
 
-  function handleEditSchedule() {
+  function handleGoToMatMenu() {
     if (!selectedScheduleDate) return;
     try {
       sessionStorage.setItem(
@@ -228,6 +316,126 @@ export default function TeamPage({
       // sessionStorageが使えない環境では何もしない
     }
     router.push("/");
+  }
+
+  function handleStartEditSchedule() {
+    if (dayDetail && dayDetail.sessions.length > 0) {
+      setEditIsOff(dayDetail.is_off);
+      setEditSessions(
+        dayDetail.sessions.map((s) => ({
+          type: s.session_type,
+          time: s.start_time.slice(0, 5),
+          isJoint: s.is_joint,
+          jointLocation: s.joint_location ?? scheduleLocation,
+        }))
+      );
+    } else {
+      setEditIsOff(dayDetail?.is_off ?? false);
+      setEditSessions([
+        { type: "mat", time: "10:00", isJoint: false, jointLocation: scheduleLocation },
+      ]);
+    }
+    setEditingSchedule(true);
+  }
+
+  function updateEditSession(
+    idx: number,
+    patch: Partial<{
+      type: SessionType;
+      time: string;
+      isJoint: boolean;
+      jointLocation: Location;
+    }>
+  ) {
+    setEditSessions((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s))
+    );
+  }
+
+  function addEditSession() {
+    setEditSessions((prev) =>
+      prev.length >= 2
+        ? prev
+        : [
+            ...prev,
+            {
+              type: "weight",
+              time: "17:00",
+              isJoint: false,
+              jointLocation: scheduleLocation,
+            },
+          ]
+    );
+  }
+
+  function removeEditSession(idx: number) {
+    setEditSessions((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
+    );
+  }
+
+  async function handleSaveSchedule() {
+    if (!selectedScheduleDate) return;
+    setSavingSchedule(true);
+
+    const { data: dayRow, error: dayError } = await supabase
+      .from("schedule_days")
+      .upsert(
+        {
+          team_id: profile.team_id,
+          location: scheduleLocation,
+          date: selectedScheduleDate,
+          is_off: editIsOff,
+          created_by: profile.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "team_id,location,date" }
+      )
+      .select("id")
+      .single();
+
+    if (dayError || !dayRow) {
+      setErrorMsg(dayError?.message ?? "時間割の保存に失敗しました。");
+      setSavingSchedule(false);
+      return;
+    }
+
+    const dayId = (dayRow as { id: string }).id;
+
+    const { error: delError } = await supabase
+      .from("schedule_sessions")
+      .delete()
+      .eq("schedule_day_id", dayId);
+
+    if (delError) {
+      setErrorMsg(delError.message);
+      setSavingSchedule(false);
+      return;
+    }
+
+    if (!editIsOff && editSessions.length > 0) {
+      const rows = editSessions.map((s, idx) => ({
+        schedule_day_id: dayId,
+        session_no: idx + 1,
+        session_type: s.type,
+        start_time: s.time,
+        is_joint: s.isJoint,
+        joint_location: s.isJoint ? s.jointLocation : null,
+      }));
+      const { error: insError } = await supabase
+        .from("schedule_sessions")
+        .insert(rows);
+      if (insError) {
+        setErrorMsg(insError.message);
+        setSavingSchedule(false);
+        return;
+      }
+    }
+
+    setEditingSchedule(false);
+    setSavingSchedule(false);
+    await loadMonthSchedule();
+    await loadDayDetail(selectedScheduleDate);
   }
 
   async function loadWeightMaxes() {
@@ -434,14 +642,14 @@ export default function TeamPage({
             <MonthlyCalendar
               cursor={calendarCursor}
               onCursorChange={setCalendarCursor}
-              menus={monthMenus}
-              loading={loadingMonthMenus}
+              scheduleDays={monthScheduleDays}
+              loading={loadingMonthSchedule}
               onSelectDate={handleSelectScheduleDate}
               highlightDate={selectedScheduleDate}
             />
             {selectedScheduleDate && (
               <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
-                <div className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
+                <div className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
                   <button
                     onClick={handleCloseScheduleDetail}
                     aria-label="閉じる"
@@ -450,57 +658,250 @@ export default function TeamPage({
                     ✕
                   </button>
 
-                  {loadingScheduleDetail ? (
+                  {editingSchedule ? (
+                    <div className="flex flex-col gap-3 pr-5">
+                      <h3 className="text-sm font-bold text-neutral-800">
+                        {locationLabel[scheduleLocation]}・
+                        {formatMonthDay(selectedScheduleDate)}の時間割
+                      </h3>
+                      <label className="flex items-center gap-2 text-xs text-neutral-600">
+                        <input
+                          type="checkbox"
+                          checked={editIsOff}
+                          onChange={(e) => setEditIsOff(e.target.checked)}
+                        />
+                        オフの日にする
+                      </label>
+
+                      {!editIsOff && (
+                        <div className="flex flex-col gap-3">
+                          {editSessions.map((s, idx) => (
+                            <div
+                              key={idx}
+                              className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-2.5"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-semibold text-neutral-500">
+                                  第{idx + 1}セッション
+                                </span>
+                                {editSessions.length > 1 && (
+                                  <button
+                                    onClick={() => removeEditSession(idx)}
+                                    className="text-[11px] text-red-500"
+                                  >
+                                    削除
+                                  </button>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <select
+                                  value={s.type}
+                                  onChange={(e) =>
+                                    updateEditSession(idx, {
+                                      type: e.target.value as SessionType,
+                                    })
+                                  }
+                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                                >
+                                  <option value="mat">マット</option>
+                                  <option value="running">ラン</option>
+                                  <option value="weight">ウェイト</option>
+                                </select>
+                                <input
+                                  type="time"
+                                  value={s.time}
+                                  onChange={(e) =>
+                                    updateEditSession(idx, {
+                                      time: e.target.value,
+                                    })
+                                  }
+                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                                />
+                              </div>
+                              <label className="flex items-center gap-2 text-[11px] text-neutral-500">
+                                <input
+                                  type="checkbox"
+                                  checked={s.isJoint}
+                                  onChange={(e) =>
+                                    updateEditSession(idx, {
+                                      isJoint: e.target.checked,
+                                    })
+                                  }
+                                />
+                                全体練習（合同）にする
+                              </label>
+                              {s.isJoint && (
+                                <select
+                                  value={s.jointLocation}
+                                  onChange={(e) =>
+                                    updateEditSession(idx, {
+                                      jointLocation: e.target.value as Location,
+                                    })
+                                  }
+                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                                >
+                                  {locations.map((loc) => (
+                                    <option key={loc} value={loc}>
+                                      {locationLabel[loc]}で実施
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          ))}
+                          {editSessions.length < 2 && (
+                            <button
+                              onClick={addEditSession}
+                              className="self-start text-xs font-medium text-neutral-600"
+                            >
+                              ＋ セッションを追加
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveSchedule}
+                          disabled={savingSchedule}
+                          className="flex-1 rounded-lg bg-neutral-900 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+                        >
+                          保存する
+                        </button>
+                        <button
+                          onClick={() => setEditingSchedule(false)}
+                          className="flex-1 rounded-lg border border-neutral-300 py-2 text-xs text-neutral-600"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  ) : loadingDayDetail ? (
                     <p className="py-6 text-center text-xs text-neutral-400">
                       読み込み中…
                     </p>
-                  ) : scheduleDetail === null ? (
+                  ) : dayDetail === null ? (
                     <div className="flex flex-col items-center gap-3 py-6 text-center">
                       <p className="text-xs text-neutral-400">
                         {locationLabel[scheduleLocation]}の
                         {formatMonthDay(selectedScheduleDate)}
-                        はまだ作成されていません
+                        はまだ時間割が決まっていません
                       </p>
-                      {canEditSchedule && (
+                      {isCoach && (
                         <button
-                          onClick={handleEditSchedule}
+                          onClick={handleStartEditSchedule}
                           className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white active:bg-neutral-700"
                         >
-                          掲示板で作成する
+                          時間割を設定する
                         </button>
                       )}
                     </div>
-                  ) : scheduleDetail ? (
-                    <div className="pr-4">
-                      <div className="mb-1 text-xs text-neutral-400">
-                        {locationLabel[scheduleDetail.location]}・
-                        {scheduleDetail.date}
-                        {scheduleDetail.start_time &&
-                          `・${scheduleDetail.start_time.slice(0, 5)}〜`}
-                        ・作成者:{" "}
-                        {scheduleDetail.creator?.display_name ?? "不明"}
-                      </div>
-                      <h3 className="mb-2 text-base font-bold">
-                        {scheduleDetail.is_off
-                          ? "オフ"
-                          : scheduleDetail.title ||
-                            formatMonthDay(scheduleDetail.date)}
-                      </h3>
-                      {!scheduleDetail.is_off && (
-                        <p className="whitespace-pre-wrap text-sm text-neutral-800">
-                          {scheduleDetail.content}
-                        </p>
-                      )}
-                      {canEditSchedule && (
+                  ) : !dayDetail ? (
+                    <p className="py-6 text-center text-xs text-neutral-400">
+                      読み込み中…
+                    </p>
+                  ) : dayDetail.is_off ? (
+                    <div className="flex flex-col items-center gap-3 py-6 text-center">
+                      <p className="text-sm font-bold text-neutral-600">
+                        {formatMonthDay(dayDetail.date)}はオフです
+                      </p>
+                      {isCoach && (
                         <button
-                          onClick={handleEditSchedule}
-                          className="mt-3 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-600 active:bg-neutral-100"
+                          onClick={handleStartEditSchedule}
+                          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
                         >
-                          掲示板で編集する
+                          時間割を編集する
                         </button>
                       )}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="flex flex-col gap-3 pr-5">
+                      <p className="text-xs text-neutral-400">
+                        {locationLabel[scheduleLocation]}・
+                        {formatMonthDay(dayDetail.date)}
+                      </p>
+                      {dayDetail.sessions.map((s) => (
+                        <div
+                          key={s.id}
+                          className="rounded-lg border border-neutral-200 p-3"
+                        >
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                            />
+                            第{s.session_no}セッション・
+                            {sessionTypeLabel[s.session_type]}・
+                            {s.start_time.slice(0, 5)}〜
+                          </div>
+                          {s.is_joint && (
+                            <p className="mb-2 rounded bg-purple-50 px-2 py-1 text-[11px] text-purple-700">
+                              全体練習（
+                              {locationLabel[s.joint_location ?? scheduleLocation]}
+                              で実施）
+                            </p>
+                          )}
+                          {s.session_type === "mat" ? (
+                            matMenuDetail === undefined ? (
+                              <p className="text-xs text-neutral-400">
+                                読み込み中…
+                              </p>
+                            ) : matMenuDetail === null ? (
+                              <div className="flex flex-col items-start gap-2">
+                                <p className="text-xs text-neutral-400">
+                                  このセッションの練習メニューはまだ掲示板に投稿されていません
+                                </p>
+                                {canEditMatMenu &&
+                                  !isPastSession(
+                                    dayDetail.date,
+                                    s.start_time
+                                  ) && (
+                                    <button
+                                      onClick={handleGoToMatMenu}
+                                      className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-700"
+                                    >
+                                      このセッションの練習メニューを作成する
+                                    </button>
+                                  )}
+                              </div>
+                            ) : (
+                              <div>
+                                <h4 className="mb-1 text-sm font-bold">
+                                  {matMenuDetail.title || "練習メニュー"}
+                                </h4>
+                                <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                                  {matMenuDetail.content}
+                                </p>
+                                {canEditMatMenu &&
+                                  !isPastSession(
+                                    matMenuDetail.date,
+                                    matMenuDetail.start_time
+                                  ) && (
+                                    <button
+                                      onClick={handleGoToMatMenu}
+                                      className="mt-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                                    >
+                                      掲示板で編集する
+                                    </button>
+                                  )}
+                              </div>
+                            )
+                          ) : (
+                            <p className="text-xs text-neutral-500">
+                              各自申告制です。実施状況はマイページの「今日のトレーニングメニュー」から記録できます。
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      {isCoach && (
+                        <button
+                          onClick={handleStartEditSchedule}
+                          className="self-start text-xs font-medium text-neutral-500 underline"
+                        >
+                          時間割を編集する
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -577,25 +978,18 @@ export default function TeamPage({
 function MonthlyCalendar({
   cursor,
   onCursorChange,
-  menus,
+  scheduleDays,
   loading,
   onSelectDate,
   highlightDate,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
-  menus: MonthMenuRow[];
+  scheduleDays: Map<string, ScheduleDayRow>;
   loading: boolean;
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
 }) {
-  const byDate = new Map<string, MonthMenuRow[]>();
-  for (const m of menus) {
-    const list = byDate.get(m.date) ?? [];
-    list.push(m);
-    byDate.set(m.date, list);
-  }
-
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -638,9 +1032,7 @@ function MonthlyCalendar({
             {cells.map((date, i) => {
               if (!date) return <div key={i} />;
               const key = toDateKey(date);
-              const rows = byDate.get(key) ?? [];
-              const hasOff = rows.some((r) => r.is_off);
-              const hasMenu = rows.some((r) => !r.is_off);
+              const day = scheduleDays.get(key);
               const isHighlighted = key === highlightDate;
               return (
                 <button
@@ -653,20 +1045,35 @@ function MonthlyCalendar({
                   }`}
                 >
                   <span>{date.getDate()}</span>
-                  {hasMenu && (
-                    <span
-                      className={`inline-block rounded-full bg-neutral-700 ${
-                        isHighlighted ? "h-2.5 w-2.5" : "h-1.5 w-1.5"
-                      }`}
-                    />
+                  {day && !day.is_off && day.sessions.length > 0 && (
+                    <span className="flex flex-wrap justify-center gap-0.5">
+                      {day.sessions.map((s) => (
+                        <span
+                          key={s.id}
+                          className={`inline-block rounded-full ${sessionTypeDotColor[s.session_type]} ${
+                            isHighlighted ? "h-2.5 w-2.5" : "h-1.5 w-1.5"
+                          }`}
+                        />
+                      ))}
+                    </span>
                   )}
-                  {hasOff && !hasMenu && (
+                  {day?.is_off && (
                     <span className="text-[9px] text-neutral-300">off</span>
                   )}
                 </button>
               );
             })}
           </div>
+          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+            {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
+              <span key={t} className="flex items-center gap-1">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[t]}`}
+                />
+                {sessionTypeLabel[t]}
+              </span>
+            ))}
+          </p>
         </>
       )}
     </div>

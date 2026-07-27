@@ -32,6 +32,21 @@ export const trainingTypeDotColor: Record<TrainingType, string> = {
   other: "bg-neutral-400",
 };
 
+// 月間の時間割（コーチが設定するセッション）の種別
+export type SessionType = "mat" | "running" | "weight";
+
+export const sessionTypeLabel: Record<SessionType, string> = {
+  mat: "マット",
+  running: "ラン",
+  weight: "ウェイト",
+};
+
+export const sessionTypeDotColor: Record<SessionType, string> = {
+  mat: "bg-neutral-700",
+  running: "bg-red-500",
+  weight: "bg-blue-500",
+};
+
 // 入学年から現在の学年を計算する（4月1日で繰り上がる）
 export function currentGrade(entryYear: number): number {
   const now = new Date();
