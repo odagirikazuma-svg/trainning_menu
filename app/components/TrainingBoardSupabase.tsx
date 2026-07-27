@@ -198,6 +198,51 @@ export default function TrainingBoardSupabase({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  // 「＋ メニューを作成」ボタン：閉じている場合は開き、
+  // コーチが設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
+  async function handleOpenNewForm() {
+    if (showNewForm) {
+      setShowNewForm(false);
+      return;
+    }
+    setConfirmingNew(false);
+    setNewMenuType("normal");
+    setNewOffBothLocations(false);
+    setNewDate(viewDate);
+    setNewStartTime("");
+
+    try {
+      const { data } = await supabase
+        .from("schedule_days")
+        .select(
+          "is_off, sessions:schedule_sessions(session_type, start_time)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("location", activeLocation)
+        .eq("date", viewDate)
+        .maybeSingle();
+
+      if (data) {
+        const row = data as unknown as {
+          is_off: boolean;
+          sessions: { session_type: string; start_time: string }[];
+        };
+        if (!row.is_off) {
+          const matSession = row.sessions.find(
+            (s) => s.session_type === "mat"
+          );
+          if (matSession) {
+            setNewStartTime(matSession.start_time.slice(0, 5));
+          }
+        }
+      }
+    } catch {
+      // 時間割が未取得でも通常通りフォームは開く
+    }
+
+    setShowNewForm(true);
+  }
+
   // 指定した日付の表示状態（メニュー／全体練習案内／未作成）を決めて反映する
   function applySelectionForDate(
     date: string,
@@ -667,12 +712,7 @@ export default function TrainingBoardSupabase({
         <div className="flex flex-col gap-2">
           {canCreateMenu(profile.role) && (
             <button
-              onClick={() => {
-                setShowNewForm((v) => !v);
-                setConfirmingNew(false);
-                setNewMenuType("normal");
-                setNewOffBothLocations(false);
-              }}
+              onClick={() => handleOpenNewForm()}
               className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white active:bg-neutral-700"
             >
               {showNewForm
