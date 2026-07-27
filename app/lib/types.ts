@@ -92,15 +92,20 @@ export const canCreateMenu = (role: Role) =>
 // ウェイトのトレーニングタイトルごとに、常に同じ色を割り当てるためのパレット。
 // 文字列をハッシュ化してパレットのインデックスを決めるので、
 // 同じタイトルは常に同じ色になる（DBに色を保存する必要がない）。
-const titleColorPalette: { border: string; text: string; dot: string }[] = [
-  { border: "border-blue-400", text: "text-blue-600", dot: "bg-blue-500" },
-  { border: "border-emerald-400", text: "text-emerald-600", dot: "bg-emerald-500" },
-  { border: "border-amber-400", text: "text-amber-600", dot: "bg-amber-500" },
-  { border: "border-purple-400", text: "text-purple-600", dot: "bg-purple-500" },
-  { border: "border-pink-400", text: "text-pink-600", dot: "bg-pink-500" },
-  { border: "border-cyan-400", text: "text-cyan-600", dot: "bg-cyan-500" },
-  { border: "border-orange-400", text: "text-orange-600", dot: "bg-orange-500" },
-  { border: "border-lime-400", text: "text-lime-600", dot: "bg-lime-500" },
+const titleColorPalette: {
+  border: string;
+  text: string;
+  dot: string;
+  fill: string;
+}[] = [
+  { border: "border-blue-400", text: "text-blue-600", dot: "bg-blue-500", fill: "bg-blue-100" },
+  { border: "border-emerald-400", text: "text-emerald-600", dot: "bg-emerald-500", fill: "bg-emerald-100" },
+  { border: "border-amber-400", text: "text-amber-600", dot: "bg-amber-500", fill: "bg-amber-100" },
+  { border: "border-purple-400", text: "text-purple-600", dot: "bg-purple-500", fill: "bg-purple-100" },
+  { border: "border-pink-400", text: "text-pink-600", dot: "bg-pink-500", fill: "bg-pink-100" },
+  { border: "border-cyan-400", text: "text-cyan-600", dot: "bg-cyan-500", fill: "bg-cyan-100" },
+  { border: "border-orange-400", text: "text-orange-600", dot: "bg-orange-500", fill: "bg-orange-100" },
+  { border: "border-lime-400", text: "text-lime-600", dot: "bg-lime-500", fill: "bg-lime-100" },
 ];
 
 export function getTitleColor(title: string) {

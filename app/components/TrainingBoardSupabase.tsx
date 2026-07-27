@@ -1735,7 +1735,7 @@ function MenuCalendar({
           const hasMenu = dayMenus.length > 0;
           const isOff = dayMenus.some((m) => m.is_off);
           const jointInfo = !hasMenu ? jointElsewhere.get(key) : undefined;
-          const schedule = !hasMenu ? scheduleByDate.get(key) : undefined;
+          const schedule = scheduleByDate.get(key);
           const isToday = key === todayKey;
           const isViewDate = key === viewDate;
           const isPast = key < todayKey;
@@ -1767,8 +1767,7 @@ function MenuCalendar({
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
-              {!hasMenu &&
-                schedule &&
+              {schedule &&
                 !schedule.is_off &&
                 schedule.sessions.length > 0 && (
                   <span className="flex flex-col items-center gap-0.5 px-0.5">
@@ -1782,7 +1781,13 @@ function MenuCalendar({
                           <span
                             className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                           />
+                          {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}
+                          {s.is_joint &&
+                            (s.joint_location &&
+                            s.joint_location !== location
+                              ? `(${locationLabel[s.joint_location]})`
+                              : "(全体)")}
                         </span>
                       ))}
                   </span>

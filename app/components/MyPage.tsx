@@ -1269,12 +1269,12 @@ function TrainingCalendar({
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs active:bg-neutral-100 ${
+              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
                 isHighlighted
-                  ? "border-amber-400 bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
+                  ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
                   : titleColor
-                    ? `${titleColor.border} text-neutral-600`
-                    : "border-transparent text-neutral-600"
+                    ? `${titleColor.fill} text-neutral-700`
+                    : "text-neutral-600"
               }`}
               title={title ?? undefined}
             >
