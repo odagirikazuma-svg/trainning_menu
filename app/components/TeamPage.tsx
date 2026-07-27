@@ -28,6 +28,17 @@ type MonthMenuRow = {
   is_joint: boolean;
 };
 
+type ScheduleDetailRow = {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  location: Location;
+  start_time: string | null;
+  is_off: boolean;
+  creator: { display_name: string } | null;
+};
+
 type WeightMaxRow = {
   author_id: string;
   bench: number | null;
@@ -41,16 +52,44 @@ type PastMenuRow = {
   location: Location;
 };
 
-const locationDotColor: Record<Location, string> = {
-  tama: "bg-blue-500",
-  otsuka: "bg-orange-500",
-};
-
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// "YYYY-MM-DD" -> "7月24日"
+function formatMonthDay(dateStr: string) {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+function groupMembersByGrade(
+  members: MemberRow[]
+): { label: string; members: MemberRow[] }[] {
+  const groups = new Map<number | null, MemberRow[]>();
+  for (const m of members) {
+    const grade = m.entry_year != null ? currentGrade(m.entry_year) : null;
+    const list = groups.get(grade) ?? [];
+    list.push(m);
+    groups.set(grade, list);
+  }
+
+  const knownGrades = Array.from(groups.keys())
+    .filter((g): g is number => g !== null)
+    .sort((a, b) => a - b);
+
+  const result = knownGrades.map((grade) => ({
+    label: `${grade}年`,
+    members: groups.get(grade)!,
+  }));
+
+  if (groups.has(null)) {
+    result.push({ label: "学年未設定", members: groups.get(null)! });
+  }
+
+  return result;
 }
 
 export default function TeamPage({
@@ -73,6 +112,22 @@ export default function TeamPage({
   });
   const [monthMenus, setMonthMenus] = useState<MonthMenuRow[]>([]);
   const [loadingMonthMenus, setLoadingMonthMenus] = useState(true);
+  const [scheduleLocation, setScheduleLocation] = useState<Location>(
+    profile.home_location ?? "tama"
+  );
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<
+    string | null
+  >(null);
+  const [scheduleDetail, setScheduleDetail] = useState<
+    ScheduleDetailRow | null | undefined
+  >(undefined);
+  const [loadingScheduleDetail, setLoadingScheduleDetail] = useState(false);
+
+  const canEditSchedule =
+    profile.role === "captain" ||
+    profile.role === "leader" ||
+    profile.role === "vice_leader" ||
+    profile.role === "coach";
 
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
   const [loadingMaxes, setLoadingMaxes] = useState(true);
@@ -91,7 +146,7 @@ export default function TeamPage({
   useEffect(() => {
     loadMonthMenus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarCursor]);
+  }, [calendarCursor, scheduleLocation]);
 
   async function loadMembers() {
     setLoadingMembers(true);
@@ -119,6 +174,7 @@ export default function TeamPage({
       .from("menus")
       .select("id, date, location, is_off, is_joint")
       .eq("team_id", profile.team_id)
+      .eq("location", scheduleLocation)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
 
@@ -128,6 +184,50 @@ export default function TeamPage({
       setMonthMenus((data ?? []) as MonthMenuRow[]);
     }
     setLoadingMonthMenus(false);
+  }
+
+  async function loadScheduleDetail(dateStr: string) {
+    setLoadingScheduleDetail(true);
+    const { data, error } = await supabase
+      .from("menus")
+      .select(
+        "id, date, title, content, location, start_time, is_off, creator:profiles!menus_created_by_fkey(display_name)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", scheduleLocation)
+      .eq("date", dateStr)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+      setScheduleDetail(null);
+    } else {
+      setScheduleDetail((data as unknown as ScheduleDetailRow | null) ?? null);
+    }
+    setLoadingScheduleDetail(false);
+  }
+
+  function handleSelectScheduleDate(dateStr: string) {
+    setSelectedScheduleDate(dateStr);
+    loadScheduleDetail(dateStr);
+  }
+
+  function handleCloseScheduleDetail() {
+    setSelectedScheduleDate(null);
+    setScheduleDetail(undefined);
+  }
+
+  function handleEditSchedule() {
+    if (!selectedScheduleDate) return;
+    try {
+      sessionStorage.setItem(
+        "jumpTo",
+        JSON.stringify({ location: scheduleLocation, date: selectedScheduleDate })
+      );
+    } catch {
+      // sessionStorageが使えない環境では何もしない
+    }
+    router.push("/");
   }
 
   async function loadWeightMaxes() {
@@ -254,73 +354,157 @@ export default function TeamPage({
               部員が登録されていません。
             </p>
           ) : (
-            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <ul className="divide-y divide-neutral-100">
-                {members.map((m) => {
-                  const gradeLabel =
-                    m.entry_year != null
-                      ? `${currentGrade(m.entry_year)}年`
-                      : null;
-                  const missing = loadingCompliance
-                    ? null
-                    : hasMissingSubmission(m.id, m.home_location);
-                  return (
-                    <li key={m.id}>
-                      <button
-                        onClick={() => router.push(`/team/${m.id}`)}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate font-medium text-neutral-800">
-                            {m.display_name}
-                          </span>
-                          {gradeLabel && (
-                            <span className="shrink-0 text-neutral-400">
-                              {gradeLabel}
-                            </span>
-                          )}
-                          {m.home_location && (
-                            <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
-                              {locationLabel[m.home_location]}
-                            </span>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          {missing === null ? (
-                            <span className="text-[10px] text-neutral-300">
-                              確認中…
-                            </span>
-                          ) : missing ? (
-                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
-                              未提出あり
-                            </span>
-                          ) : (
-                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                              提出OK
-                            </span>
-                          )}
-                          <span className="text-neutral-300">›</span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+            <div className="flex flex-col gap-4">
+              {groupMembersByGrade(members).map((group) => (
+                <div key={group.label} className="flex flex-col gap-1.5">
+                  <h3 className="text-[11px] font-semibold text-neutral-400">
+                    {group.label}（{group.members.length}人）
+                  </h3>
+                  <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
+                    <ul className="divide-y divide-neutral-100">
+                      {group.members.map((m) => {
+                        const missing = loadingCompliance
+                          ? null
+                          : hasMissingSubmission(m.id, m.home_location);
+                        return (
+                          <li key={m.id}>
+                            <button
+                              onClick={() => router.push(`/team/${m.id}`)}
+                              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate font-medium text-neutral-800">
+                                  {m.display_name}
+                                </span>
+                                {m.home_location && (
+                                  <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                                    {locationLabel[m.home_location]}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-2">
+                                {missing === null ? (
+                                  <span className="text-[10px] text-neutral-300">
+                                    確認中…
+                                  </span>
+                                ) : missing ? (
+                                  <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                                    未提出あり
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                                    提出OK
+                                  </span>
+                                )}
+                                <span className="text-neutral-300">›</span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
 
         {/* 月間の練習スケジュール */}
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
             月間の練習スケジュール
           </h2>
-          <MonthlyCalendar
-            cursor={calendarCursor}
-            onCursorChange={setCalendarCursor}
-            menus={monthMenus}
-            loading={loadingMonthMenus}
-          />
+          <div className="flex gap-2">
+            {locations.map((loc) => (
+              <button
+                key={loc}
+                onClick={() => setScheduleLocation(loc)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
+                  scheduleLocation === loc
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-300 text-neutral-500 active:bg-neutral-100"
+                }`}
+              >
+                {locationLabel[loc]}
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <MonthlyCalendar
+              cursor={calendarCursor}
+              onCursorChange={setCalendarCursor}
+              menus={monthMenus}
+              loading={loadingMonthMenus}
+              onSelectDate={handleSelectScheduleDate}
+              highlightDate={selectedScheduleDate}
+            />
+            {selectedScheduleDate && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center p-2">
+                <div className="relative w-full max-w-sm rounded-lg border border-neutral-300 bg-white p-4 shadow-lg">
+                  <button
+                    onClick={handleCloseScheduleDetail}
+                    aria-label="閉じる"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-neutral-400 active:bg-neutral-100"
+                  >
+                    ✕
+                  </button>
+
+                  {loadingScheduleDetail ? (
+                    <p className="py-6 text-center text-xs text-neutral-400">
+                      読み込み中…
+                    </p>
+                  ) : scheduleDetail === null ? (
+                    <div className="flex flex-col items-center gap-3 py-6 text-center">
+                      <p className="text-xs text-neutral-400">
+                        {locationLabel[scheduleLocation]}の
+                        {formatMonthDay(selectedScheduleDate)}
+                        はまだ作成されていません
+                      </p>
+                      {canEditSchedule && (
+                        <button
+                          onClick={handleEditSchedule}
+                          className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white active:bg-neutral-700"
+                        >
+                          掲示板で作成する
+                        </button>
+                      )}
+                    </div>
+                  ) : scheduleDetail ? (
+                    <div className="pr-4">
+                      <div className="mb-1 text-xs text-neutral-400">
+                        {locationLabel[scheduleDetail.location]}・
+                        {scheduleDetail.date}
+                        {scheduleDetail.start_time &&
+                          `・${scheduleDetail.start_time.slice(0, 5)}〜`}
+                        ・作成者:{" "}
+                        {scheduleDetail.creator?.display_name ?? "不明"}
+                      </div>
+                      <h3 className="mb-2 text-base font-bold">
+                        {scheduleDetail.is_off
+                          ? "オフ"
+                          : scheduleDetail.title ||
+                            formatMonthDay(scheduleDetail.date)}
+                      </h3>
+                      {!scheduleDetail.is_off && (
+                        <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                          {scheduleDetail.content}
+                        </p>
+                      )}
+                      {canEditSchedule && (
+                        <button
+                          onClick={handleEditSchedule}
+                          className="mt-3 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-600 active:bg-neutral-100"
+                        >
+                          掲示板で編集する
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         {/* 全員のウェイトMAX */}
@@ -395,11 +579,15 @@ function MonthlyCalendar({
   onCursorChange,
   menus,
   loading,
+  onSelectDate,
+  highlightDate,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
   menus: MonthMenuRow[];
   loading: boolean;
+  onSelectDate: (dateStr: string) => void;
+  highlightDate?: string | null;
 }) {
   const byDate = new Map<string, MonthMenuRow[]>();
   for (const m of menus) {
@@ -452,44 +640,33 @@ function MonthlyCalendar({
               const key = toDateKey(date);
               const rows = byDate.get(key) ?? [];
               const hasOff = rows.some((r) => r.is_off);
-              const activeLocations = Array.from(
-                new Set(
-                  rows.filter((r) => !r.is_off).map((r) => r.location)
-                )
-              );
+              const hasMenu = rows.some((r) => !r.is_off);
+              const isHighlighted = key === highlightDate;
               return (
-                <div
+                <button
                   key={i}
-                  className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs text-neutral-600"
+                  onClick={() => onSelectDate(key)}
+                  className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
+                    isHighlighted
+                      ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
+                      : "text-neutral-600"
+                  }`}
                 >
                   <span>{date.getDate()}</span>
-                  {activeLocations.length > 0 && (
-                    <span className="flex flex-wrap justify-center gap-0.5">
-                      {activeLocations.map((loc) => (
-                        <span
-                          key={loc}
-                          className={`inline-block h-1.5 w-1.5 rounded-full ${locationDotColor[loc]}`}
-                        />
-                      ))}
-                    </span>
+                  {hasMenu && (
+                    <span
+                      className={`inline-block rounded-full bg-neutral-700 ${
+                        isHighlighted ? "h-2.5 w-2.5" : "h-1.5 w-1.5"
+                      }`}
+                    />
                   )}
-                  {hasOff && activeLocations.length === 0 && (
+                  {hasOff && !hasMenu && (
                     <span className="text-[9px] text-neutral-300">off</span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
-          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
-            {locations.map((loc) => (
-              <span key={loc} className="flex items-center gap-1">
-                <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${locationDotColor[loc]}`}
-                />
-                {locationLabel[loc]}
-              </span>
-            ))}
-          </p>
         </>
       )}
     </div>
