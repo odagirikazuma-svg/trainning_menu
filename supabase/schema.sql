@@ -437,3 +437,68 @@ create policy "schedule_sessions_delete_coach" on schedule_sessions
       select 1 from profiles where id = auth.uid() and role = 'coach'
     )
   );
+
+-- ============================================
+-- 追加: 部員の事前登録（名前とメールアドレスをあらかじめ紐づけておき、
+-- 本人が実際にサインアップした際に自動で情報を引き継ぐ）
+-- ============================================
+create table if not exists member_roster (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  email text not null,
+  display_name text not null,
+  role text not null default 'member' check (role in ('captain', 'vice_captain', 'coach', 'member')),
+  home_location text check (home_location in ('tama', 'otsuka')),
+  entry_year integer,
+  claimed_by uuid references profiles(id) on delete set null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (team_id, email)
+);
+alter table member_roster enable row level security;
+
+create policy "member_roster_select_same_team" on member_roster
+  for select using (team_id = get_my_team_id());
+
+create policy "member_roster_insert_coach" on member_roster
+  for insert with check (
+    team_id = get_my_team_id()
+    and exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "member_roster_update_coach" on member_roster
+  for update using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+create policy "member_roster_delete_coach" on member_roster
+  for delete using (
+    exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
+
+-- サインアップ時に自分のメールアドレスに一致する未紐付けの事前登録があれば、
+-- claimed_byを自分自身に更新できるようにする（プロフィール作成時に使用）
+create policy "member_roster_update_self_claim" on member_roster
+  for update using (
+    claimed_by is null
+    and lower(email) = lower((select email from auth.users where id = auth.uid()))
+  );
+
+-- 新規サインアップ時（まだ自分のprofilesが存在しない段階）でも、
+-- 自分のメールアドレスに一致する事前登録だけは検索できるようにする
+create policy "member_roster_select_self_email" on member_roster
+  for select using (
+    lower(email) = lower((select email from auth.users where id = auth.uid()))
+  );
+
+-- ============================================
+-- 追加: 部員の事前登録時点ではメールアドレス未定のケースに対応するため、
+-- member_roster.emailを必須ではなくする
+-- ============================================
+alter table member_roster alter column email drop not null;

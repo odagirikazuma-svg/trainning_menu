@@ -91,23 +91,56 @@ export default function AuthGate({
       return;
     }
 
-    // 初回ログイン時：デフォルトチームに参加
-    const { data: team, error: teamError } = await supabase
-      .from("teams")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    // 初回ログイン時：まず自分のメールアドレスに一致する「部員の事前登録」が
+    // ないか確認する。あれば、その内容（氏名・拠点・入学年・役職・チーム）を
+    // 優先的に使ってプロフィールを作成する。
+    const userEmail = session.user.email ?? null;
+    type RosterMatch = {
+      id: string;
+      team_id: string;
+      display_name: string;
+      role: SignupRoleChoice | "coach";
+      home_location: Location | null;
+      entry_year: number | null;
+    };
+    let rosterMatch: RosterMatch | null = null;
 
-    if (teamError) {
-      setErrorMsg(`チーム取得エラー: ${teamError.message}`);
-      return;
+    if (userEmail) {
+      const { data: rosterRow } = await supabase
+        .from("member_roster")
+        .select("id, team_id, display_name, role, home_location, entry_year")
+        .ilike("email", userEmail)
+        .is("claimed_by", null)
+        .maybeSingle();
+      if (rosterRow) {
+        rosterMatch = rosterRow as unknown as RosterMatch;
+      }
     }
 
-    if (!team) {
-      setErrorMsg(
-        "チームが見つかりません。先にSupabaseでteamsテーブルにチームを1件作成してください。"
-      );
-      return;
+    let teamId: string;
+
+    if (rosterMatch) {
+      teamId = rosterMatch.team_id;
+    } else {
+      // 事前登録が無い場合は、デフォルトチームに参加する
+      const { data: team, error: teamError } = await supabase
+        .from("teams")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+
+      if (teamError) {
+        setErrorMsg(`チーム取得エラー: ${teamError.message}`);
+        return;
+      }
+
+      if (!team) {
+        setErrorMsg(
+          "チームが見つかりません。先にSupabaseでteamsテーブルにチームを1件作成してください。"
+        );
+        return;
+      }
+      teamId = team.id;
     }
 
     const meta = session.user.user_metadata as Record<string, unknown>;
@@ -129,14 +162,17 @@ export default function AuthGate({
       .from("profiles")
       .insert({
         id: session.user.id,
-        team_id: team.id,
+        team_id: teamId,
         display_name:
+          rosterMatch?.display_name ||
           (meta?.display_name as string | undefined) ||
           session.user.email?.split("@")[0] ||
           "名無し",
-        role: metaRole,
-        home_location: metaLocation,
-        entry_year: metaEntryYear,
+        role: rosterMatch?.role ?? metaRole,
+        home_location: rosterMatch
+          ? rosterMatch.home_location
+          : metaLocation,
+        entry_year: rosterMatch ? rosterMatch.entry_year : metaEntryYear,
       })
       .select("id, team_id, display_name, role, home_location, entry_year")
       .single();
@@ -145,6 +181,15 @@ export default function AuthGate({
       setErrorMsg(`プロフィール作成に失敗しました: ${error.message}`);
       return;
     }
+
+    // 事前登録があった場合は「紐付け済み」にする
+    if (rosterMatch) {
+      await supabase
+        .from("member_roster")
+        .update({ claimed_by: created.id })
+        .eq("id", rosterMatch.id);
+    }
+
     setProfile(created as Profile);
   }
 
