@@ -1165,7 +1165,13 @@ export default function MyPage({
                   "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
                 }
                 rows={10}
-                className="rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
+                className={`rounded-lg border px-3 py-2.5 text-sm ${
+                  !todayLog
+                    ? "border-neutral-300"
+                    : todayLogType === "weight" && todayLogTitle.trim()
+                      ? `${getTitleColor(todayLogTitle.trim()).border} ${getTitleColor(todayLogTitle.trim()).fill}`
+                      : "border-emerald-300 bg-emerald-50"
+                }`}
               />
               <button
                 onClick={handleSaveLog}
@@ -1174,6 +1180,11 @@ export default function MyPage({
               >
                 {todayLog ? "更新する" : "保存する"}
               </button>
+              {todayLog && (
+                <p className="text-[11px] text-emerald-600">
+                  保存済みです。内容を変えてから「更新する」を押すと上書きされます。
+                </p>
+              )}
             </div>
           )}
         </section>

@@ -101,6 +101,11 @@ export default function CoachAdminPage({
   const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
   const [loadingReports, setLoadingReports] = useState(true);
 
+  const [otherSessionByDateLocation, setOtherSessionByDateLocation] =
+    useState<Set<string>>(new Set());
+  const [selfLogKeys, setSelfLogKeys] = useState<Set<string>>(new Set());
+  const [loadingSelfLogs, setLoadingSelfLogs] = useState(true);
+
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [rosterName, setRosterName] = useState("");
@@ -136,6 +141,7 @@ export default function CoachAdminPage({
   useEffect(() => {
     loadMembers();
     loadReports();
+    loadSelfLogs();
     loadRoster();
     loadWeightMaxEvent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,6 +217,67 @@ export default function CoachAdminPage({
     }
     setSubmittedKeys(keys);
     setLoadingReports(false);
+  }
+
+  // 「マット以外（ラン・ウェイト・その他）」のセッションがある日に、
+  // その部員が自己申告のトレーニング記録（weight_logs）を保存しているかを調べる
+  async function loadSelfLogs() {
+    setLoadingSelfLogs(true);
+    const rangeStart = recentDates[0];
+    const rangeEnd = recentDates[recentDates.length - 1];
+
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("schedule_days")
+      .select(
+        "date, location, is_off, sessions:schedule_sessions(session_type)"
+      )
+      .eq("team_id", profile.team_id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (sessionError) {
+      setErrorMsg(sessionError.message);
+      setLoadingSelfLogs(false);
+      return;
+    }
+
+    const otherSet = new Set<string>();
+    for (const row of (sessionData ?? []) as unknown as {
+      date: string;
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: string }[];
+    }[]) {
+      if (row.is_off) continue;
+      const hasOther = row.sessions.some(
+        (s) => s.session_type === "running" || s.session_type === "weight"
+      );
+      if (hasOther) otherSet.add(`${row.date}:${row.location}`);
+    }
+    setOtherSessionByDateLocation(otherSet);
+
+    const { data: logData, error: logError } = await supabase
+      .from("weight_logs")
+      .select("author_id, date")
+      .eq("team_id", profile.team_id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (logError) {
+      setErrorMsg(logError.message);
+      setLoadingSelfLogs(false);
+      return;
+    }
+
+    const logKeys = new Set<string>();
+    for (const row of (logData ?? []) as {
+      author_id: string;
+      date: string;
+    }[]) {
+      logKeys.add(`${row.author_id}:${row.date}`);
+    }
+    setSelfLogKeys(logKeys);
+    setLoadingSelfLogs(false);
   }
 
   const loading = loadingMembers || loadingReports;
@@ -602,7 +669,7 @@ export default function CoachAdminPage({
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-4 gap-1.5">
+                      <div className="grid grid-cols-7 gap-1">
                         {recentDates.map((date) => {
                           const menu = m.home_location
                             ? menusByDateLocation.get(
@@ -617,7 +684,8 @@ export default function CoachAdminPage({
                           return (
                             <div
                               key={date}
-                              className={`flex flex-col items-center gap-0.5 rounded px-1.5 py-1.5 ${
+                              title={formatMonthDay(date)}
+                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${
                                 status === "done"
                                   ? "bg-emerald-50"
                                   : status === "missing"
@@ -625,11 +693,11 @@ export default function CoachAdminPage({
                                     : "bg-neutral-50"
                               }`}
                             >
-                              <span className="text-[10px] text-neutral-400">
-                                {formatMonthDay(date)}
+                              <span className="text-[9px] text-neutral-400">
+                                {date.slice(8, 10)}日
                               </span>
                               <span
-                                className={`text-[11px] font-semibold ${
+                                className={`text-[9px] font-semibold ${
                                   status === "done"
                                     ? "text-emerald-600"
                                     : status === "missing"
@@ -638,10 +706,105 @@ export default function CoachAdminPage({
                                 }`}
                               >
                                 {status === "done"
-                                  ? "提出済み"
+                                  ? "済"
                                   : status === "missing"
-                                    ? "未提出"
-                                    : "対象外"}
+                                    ? "未"
+                                    : "−"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* 自己トレーニング記録（ラン・ウェイト等）の提出状況 */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            自己トレーニング記録の提出状況
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            マット以外(ラン・ウェイト)のセッションがある日に、マイページの「今日のトレーニングメニュー」を保存しているかどうかを表示しています。ラン・ウェイト・その他のいずれかを保存していればOKです。「対象外」はその日にマット以外のセッションが設定されていない場合です。
+          </p>
+
+          {loadingMembers || loadingSelfLogs ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : members.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              部員が登録されていません。
+            </p>
+          ) : (
+            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-200">
+              <ul className="divide-y divide-neutral-100">
+                {members.map((m) => {
+                  const gradeLabel =
+                    m.entry_year != null
+                      ? `${currentGrade(m.entry_year)}年`
+                      : null;
+                  return (
+                    <li
+                      key={m.id}
+                      className="flex flex-col gap-1.5 px-3 py-2.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-neutral-800">
+                          {m.display_name}
+                        </span>
+                        {gradeLabel && (
+                          <span className="text-neutral-400">{gradeLabel}</span>
+                        )}
+                        {m.home_location && (
+                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                            {locationLabel[m.home_location]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {recentDates.map((date) => {
+                          const hasOtherSession = m.home_location
+                            ? otherSessionByDateLocation.has(
+                                `${date}:${m.home_location}`
+                              )
+                            : false;
+                          const status = !hasOtherSession
+                            ? "n/a"
+                            : selfLogKeys.has(`${m.id}:${date}`)
+                              ? "done"
+                              : "missing";
+                          return (
+                            <div
+                              key={date}
+                              title={formatMonthDay(date)}
+                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${
+                                status === "done"
+                                  ? "bg-emerald-50"
+                                  : status === "missing"
+                                    ? "bg-red-50"
+                                    : "bg-neutral-50"
+                              }`}
+                            >
+                              <span className="text-[9px] text-neutral-400">
+                                {date.slice(8, 10)}日
+                              </span>
+                              <span
+                                className={`text-[9px] font-semibold ${
+                                  status === "done"
+                                    ? "text-emerald-600"
+                                    : status === "missing"
+                                      ? "text-red-600"
+                                      : "text-neutral-400"
+                                }`}
+                              >
+                                {status === "done"
+                                  ? "済"
+                                  : status === "missing"
+                                    ? "未"
+                                    : "−"}
                               </span>
                             </div>
                           );
