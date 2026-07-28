@@ -23,6 +23,7 @@ const dayTypeFillColorDark: Record<DayType, string> = {
   camp: "bg-pink-950/40 text-pink-400",
   match: "bg-red-950/40 text-red-400",
 };
+
 type MemberRow = {
   id: string;
   display_name: string;
