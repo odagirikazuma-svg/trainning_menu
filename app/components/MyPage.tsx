@@ -115,6 +115,7 @@ export default function MyPage({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [weightMaxTodo, setWeightMaxTodo] = useState<{
+    eventId: string;
     deadline: string;
     createdAt: string;
   } | null>(null);
@@ -380,6 +381,7 @@ export default function MyPage({
       .from("weight_max_events")
       .select("id, deadline, created_at")
       .eq("team_id", profile.team_id)
+      .is("closed_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -396,8 +398,9 @@ export default function MyPage({
 
     const { data: maxData, error: maxError } = await supabase
       .from("weight_maxes")
-      .select("updated_at")
+      .select("id")
       .eq("author_id", profile.id)
+      .eq("event_id", event.id)
       .maybeSingle();
 
     if (maxError) {
@@ -405,19 +408,15 @@ export default function MyPage({
       return;
     }
 
-    const alreadySubmitted =
-      !!maxData &&
-      new Date((maxData as { updated_at: string }).updated_at) >=
-        new Date(event.created_at);
-
     setWeightMaxTodo(
-      alreadySubmitted
+      maxData
         ? null
-        : { deadline: event.deadline, createdAt: event.created_at }
+        : { eventId: event.id, deadline: event.deadline, createdAt: event.created_at }
     );
   }
 
   async function handleSaveWeightMaxTodo() {
+    if (!weightMaxTodo) return;
     setSavingWeightMaxTodo(true);
     const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -425,12 +424,13 @@ export default function MyPage({
       {
         team_id: profile.team_id,
         author_id: profile.id,
+        event_id: weightMaxTodo.eventId,
         bench: toNum(weightMaxBench),
         squat: toNum(weightMaxSquat),
         deadlift: toNum(weightMaxDeadlift),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "author_id" }
+      { onConflict: "author_id,event_id" }
     );
 
     if (error) {

@@ -62,9 +62,15 @@ type ScheduleDetailRow = {
 
 type WeightMaxRow = {
   author_id: string;
+  event_id: string | null;
   bench: number | null;
   squat: number | null;
   deadlift: number | null;
+};
+
+type WeightMaxEventInfo = {
+  id: string;
+  measurementDate: string;
 };
 
 type PastMenuRow = {
@@ -201,6 +207,9 @@ export default function TeamPage({
 
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
   const [loadingMaxes, setLoadingMaxes] = useState(true);
+  const [weightMaxEvents, setWeightMaxEvents] = useState<WeightMaxEventInfo[]>(
+    []
+  );
 
   const [pastMenus, setPastMenus] = useState<PastMenuRow[]>([]);
   const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
@@ -794,12 +803,41 @@ export default function TeamPage({
     setLoadingMaxes(true);
     const { data, error } = await supabase
       .from("weight_maxes")
-      .select("author_id, bench, squat, deadlift")
+      .select("author_id, event_id, bench, squat, deadlift")
       .eq("team_id", profile.team_id);
     if (error) {
       setErrorMsg(error.message);
     } else {
       setWeightMaxes((data ?? []) as WeightMaxRow[]);
+    }
+
+    const { data: eventData, error: eventError } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline, closed_at")
+      .eq("team_id", profile.team_id);
+
+    if (eventError) {
+      setErrorMsg(eventError.message);
+    } else {
+      const events = (
+        (eventData ?? []) as {
+          id: string;
+          deadline: string;
+          closed_at: string | null;
+        }[]
+      ).map((e) => {
+        // 測定日は「締切日」と「集計終了日」のうち早い方
+        const closedDateStr = e.closed_at
+          ? toDateKey(new Date(e.closed_at))
+          : null;
+        const measurementDate =
+          closedDateStr && closedDateStr < e.deadline
+            ? closedDateStr
+            : e.deadline;
+        return { id: e.id, measurementDate };
+      });
+      events.sort((a, b) => b.measurementDate.localeCompare(a.measurementDate));
+      setWeightMaxEvents(events);
     }
     setLoadingMaxes(false);
   }
@@ -863,7 +901,40 @@ export default function TeamPage({
     setLoadingCompliance(false);
   }
 
-  const maxByAuthor = new Map(weightMaxes.map((w) => [w.author_id, w]));
+  // イベントごとに「著者ID -> 記録」のMapを作る
+  const weightMaxesByEvent = new Map<string, Map<string, WeightMaxRow>>();
+  for (const w of weightMaxes) {
+    if (!w.event_id) continue;
+    const inner = weightMaxesByEvent.get(w.event_id) ?? new Map();
+    inner.set(w.author_id, w);
+    weightMaxesByEvent.set(w.event_id, inner);
+  }
+
+  function formatWithDiff(
+    current: number | null,
+    previous: number | null | undefined
+  ): { text: string; className: string } {
+    if (current == null) {
+      return { text: "-", className: "text-neutral-300" };
+    }
+    if (previous == null) {
+      return { text: `${current}`, className: "text-neutral-700" };
+    }
+    const diff = current - previous;
+    if (diff === 0) {
+      return { text: `${current}（±0）`, className: "text-neutral-500" };
+    }
+    if (diff > 0) {
+      return {
+        text: `${current}（+${diff}）`,
+        className: "font-semibold text-blue-600",
+      };
+    }
+    return {
+      text: `${current}（${diff}）`,
+      className: "font-semibold text-red-600",
+    };
+  }
 
   function getMissingSubmissions(
     memberId: string,
@@ -1587,7 +1658,7 @@ export default function TeamPage({
             ウェイトMAX一覧
           </h2>
           <p className="text-[11px] text-neutral-400">
-            コーチが「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。
+            コーチが「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。（　）内は前回の計測からの増減です。
           </p>
           {loadingMembers || loadingMaxes ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
@@ -1595,51 +1666,93 @@ export default function TeamPage({
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
               部員が登録されていません。
             </p>
+          ) : weightMaxEvents.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              まだウェイトMAXの計測は行われていません。
+            </p>
           ) : (
-            <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b border-neutral-200 text-neutral-400">
-                    <th className="px-2 py-1.5 text-left font-medium">
-                      氏名
-                    </th>
-                    <th className="px-1 py-1.5 text-right font-medium">
-                      BP
-                    </th>
-                    <th className="px-1 py-1.5 text-right font-medium">
-                      SQ
-                    </th>
-                    <th className="px-2 py-1.5 text-right font-medium">
-                      DL
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {members
-                    .filter((m) => m.role !== "coach" && !m.isPending)
-                    .map((m) => {
-                    const max = maxByAuthor.get(m.id);
-                    const fmt = (v: number | null | undefined) =>
-                      v != null ? `${v}` : "-";
-                    return (
-                      <tr key={m.id}>
-                        <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-800">
-                          {m.display_name}
-                        </td>
-                        <td className="px-1 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.bench)}
-                        </td>
-                        <td className="px-1 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.squat)}
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-neutral-600">
-                          {fmt(max?.deadlift)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="flex flex-col gap-2">
+              {weightMaxEvents.map((event, eventIdx) => {
+                const currentMap = weightMaxesByEvent.get(event.id);
+                const previousEvent = weightMaxEvents[eventIdx + 1];
+                const previousMap = previousEvent
+                  ? weightMaxesByEvent.get(previousEvent.id)
+                  : undefined;
+
+                return (
+                  <details
+                    key={event.id}
+                    open={eventIdx === 0}
+                    className="rounded-lg border border-neutral-200"
+                  >
+                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-700">
+                      {formatMonthDay(event.measurementDate)}計測一覧
+                    </summary>
+                    <div className="max-h-[60vh] overflow-y-auto border-t border-neutral-100">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-white">
+                          <tr className="border-b border-neutral-200 text-neutral-400">
+                            <th className="px-2 py-1.5 text-left font-medium">
+                              氏名
+                            </th>
+                            <th className="px-1 py-1.5 text-right font-medium">
+                              BP
+                            </th>
+                            <th className="px-1 py-1.5 text-right font-medium">
+                              SQ
+                            </th>
+                            <th className="px-2 py-1.5 text-right font-medium">
+                              DL
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {members
+                            .filter((m) => m.role !== "coach" && !m.isPending)
+                            .map((m) => {
+                              const max = currentMap?.get(m.id);
+                              const prev = previousMap?.get(m.id);
+                              const bench = formatWithDiff(
+                                max?.bench ?? null,
+                                prev?.bench
+                              );
+                              const squat = formatWithDiff(
+                                max?.squat ?? null,
+                                prev?.squat
+                              );
+                              const deadlift = formatWithDiff(
+                                max?.deadlift ?? null,
+                                prev?.deadlift
+                              );
+                              return (
+                                <tr key={m.id}>
+                                  <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-800">
+                                    {m.display_name}
+                                  </td>
+                                  <td
+                                    className={`px-1 py-1.5 text-right ${bench.className}`}
+                                  >
+                                    {bench.text}
+                                  </td>
+                                  <td
+                                    className={`px-1 py-1.5 text-right ${squat.className}`}
+                                  >
+                                    {squat.text}
+                                  </td>
+                                  <td
+                                    className={`px-2 py-1.5 text-right ${deadlift.className}`}
+                                  >
+                                    {deadlift.text}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           )}
         </section>

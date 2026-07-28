@@ -586,3 +586,21 @@ create policy "profiles_update_coach" on profiles
       select 1 from profiles where id = auth.uid() and role = 'coach'
     )
   );
+
+-- ============================================
+-- 追加: ウェイトMAXの計測履歴を残せるようにする
+-- （集計イベントごとに記録を分けて保存し、過去の計測結果も遡って見れるようにする）
+-- ============================================
+alter table weight_max_events add column if not exists closed_at timestamptz;
+
+alter table weight_maxes add column if not exists event_id uuid references weight_max_events(id) on delete set null;
+
+-- 既存の単一レコードは、直近の集計イベントに紐付けておく（無ければ紐付けなしのまま）
+update weight_maxes
+set event_id = (select id from weight_max_events order by created_at desc limit 1)
+where event_id is null
+  and exists (select 1 from weight_max_events);
+
+alter table weight_maxes drop constraint if exists weight_maxes_author_id_key;
+alter table weight_maxes drop constraint if exists weight_maxes_author_event_unique;
+alter table weight_maxes add constraint weight_maxes_author_event_unique unique (author_id, event_id);

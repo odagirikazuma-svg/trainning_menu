@@ -44,6 +44,7 @@ type WeightMaxEventRow = {
   id: string;
   deadline: string;
   created_at: string;
+  closed_at: string | null;
 };
 
 type RosterRow = {
@@ -309,8 +310,9 @@ export default function CoachAdminPage({
   async function loadWeightMaxEvent() {
     const { data, error } = await supabase
       .from("weight_max_events")
-      .select("id, deadline, created_at")
+      .select("id, deadline, created_at, closed_at")
       .eq("team_id", profile.team_id)
+      .is("closed_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -325,9 +327,9 @@ export default function CoachAdminPage({
     if (event) {
       const { data: maxData, error: maxError } = await supabase
         .from("weight_maxes")
-        .select("author_id, updated_at")
+        .select("author_id")
         .eq("team_id", profile.team_id)
-        .gte("updated_at", event.created_at);
+        .eq("event_id", event.id);
       if (maxError) {
         setErrorMsg(maxError.message);
       } else {
@@ -358,10 +360,15 @@ export default function CoachAdminPage({
 
   async function handleEndWeightMaxEvent() {
     if (!weightMaxEvent) return;
-    if (!window.confirm("このウェイトMAX集計を終了しますか？")) return;
+    if (
+      !window.confirm(
+        "このウェイトMAX集計を終了しますか？（これまでの提出内容はチームページの履歴に残ります）"
+      )
+    )
+      return;
     const { error } = await supabase
       .from("weight_max_events")
-      .delete()
+      .update({ closed_at: new Date().toISOString() })
       .eq("id", weightMaxEvent.id);
     if (error) {
       setErrorMsg(error.message);
