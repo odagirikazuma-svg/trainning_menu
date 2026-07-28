@@ -663,19 +663,22 @@ export default function CoachAdminPage({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-base font-bold sm:text-lg">管理ページ</h1>
-        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          管理ページ
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
           <button
             onClick={() => router.push("/")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             掲示板に戻る
           </button>
           <button
             onClick={() => router.push("/team")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             チームページ
           </button>
@@ -684,28 +687,29 @@ export default function CoachAdminPage({
 
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
-          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
         )}
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-700">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             直近1週間の提出状況
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             「マ」は実施報告・未実施報告(マット)、「他」はマット以外(ラン・ウェイト)のセッションがある日にマイページの「今日のトレーニングメニュー」を保存しているかどうかです。それぞれ緑=提出済み、赤=未提出、グレー=対象外(その日にそのセッション自体がない場合)を表します。
           </p>
 
           {loading || loadingSelfLogs ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
           ) : (
-            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <ul className="divide-y divide-neutral-100">
+            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-800">
+              <ul className="divide-y divide-neutral-800">
                 {members.map((m) => {
                   const gradeLabel =
                     m.entry_year != null
@@ -714,14 +718,14 @@ export default function CoachAdminPage({
                   return (
                     <li key={m.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-neutral-800">
+                        <span className="font-medium text-neutral-100">
                           {m.display_name}
                         </span>
                         {gradeLabel && (
-                          <span className="text-neutral-400">{gradeLabel}</span>
+                          <span className="text-neutral-500">{gradeLabel}</span>
                         )}
                         {m.home_location && (
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">
                             {locationLabel[m.home_location]}
                           </span>
                         )}
@@ -755,17 +759,17 @@ export default function CoachAdminPage({
                           const bothNA =
                             matStatus === "n/a" && otherStatus === "n/a";
                           const cellColor = bothNA
-                            ? "bg-neutral-50"
+                            ? "bg-neutral-900"
                             : anyMissing
-                              ? "bg-red-50"
-                              : "bg-emerald-50";
+                              ? "bg-red-950/40"
+                              : "bg-emerald-950/40";
 
                           const badgeClass = (s: "n/a" | "done" | "missing") =>
                             s === "done"
-                              ? "text-emerald-600"
+                              ? "text-emerald-400"
                               : s === "missing"
-                                ? "text-red-600"
-                                : "text-neutral-300";
+                                ? "text-red-400"
+                                : "text-neutral-600";
 
                           return (
                             <div
@@ -773,11 +777,11 @@ export default function CoachAdminPage({
                               title={formatMonthDay(date)}
                               className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${cellColor}`}
                             >
-                              <span className="text-[9px] text-neutral-400">
+                              <span className="text-[9px] text-neutral-500">
                                 {date.slice(8, 10)}日
                               </span>
                               {bothNA ? (
-                                <span className="text-[9px] font-semibold text-neutral-400">
+                                <span className="text-[9px] font-semibold text-neutral-500">
                                   −
                                 </span>
                               ) : (
@@ -811,17 +815,18 @@ export default function CoachAdminPage({
         </section>
 
         {/* 怪我人一覧 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我人一覧
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             部員がマイページから報告した怪我の一覧です。タップすると詳細が開きます。完治してから1週間が経過した怪我は、下の「過去の怪我情報を見る」から確認できます。
           </p>
           {loadingInjuries ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : injuries.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               報告されている怪我はありません。
             </p>
           ) : (
@@ -837,7 +842,7 @@ export default function CoachAdminPage({
 
                 if (activeInjuries.length === 0) {
                   return (
-                    <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+                    <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
                       現在対応中の怪我はありません。
                     </p>
                   );
@@ -862,7 +867,7 @@ export default function CoachAdminPage({
               })()}
               <button
                 onClick={() => setShowPastInjuries(true)}
-                className="self-end text-xs font-medium text-neutral-500 underline"
+                className="self-end text-xs font-medium text-neutral-400 underline"
               >
                 過去の怪我情報を見る
               </button>
@@ -876,21 +881,21 @@ export default function CoachAdminPage({
             onClick={() => setShowPastInjuries(false)}
           >
             <div
-              className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-lg bg-white p-4 shadow-xl"
+              className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-lg bg-neutral-900 p-4 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => setShowPastInjuries(false)}
                 aria-label="閉じる"
-                className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+                className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-neutral-500 shadow active:bg-neutral-800"
               >
                 ✕
               </button>
-              <h3 className="text-sm font-semibold text-neutral-700">
+              <h3 className="text-sm font-semibold text-neutral-200">
                 過去の怪我情報
               </h3>
               {injuries.length === 0 ? (
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-neutral-500">
                   報告されている怪我はありません。
                 </p>
               ) : (
@@ -914,28 +919,29 @@ export default function CoachAdminPage({
         )}
 
         {/* 部員の役職を編集 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             部員の役職を編集
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             主将・副主将・リーダー・副リーダー・役職なし、から選べます。
           </p>
           {loadingMembers ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
           ) : (
-            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <ul className="divide-y divide-neutral-100">
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-800">
+              <ul className="divide-y divide-neutral-800">
                 {members.map((m) => (
                   <li
                     key={m.id}
                     className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs"
                   >
-                    <span className="font-medium text-neutral-800">
+                    <span className="font-medium text-neutral-100">
                       {m.display_name}
                     </span>
                     {editingRoleId === m.id ? (
@@ -950,7 +956,7 @@ export default function CoachAdminPage({
                           )
                         }
                         onBlur={() => setEditingRoleId(null)}
-                        className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                        className="rounded border border-neutral-700 px-2 py-1 text-xs"
                       >
                         {(
                           Object.keys(
@@ -965,7 +971,7 @@ export default function CoachAdminPage({
                     ) : (
                       <button
                         onClick={() => setEditingRoleId(m.id)}
-                        className="rounded bg-neutral-100 px-2 py-1 text-neutral-600 active:bg-neutral-200"
+                        className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
                       >
                         {memberRoleEditLabel[m.role]}
                       </button>
@@ -978,30 +984,31 @@ export default function CoachAdminPage({
         </section>
 
         {/* ウェイトMAXを集計する */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             ウェイトMAXを集計する
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             締切日を設定すると、部員のマイページの「やることリスト」にBIG3(ベンチプレス・スクワット・デッドリフト)のMAX重量を提出するタスクが表示されます。提出内容はチームページの「ウェイトMAX一覧」で確認できます。
           </p>
 
           {weightMaxEvent === undefined ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : weightMaxEvent ? (
-            <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3">
-              <p className="text-sm text-neutral-700">
+            <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+              <p className="text-sm text-neutral-200">
                 締切:{" "}
                 <span className="font-semibold">
                   {weightMaxEvent.deadline}
                 </span>
               </p>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-neutral-400">
                 提出済み {weightMaxSubmittedCount}人 / {members.length}人
               </p>
               <button
                 onClick={handleEndWeightMaxEvent}
-                className="self-start rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
               >
                 この集計を終了する
               </button>
@@ -1011,20 +1018,20 @@ export default function CoachAdminPage({
               onSubmit={handleCreateWeightMaxEvent}
               className="flex items-end gap-2"
             >
-              <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500">
+              <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
                 締切日
                 <input
                   type="date"
                   required
                   value={newDeadline}
                   onChange={(e) => setNewDeadline(e.target.value)}
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                 />
               </label>
               <button
                 type="submit"
                 disabled={savingWeightMaxEvent}
-                className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
               >
                 集計を開始する
               </button>
@@ -1033,22 +1040,23 @@ export default function CoachAdminPage({
         </section>
 
         {/* 部員の事前登録 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             部員の事前登録
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
           </p>
 
           {loadingRoster ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : roster.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               まだ事前登録がありません。
             </p>
           ) : (
-            <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+            <ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
               {roster.map((r) => (
                 <li
                   key={r.id}
@@ -1057,36 +1065,36 @@ export default function CoachAdminPage({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex items-center gap-1.5">
-                        <span className="font-medium text-neutral-800">
+                        <span className="font-medium text-neutral-100">
                           {r.display_name}
                         </span>
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">
                           {rosterRoleLabel[r.role]}
                         </span>
                         {r.home_location && (
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+                          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">
                             {locationLabel[r.home_location]}
                           </span>
                         )}
                       </span>
                       {editingEmailId !== r.id &&
                         (r.email ? (
-                          <span className="truncate text-neutral-400">
+                          <span className="truncate text-neutral-500">
                             {r.email}
                           </span>
                         ) : (
-                          <span className="text-amber-600">
+                          <span className="text-amber-400">
                             メール未設定
                           </span>
                         ))}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {r.claimed_by ? (
-                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                        <span className="rounded bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                           連携済み
                         </span>
                       ) : (
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
+                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
                           未登録
                         </span>
                       )}
@@ -1107,18 +1115,18 @@ export default function CoachAdminPage({
                         placeholder="メールアドレス"
                         value={editingEmailValue}
                         onChange={(e) => setEditingEmailValue(e.target.value)}
-                        className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
                       />
                       <button
                         onClick={() => handleSaveEmail(r.id)}
                         disabled={savingEmail}
-                        className="rounded bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                        className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
                       >
                         保存
                       </button>
                       <button
                         onClick={() => setEditingEmailId(null)}
-                        className="rounded border border-neutral-300 px-2.5 py-1 text-[11px] text-neutral-600"
+                        className="rounded border border-neutral-700 px-2.5 py-1 text-[11px] text-neutral-300"
                       >
                         キャンセル
                       </button>
@@ -1127,7 +1135,7 @@ export default function CoachAdminPage({
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => handleStartEditEmail(r)}
-                        className="text-[11px] font-medium text-neutral-500 underline"
+                        className="text-[11px] font-medium text-neutral-400 underline"
                       >
                         {r.email ? "メールを編集" : "メールを追加"}
                       </button>
@@ -1150,9 +1158,9 @@ export default function CoachAdminPage({
 
           <form
             onSubmit={handleAddRoster}
-            className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
+            className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3"
           >
-            <p className="text-xs font-semibold text-neutral-600">
+            <p className="text-xs font-semibold text-neutral-300">
               1件ずつ登録
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -1162,14 +1170,14 @@ export default function CoachAdminPage({
                 placeholder="氏名"
                 value={rosterName}
                 onChange={(e) => setRosterName(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
               />
               <input
                 type="email"
                 placeholder="メールアドレス（あとで追加可）"
                 value={rosterEmail}
                 onChange={(e) => setRosterEmail(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -1178,7 +1186,7 @@ export default function CoachAdminPage({
                 onChange={(e) =>
                   setRosterRole(e.target.value as RosterRoleChoice)
                 }
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
               >
                 {(
                   Object.keys(rosterRoleLabel) as RosterRoleChoice[]
@@ -1194,7 +1202,7 @@ export default function CoachAdminPage({
                   onChange={(e) =>
                     setRosterLocation(e.target.value as Location)
                   }
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                 >
                   {locations.map((loc) => (
                     <option key={loc} value={loc}>
@@ -1208,7 +1216,7 @@ export default function CoachAdminPage({
               <select
                 value={rosterEntryYear}
                 onChange={(e) => setRosterEntryYear(e.target.value)}
-                className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
               >
                 <option value="">入学年を選択</option>
                 {rosterEntryYearOptions.map((y) => (
@@ -1221,17 +1229,17 @@ export default function CoachAdminPage({
             <button
               type="submit"
               disabled={savingRoster}
-              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+              className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
             >
               追加する
             </button>
           </form>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3">
-            <p className="text-xs font-semibold text-neutral-600">
+          <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+            <p className="text-xs font-semibold text-neutral-300">
               CSVから一括登録
             </p>
-            <p className="text-[11px] text-neutral-400">
+            <p className="text-[11px] text-neutral-500">
               1行目に見出し、2行目以降に「氏名, メールアドレス, 役職,
               拠点, 入学年」の順で入力したCSVファイルを選んでください。
               <br />
@@ -1252,22 +1260,22 @@ export default function CoachAdminPage({
             <button
               onClick={handleImportCsv}
               disabled={!csvFile || importingCsv}
-              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+              className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
             >
               {importingCsv ? "インポート中…" : "インポートする"}
             </button>
             {csvResult && (
-              <p className="rounded bg-emerald-50 p-2 text-[11px] text-emerald-700">
+              <p className="rounded bg-emerald-950/40 p-2 text-[11px] text-emerald-400">
                 {csvResult}
               </p>
             )}
           </div>
         </section>
 
-        <div className="border-t border-neutral-200 pt-4">
+        <div className="border-t border-neutral-800 pt-4">
           <button
             onClick={signOut}
-            className="w-full rounded-lg border border-neutral-300 py-3 text-sm font-medium text-neutral-600 active:bg-neutral-100"
+            className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
           >
             ログアウト
           </button>
@@ -1290,8 +1298,8 @@ function InjuryListItem({
     <li
       className={`rounded-lg border ${
         inj.is_recovered
-          ? "border-emerald-200 bg-emerald-50"
-          : "border-neutral-200"
+          ? "border-emerald-900/60 bg-emerald-950/40"
+          : "border-neutral-800"
       }`}
     >
       <button
@@ -1299,22 +1307,22 @@ function InjuryListItem({
         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-black/5"
       >
         <span className="flex flex-col">
-          <span className="font-medium text-neutral-800">
+          <span className="font-medium text-neutral-100">
             {inj.author?.display_name ?? "不明"}
           </span>
-          <span className="text-neutral-500">
+          <span className="text-neutral-400">
             {inj.symptom_name}（{inj.body_part}）
             {inj.is_recovered && (
-              <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              <span className="ml-1.5 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                 完治
               </span>
             )}
           </span>
         </span>
-        <span className="text-neutral-300">{isOpen ? "︿" : "﹀"}</span>
+        <span className="text-neutral-600">{isOpen ? "︿" : "﹀"}</span>
       </button>
       {isOpen && (
-        <div className="flex flex-col gap-1 border-t border-neutral-100 px-3 py-2.5 text-xs text-neutral-600">
+        <div className="flex flex-col gap-1 border-t border-neutral-800 px-3 py-2.5 text-xs text-neutral-300">
           {inj.detail && <p className="whitespace-pre-wrap">{inj.detail}</p>}
           <p>
             完治見込み日:{" "}
@@ -1344,17 +1352,17 @@ function InjuryListItem({
               <p>条件: {inj.mat_participation_detail}</p>
             )}
           {inj.progress_note && (
-            <p className="rounded bg-white/60 p-2">
+            <p className="rounded bg-neutral-900/60 p-2">
               最新の経過報告: {inj.progress_note}
             </p>
           )}
           {inj.progress_updated_at && (
-            <p className="text-[10px] text-neutral-400">
+            <p className="text-[10px] text-neutral-500">
               経過報告日:{" "}
               {formatMonthDay(toDateKey(new Date(inj.progress_updated_at)))}
             </p>
           )}
-          <p className="text-[10px] text-neutral-400">
+          <p className="text-[10px] text-neutral-500">
             報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
           </p>
         </div>

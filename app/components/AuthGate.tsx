@@ -317,27 +317,30 @@ export default function AuthGate({
   }
 
   if (loading) {
-    return <div className="p-8 text-sm text-neutral-400">読み込み中…</div>;
+    return <div className="p-8 text-sm text-neutral-500">読み込み中…</div>;
   }
 
   if (!session) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-        <h1 className="text-lg font-bold">練習ノート ログイン</h1>
+      <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 bg-neutral-950 p-6 text-neutral-200">
+        <h1 className="flex items-center gap-2 text-lg font-bold text-white">
+          <span className="inline-block h-5 w-1.5 rounded-full bg-red-600" />
+          練習ノート ログイン
+        </h1>
         {inviteToken && rosterPreview && (
-          <p className="rounded bg-emerald-50 p-2 text-xs text-emerald-700">
+          <p className="rounded bg-emerald-950/40 p-2 text-xs text-emerald-400">
             招待リンクから開いています。以下の内容で登録されます。
           </p>
         )}
         {inviteToken && rosterPreview === null && (
-          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             この招待リンクは無効か、すでに使用されています。通常の新規登録を行ってください。
           </p>
         )}
         <div className="flex gap-2 text-xs">
           <button
             className={`rounded px-3 py-1 ${
-              mode === "login" ? "bg-neutral-900 text-white" : "bg-neutral-100"
+              mode === "login" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
             }`}
             onClick={() => setMode("login")}
           >
@@ -345,7 +348,7 @@ export default function AuthGate({
           </button>
           <button
             className={`rounded px-3 py-1 ${
-              mode === "signup" ? "bg-neutral-900 text-white" : "bg-neutral-100"
+              mode === "signup" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
             }`}
             onClick={() => setMode("signup")}
           >
@@ -354,7 +357,7 @@ export default function AuthGate({
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           {mode === "signup" && inviteToken && rosterPreview ? (
-            <div className="flex flex-col gap-1 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-xs text-neutral-700">
+            <div className="flex flex-col gap-1 rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-xs text-neutral-200">
               <p>
                 氏名: <span className="font-medium">{rosterPreview.display_name}</span>
               </p>
@@ -399,12 +402,12 @@ export default function AuthGate({
                   placeholder="氏名"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                 />
 
                 <div className="flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-500">区分</span>
-                  <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                  <span className="text-[11px] text-neutral-400">区分</span>
+                  <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                     {(
                       [
                         { v: "member", label: "部員" },
@@ -417,8 +420,8 @@ export default function AuthGate({
                         onClick={() => setSignupCategory(opt.v)}
                         className={`flex-1 rounded-md py-2 font-medium ${
                           signupCategory === opt.v
-                            ? "bg-white text-neutral-900 shadow"
-                            : "text-neutral-500"
+                            ? "bg-red-600 text-white shadow"
+                            : "text-neutral-400"
                         }`}
                       >
                         {opt.label}
@@ -430,10 +433,10 @@ export default function AuthGate({
                 {signupCategory === "member" && (
                   <>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-neutral-500">
+                      <span className="text-[11px] text-neutral-400">
                         所属拠点
                       </span>
-                      <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                      <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                         {locations.map((loc) => (
                           <button
                             key={loc}
@@ -441,8 +444,8 @@ export default function AuthGate({
                             onClick={() => setSignupLocation(loc)}
                             className={`flex-1 rounded-md py-2 font-medium ${
                               signupLocation === loc
-                                ? "bg-white text-neutral-900 shadow"
-                                : "text-neutral-500"
+                                ? "bg-red-600 text-white shadow"
+                                : "text-neutral-400"
                             }`}
                           >
                             {locationLabel[loc]}
@@ -452,13 +455,13 @@ export default function AuthGate({
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-neutral-500">
+                      <span className="text-[11px] text-neutral-400">
                         入学年（学年は自動計算されます）
                       </span>
                       <select
                         value={signupEntryYear}
                         onChange={(e) => setSignupEntryYear(e.target.value)}
-                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                       >
                         <option value="">選択してください</option>
                         {entryYearOptions.map((y) => (
@@ -470,10 +473,10 @@ export default function AuthGate({
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-neutral-500">
+                      <span className="text-[11px] text-neutral-400">
                         役職
                       </span>
-                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                         {(
                           Object.keys(roleChoiceLabel) as SignupRoleChoice[]
                         ).map((v) => (
@@ -483,8 +486,8 @@ export default function AuthGate({
                             onClick={() => setSignupRoleChoice(v)}
                             className={`rounded-md py-2 font-medium ${
                               signupRoleChoice === v
-                                ? "bg-white text-neutral-900 shadow"
-                                : "text-neutral-500"
+                                ? "bg-red-600 text-white shadow"
+                                : "text-neutral-400"
                             }`}
                           >
                             {roleChoiceLabel[v]}
@@ -503,7 +506,7 @@ export default function AuthGate({
             placeholder="メールアドレス"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
           />
           <input
             type="password"
@@ -512,18 +515,18 @@ export default function AuthGate({
             placeholder="パスワード（6文字以上）"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
           />
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
           >
             {mode === "signup" ? "登録する" : "ログイン"}
           </button>
         </form>
         {errorMsg && (
-          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
         )}
@@ -533,7 +536,7 @@ export default function AuthGate({
 
   if (!profile) {
     return (
-      <div className="p-8 text-sm text-neutral-400">
+      <div className="p-8 text-sm text-neutral-500">
         {errorMsg ?? "プロフィールを準備しています…"}
       </div>
     );

@@ -1113,26 +1113,29 @@ export default function MyPage({
     profile.entry_year != null ? `${currentGrade(profile.entry_year)}年` : null;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-base font-bold sm:text-lg">マイページ</h1>
-        <div className="flex flex-col items-end text-[11px] leading-tight text-neutral-500">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          マイページ
+        </h1>
+        <div className="flex flex-col items-end text-[11px] leading-tight text-neutral-400">
           <span>{formatFullDate(todayStr)}</span>
-          <span className="font-semibold text-neutral-700">
+          <span className="font-semibold text-neutral-200">
             {profile.display_name}
             {gradeLabel && ` ${gradeLabel}`}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
           <button
             onClick={() => router.push("/")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             掲示板に戻る
           </button>
           <button
             onClick={() => router.push("/team")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             チームページ
           </button>
@@ -1141,7 +1144,7 @@ export default function MyPage({
 
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
-          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
         )}
@@ -1149,11 +1152,11 @@ export default function MyPage({
         {/* 次の試合まで */}
         <section className="flex flex-col gap-2">
           {loadingMatch ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : nextMatch ? (
-            <div className="relative rounded-lg border border-red-200 bg-red-50 p-4 text-center">
-              <p className="text-xs text-red-600">次の試合【{nextMatch.name}】まで</p>
-              <p className="text-3xl font-bold text-red-700">
+            <div className="relative rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-center">
+              <p className="text-xs text-red-400">次の試合【{nextMatch.name}】まで</p>
+              <p className="text-3xl font-bold text-red-500">
                 あと{matchDays}日
               </p>
               <p className="text-[11px] text-red-500">
@@ -1169,7 +1172,7 @@ export default function MyPage({
                     type="date"
                     value={editMatchDate}
                     onChange={(e) => setEditMatchDate(e.target.value)}
-                    className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm"
+                    className="rounded-lg border border-red-800 bg-neutral-900 px-3 py-2 text-sm"
                     required
                   />
                   <div className="flex gap-2">
@@ -1182,14 +1185,14 @@ export default function MyPage({
                     <button
                       type="button"
                       onClick={handleDeleteMatch}
-                      className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 active:bg-red-100"
+                      className="rounded-lg border border-red-800 px-3 py-1.5 text-xs text-red-400 active:bg-red-900/40"
                     >
                       削除する
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingMatch(false)}
-                      className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                      className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
                     >
                       閉じる
                     </button>
@@ -1198,42 +1201,42 @@ export default function MyPage({
               ) : (
                 <button
                   onClick={startEditingMatch}
-                  className="absolute bottom-2 right-2 rounded border border-red-200 bg-white px-2 py-1 text-[10px] text-red-500 active:bg-red-100"
+                  className="absolute bottom-2 right-2 rounded border border-red-900/60 bg-neutral-900 px-2 py-1 text-[10px] text-red-500 active:bg-red-900/40"
                 >
                   編集
                 </button>
               )}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-center text-xs text-neutral-500">
               次の試合はまだ登録されていません。
             </p>
           )}
 
           <button
             onClick={() => setShowMatchForm((v) => !v)}
-            className="self-start text-[11px] font-medium text-red-700 active:text-red-900"
+            className="self-start text-[11px] font-medium text-red-400 active:text-red-900"
           >
             {showMatchForm ? "キャンセル" : "＋ 試合を登録する"}
           </button>
           {showMatchForm && (
             <form
               onSubmit={handleAddMatch}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3"
+              className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
             >
               <input
                 type="text"
                 placeholder="試合名（例：全日本学生選手権）"
                 value={newMatchName}
                 onChange={(e) => setNewMatchName(e.target.value)}
-                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
                 required
               />
               <input
                 type="date"
                 value={newMatchDate}
                 onChange={(e) => setNewMatchDate(e.target.value)}
-                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
                 required
               />
               <button
@@ -1247,11 +1250,12 @@ export default function MyPage({
         </section>
 
         {/* タスク一覧 */}
-        <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             タスク一覧
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             提出・完了するまで一覧から消えません。期日を過ぎたタスクは赤く強調表示されます。
           </p>
 
@@ -1263,7 +1267,7 @@ export default function MyPage({
                   className={`flex flex-col rounded-lg border p-3 text-sm ${
                     isOverdue
                       ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
-                      : "border-amber-200 bg-amber-50 text-left"
+                      : "border-amber-900/60 bg-amber-950/40 text-left"
                   }`}
                 >
                   <button
@@ -1271,42 +1275,42 @@ export default function MyPage({
                     className="flex w-full flex-col text-left"
                   >
                     <span
-                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-600"}`}
+                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
                     >
                       {isOverdue
                         ? `期限切れ！(${weightMaxTodo.deadline}まで)`
                         : `${weightMaxTodo.deadline}までに提出`}
                     </span>
                     <span
-                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-800"}`}
+                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
                     >
                       ウェイトMAX(BIG3)を提出する
                     </span>
                   </button>
                   {weightMaxTodoOpen && (
-                    <div className="mt-3 flex flex-col gap-2 rounded-lg bg-white p-3 text-neutral-800">
+                    <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
                       <div className="grid grid-cols-3 gap-2">
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           ベンチプレス(kg)
                           <input
                             type="number"
                             inputMode="decimal"
                             value={weightMaxBench}
                             onChange={(e) => setWeightMaxBench(e.target.value)}
-                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           スクワット(kg)
                           <input
                             type="number"
                             inputMode="decimal"
                             value={weightMaxSquat}
                             onChange={(e) => setWeightMaxSquat(e.target.value)}
-                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           デッドリフト(kg)
                           <input
                             type="number"
@@ -1315,7 +1319,7 @@ export default function MyPage({
                             onChange={(e) =>
                               setWeightMaxDeadlift(e.target.value)
                             }
-                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
                       </div>
@@ -1353,15 +1357,15 @@ export default function MyPage({
                   </span>
                 </button>
                 {isOpen && (
-                  <div className="mt-3 flex flex-col gap-2 rounded-lg bg-white p-3 text-neutral-800">
-                    <div className="flex gap-2 rounded-lg bg-neutral-200 p-1 text-xs">
+                  <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
+                    <div className="flex gap-2 rounded-lg bg-neutral-800 p-1 text-xs">
                       <button
                         type="button"
                         onClick={() => setProgressIsRecovered(true)}
                         className={`flex-1 rounded-md py-2 font-medium ${
                           progressIsRecovered
-                            ? "bg-white text-neutral-900 shadow"
-                            : "text-neutral-500"
+                            ? "bg-red-600 text-white shadow"
+                            : "text-neutral-400"
                         }`}
                       >
                         完治した
@@ -1371,8 +1375,8 @@ export default function MyPage({
                         onClick={() => setProgressIsRecovered(false)}
                         className={`flex-1 rounded-md py-2 font-medium ${
                           !progressIsRecovered
-                            ? "bg-white text-neutral-900 shadow"
-                            : "text-neutral-500"
+                            ? "bg-red-600 text-white shadow"
+                            : "text-neutral-400"
                         }`}
                       >
                         まだ完治していない
@@ -1381,7 +1385,7 @@ export default function MyPage({
 
                     {!progressIsRecovered && (
                       <>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           新しい完治見込み日
                           <input
                             type="date"
@@ -1389,10 +1393,10 @@ export default function MyPage({
                             onChange={(e) =>
                               setProgressRecoveryDate(e.target.value)
                             }
-                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           マット参加の可否
                           <select
                             value={progressMatParticipation}
@@ -1401,7 +1405,7 @@ export default function MyPage({
                                 e.target.value as "yes" | "no" | "conditional"
                               )
                             }
-                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           >
                             <option value="no">非</option>
                             <option value="yes">可</option>
@@ -1409,7 +1413,7 @@ export default function MyPage({
                           </select>
                         </label>
                         {progressMatParticipation === "conditional" && (
-                          <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                             条件の詳細
                             <textarea
                               value={progressMatDetail}
@@ -1417,13 +1421,13 @@ export default function MyPage({
                                 setProgressMatDetail(e.target.value)
                               }
                               rows={2}
-                              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                             />
                           </label>
                         )}
                       </>
                     )}
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                       理由・経過（自由記述）
                       <textarea
                         value={progressNote}
@@ -1434,7 +1438,7 @@ export default function MyPage({
                             ? "任意で記入できます"
                             : "完治していない理由や現在の状態など"
                         }
-                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                       />
                     </label>
                     <button
@@ -1451,15 +1455,15 @@ export default function MyPage({
           })}
 
           {!profile.home_location ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               所属拠点(多摩/大塚)がまだ設定されていません。設定されると、未報告の練習メニューがここに表示されます。
             </p>
           ) : loadingTodo ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : todoMenus.length === 0 ? (
             !weightMaxTodo &&
             injuries.filter(injuryNeedsProgressUpdate).length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
                 未報告の練習メニューはありません。
               </p>
             )
@@ -1474,17 +1478,17 @@ export default function MyPage({
                       className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
                         isOverdue
                           ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
-                          : "border-amber-200 bg-amber-50 active:bg-amber-100"
+                          : "border-amber-900/60 bg-amber-950/40 active:bg-amber-100"
                       }`}
                     >
                       <span
-                        className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-600"}`}
+                        className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
                       >
                         {locationLabel[m.location]}・実施報告 未提出
                         {isOverdue && "（期限切れ）"}
                       </span>
                       <span
-                        className={`font-medium ${isOverdue ? "text-white" : "text-neutral-800"}`}
+                        className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
                       >
                         {m.title || formatShortDateTime(m.date, m.start_time)}
                       </span>
@@ -1497,36 +1501,37 @@ export default function MyPage({
         </section>
 
         {/* 本日のトレーニングメニュー */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             本日のトレーニングメニュー
           </h2>
 
           {todayAbsentRecords.map((r) => (
             <div
               key={r.id}
-              className="rounded-lg border border-neutral-200 bg-neutral-50 p-3"
+              className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
             >
-              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
                 />
                 {trainingTypeLabel[r.type]}
-                <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
                   未実施報告の代替メニュー
                 </span>
               </div>
-              <p className="whitespace-pre-wrap text-sm text-neutral-800">
+              <p className="whitespace-pre-wrap text-sm text-neutral-100">
                 {r.content}
               </p>
             </div>
           ))}
 
           {loadingLog ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : (
             <div className="flex flex-col gap-2">
-              <div className="flex gap-1 rounded-lg bg-neutral-200 p-1 text-xs">
+              <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                 {(
                   Object.keys(trainingTypeLabel) as TrainingType[]
                 ).map((t) => (
@@ -1536,8 +1541,8 @@ export default function MyPage({
                     onClick={() => setTodayLogType(t)}
                     className={`flex-1 rounded-md py-2 font-medium ${
                       todayLogType === t
-                        ? "bg-white text-neutral-900 shadow"
-                        : "text-neutral-500"
+                        ? "bg-red-600 text-white shadow"
+                        : "text-neutral-400"
                     }`}
                   >
                     {trainingTypeLabel[t]}
@@ -1545,7 +1550,7 @@ export default function MyPage({
                 ))}
               </div>
               {todayLogType === "weight" && (
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                   タイトル（種目名など。任意）
                   <input
                     type="text"
@@ -1553,7 +1558,7 @@ export default function MyPage({
                     value={todayLogTitle}
                     onChange={(e) => setTodayLogTitle(e.target.value)}
                     placeholder="例：BIG3、上半身の日 など"
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                   />
                   <datalist id="weight-title-options">
                     {titleOptions.map((t) => (
@@ -1569,12 +1574,12 @@ export default function MyPage({
                   "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
                 }
                 rows={10}
-                className={`rounded-lg border px-3 py-2.5 text-sm ${
+                className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
                   !todayLog
-                    ? "border-neutral-300"
+                    ? "border-neutral-700 bg-neutral-900"
                     : todayLogType === "weight" && todayLogTitle.trim()
                       ? `${getTitleColor(todayLogTitle.trim()).border} ${getTitleColor(todayLogTitle.trim()).fill}`
-                      : "border-emerald-300 bg-emerald-50"
+                      : "border-emerald-800 bg-emerald-950/40"
                 }`}
               />
               <button
@@ -1585,7 +1590,7 @@ export default function MyPage({
                 {todayLog ? "更新する" : "保存する"}
               </button>
               {todayLog && (
-                <p className="text-[11px] text-emerald-600">
+                <p className="text-[11px] text-emerald-400">
                   保存済みです。内容を変えてから「更新する」を押すと上書きされます。
                 </p>
               )}
@@ -1594,17 +1599,18 @@ export default function MyPage({
         </section>
 
         {/* 直近のトレーニング記録 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             直近のトレーニング記録
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             過去にトレーニングを行った直近3日間のメニューが表示されます。それ以外のメニューは下の「記録カレンダー」から閲覧できます。
           </p>
           {loadingRecentLogs ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : recentLogs.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               まだ記録がありません。
             </p>
           ) : (
@@ -1615,28 +1621,28 @@ export default function MyPage({
                   <details
                     key={log.id}
                     className={`rounded-lg border p-3 ${
-                      titleColor ? titleColor.border : "border-neutral-200"
+                      titleColor ? titleColor.border : "border-neutral-800"
                     }`}
                   >
-                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-500">
+                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-400">
                       <span
                         className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[log.type]}`}
                       />
                       {formatMonthDay(log.date)}・{trainingTypeLabel[log.type]}
                       {log.title && (
                         <span
-                          className={`rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium ${titleColor?.text}`}
+                          className={`rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium ${titleColor?.text}`}
                         >
                           {log.title}
                         </span>
                       )}
                       {log.isAlternative && (
-                        <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
                           代替メニュー
                         </span>
                       )}
                     </summary>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-100">
                       {log.content || "(記録なし)"}
                     </p>
                   </details>
@@ -1647,8 +1653,9 @@ export default function MyPage({
         </section>
 
         {/* 記録カレンダー */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             記録カレンダー
           </h2>
           <div className="relative">
@@ -1669,13 +1676,13 @@ export default function MyPage({
                 onClick={handleCloseCalendarPopup}
               >
                 <div
-                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     onClick={handleCloseCalendarPopup}
                     aria-label="閉じる"
-                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-neutral-500 shadow active:bg-neutral-800"
                   >
                     ✕
                   </button>
@@ -1683,7 +1690,7 @@ export default function MyPage({
                     <button
                       onClick={() => handleShiftCalendarDate(-1)}
                       aria-label="前の記録"
-                      className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                      className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
                     >
                       ◀
                     </button>
@@ -1692,7 +1699,7 @@ export default function MyPage({
                     <button
                       onClick={() => handleShiftCalendarDate(1)}
                       aria-label="次の記録"
-                      className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                      className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
                     >
                       ▶
                     </button>
@@ -1701,15 +1708,15 @@ export default function MyPage({
                   {selectedCalendarDate &&
                     (calendarSchedule.get(selectedCalendarDate) ?? []).length >
                       0 && (
-                      <div className="mb-3 flex flex-col gap-1 rounded-lg bg-neutral-50 p-2">
-                        <p className="text-[10px] font-semibold text-neutral-400">
+                      <div className="mb-3 flex flex-col gap-1 rounded-lg bg-neutral-900 p-2">
+                        <p className="text-[10px] font-semibold text-neutral-500">
                           この日の予定
                         </p>
                         {(calendarSchedule.get(selectedCalendarDate) ?? []).map(
                           (s, idx) => (
                             <span
                               key={idx}
-                              className="flex items-center gap-1 text-xs text-neutral-600"
+                              className="flex items-center gap-1 text-xs text-neutral-300"
                             >
                               <span
                                 className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[s.type]}`}
@@ -1723,11 +1730,11 @@ export default function MyPage({
                     )}
 
                   {loadingPopupRecord ? (
-                    <p className="py-6 text-center text-xs text-neutral-400">
+                    <p className="py-6 text-center text-xs text-neutral-500">
                       読み込み中…
                     </p>
                   ) : popupRecord === null ? (
-                    <p className="py-6 text-center text-xs text-neutral-400">
+                    <p className="py-6 text-center text-xs text-neutral-500">
                       {formatMonthDay(selectedCalendarDate)}
                       のトレーニング記録はありません
                     </p>
@@ -1738,11 +1745,11 @@ export default function MyPage({
                           key={idx}
                           className={
                             idx > 0
-                              ? "border-t border-neutral-100 pt-4"
+                              ? "border-t border-neutral-800 pt-4"
                               : undefined
                           }
                         >
-                          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-400">
                             <span
                               className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
                             />
@@ -1750,18 +1757,18 @@ export default function MyPage({
                             {trainingTypeLabel[r.type]}
                             {r.title && (
                               <span
-                                className={`rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium ${getTitleColor(r.title).text}`}
+                                className={`rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium ${getTitleColor(r.title).text}`}
                               >
                                 {r.title}
                               </span>
                             )}
                             {r.isAlternative && (
-                              <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
                                 代替メニュー
                               </span>
                             )}
                           </div>
-                          <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                          <p className="whitespace-pre-wrap text-sm text-neutral-100">
                             {r.content || "(記録なし)"}
                           </p>
                         </div>
@@ -1774,22 +1781,26 @@ export default function MyPage({
           </div>
         </section>
 
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">目標</h2>
-          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            目標
+          </h2>
+          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
             準備中です。
           </p>
         </section>
 
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我の記録・復帰計画
           </h2>
 
           {!showInjuryForm && (
             <button
               onClick={handleStartNewInjury}
-              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700"
+              className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
             >
               ＋ 怪我を報告する
             </button>
@@ -1798,16 +1809,16 @@ export default function MyPage({
           {showInjuryForm && (
             <form
               onSubmit={handleSubmitInjury}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
+              className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3"
             >
               {editingInjuryId && (
-                <p className="rounded bg-neutral-50 p-2 text-[11px] text-neutral-500">
+                <p className="rounded bg-neutral-900 p-2 text-[11px] text-neutral-400">
                   編集では完治見込み日・次回通院日のみ変更できます。他の項目は変更できません。
                 </p>
               )}
               {!editingInjuryId && (
                 <>
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                     怪我の症状名
                     <input
                       type="text"
@@ -1815,10 +1826,10 @@ export default function MyPage({
                       value={injurySymptom}
                       onChange={(e) => setInjurySymptom(e.target.value)}
                       placeholder="例：前十字靭帯損傷、肉離れ など"
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                     発生場所（部位）
                     <input
                       type="text"
@@ -1826,41 +1837,41 @@ export default function MyPage({
                       value={injuryBodyPart}
                       onChange={(e) => setInjuryBodyPart(e.target.value)}
                       placeholder="例：右膝、左足首 など"
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                     発生時の詳細
                     <textarea
                       value={injuryDetail}
                       onChange={(e) => setInjuryDetail(e.target.value)}
                       rows={4}
                       placeholder="いつ・どんな状況で起きたかなど自由に記入してください"
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                     />
                   </label>
                 </>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                   完治見込み日
                   <input
                     type="date"
                     value={injuryRecoveryDate}
                     onChange={(e) => setInjuryRecoveryDate(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                   次回通院日
                   <input
                     type="date"
                     value={injuryNextHospital}
                     disabled={injuryNextHospitalUndetermined}
                     onChange={(e) => setInjuryNextHospital(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100"
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 disabled:bg-neutral-800"
                   />
-                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
                     <input
                       type="checkbox"
                       checked={injuryNextHospitalUndetermined}
@@ -1875,7 +1886,7 @@ export default function MyPage({
               </div>
               {!editingInjuryId && (
                 <>
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                     手術の可能性
                     <select
                       value={injurySurgery}
@@ -1884,14 +1895,14 @@ export default function MyPage({
                           e.target.value as "yes" | "no" | "unknown"
                         )
                       }
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                     >
                       <option value="unknown">未定</option>
                       <option value="yes">あり</option>
                       <option value="no">なし</option>
                     </select>
                   </label>
-                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                     マット参加の可否
                     <select
                       value={injuryMatParticipation}
@@ -1900,7 +1911,7 @@ export default function MyPage({
                           e.target.value as "yes" | "no" | "conditional"
                         )
                       }
-                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                     >
                       <option value="no">非</option>
                       <option value="yes">可</option>
@@ -1908,14 +1919,14 @@ export default function MyPage({
                     </select>
                   </label>
                   {injuryMatParticipation === "conditional" && (
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                       条件の詳細
                       <textarea
                         value={injuryMatDetail}
                         onChange={(e) => setInjuryMatDetail(e.target.value)}
                         rows={3}
                         placeholder="例：打ち込みのみ可、グランド以外可能など"
-                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                       />
                     </label>
                   )}
@@ -1935,7 +1946,7 @@ export default function MyPage({
                     resetInjuryForm();
                     setShowInjuryForm(false);
                   }}
-                  className="flex-1 rounded-lg border border-neutral-300 py-2.5 text-sm text-neutral-600"
+                  className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
                 >
                   キャンセル
                 </button>
@@ -1944,9 +1955,9 @@ export default function MyPage({
           )}
 
           {loadingInjuries ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : injuries.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               報告されている怪我はありません。
             </p>
           ) : (
@@ -1954,27 +1965,27 @@ export default function MyPage({
               {injuries.map((inj) => (
                 <li
                   key={inj.id}
-                  className="flex flex-col gap-1 rounded-lg border border-neutral-200 p-3 text-xs"
+                  className="flex flex-col gap-1 rounded-lg border border-neutral-800 p-3 text-xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-neutral-800">
+                    <span className="font-medium text-neutral-100">
                       {inj.symptom_name}（{inj.body_part}）
                       {inj.is_recovered && (
-                        <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        <span className="ml-1.5 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                           完治
                         </span>
                       )}
                     </span>
-                    <span className="text-[10px] text-neutral-400">
+                    <span className="text-[10px] text-neutral-500">
                       {formatMonthDay(toDateKey(new Date(inj.created_at)))}報告
                     </span>
                   </div>
                   {inj.detail && (
-                    <p className="whitespace-pre-wrap text-neutral-600">
+                    <p className="whitespace-pre-wrap text-neutral-300">
                       {inj.detail}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-3 text-[11px] text-neutral-500">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-neutral-400">
                     <span>
                       完治見込み:{" "}
                       {inj.expected_recovery_date
@@ -2002,26 +2013,26 @@ export default function MyPage({
                   </div>
                   {inj.mat_participation === "conditional" &&
                     inj.mat_participation_detail && (
-                      <p className="text-[11px] text-neutral-500">
+                      <p className="text-[11px] text-neutral-400">
                         条件: {inj.mat_participation_detail}
                       </p>
                     )}
                   {inj.progress_note && (
-                    <p className="rounded bg-neutral-50 p-2 text-[11px] text-neutral-500">
+                    <p className="rounded bg-neutral-900 p-2 text-[11px] text-neutral-400">
                       最新の経過: {inj.progress_note}
                     </p>
                   )}
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleStartEditInjury(inj)}
-                      className="text-[11px] font-medium text-neutral-500 underline"
+                      className="text-[11px] font-medium text-neutral-400 underline"
                     >
                       編集
                     </button>
                     {!inj.is_recovered && (
                       <button
                         onClick={() => handleMarkRecovered(inj.id)}
-                        className="text-[11px] font-medium text-emerald-600 underline"
+                        className="text-[11px] font-medium text-emerald-400 underline"
                       >
                         完治を報告する
                       </button>
@@ -2034,10 +2045,10 @@ export default function MyPage({
         </section>
 
         {/* ログアウト（一番下に配置） */}
-        <div className="border-t border-neutral-200 pt-4">
+        <div className="border-t border-neutral-800 pt-4">
           <button
             onClick={signOut}
-            className="w-full rounded-lg border border-neutral-300 py-3 text-sm font-medium text-neutral-600 active:bg-neutral-100"
+            className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
           >
             ログアウト
           </button>
@@ -2090,11 +2101,11 @@ function TrainingCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   return (
-    <div className="rounded-lg border border-neutral-200 p-3">
+    <div className="rounded-lg border border-neutral-800 p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => onCursorChange(new Date(year, month - 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
         >
           ＜
         </button>
@@ -2103,12 +2114,12 @@ function TrainingCalendar({
         </span>
         <button
           onClick={() => onCursorChange(new Date(year, month + 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
         >
           ＞
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
         {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
           <div key={w}>{w}</div>
         ))}
@@ -2127,12 +2138,12 @@ function TrainingCalendar({
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs active:bg-neutral-100 ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs active:bg-neutral-800 ${
                 isHighlighted
-                  ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
+                  ? "bg-amber-950/40 font-bold text-amber-400 ring-2 ring-amber-400"
                   : titleColor
-                    ? `${titleColor.fill} text-neutral-700`
-                    : "text-neutral-600"
+                    ? `${titleColor.fill} text-neutral-200`
+                    : "text-neutral-300"
               } ${
                 isMatchDay
                   ? "ring-2 ring-red-400"
@@ -2162,7 +2173,7 @@ function TrainingCalendar({
                   {(scheduleByDate.get(key) ?? []).map((s, idx) => (
                     <span
                       key={idx}
-                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500"
+                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-400"
                     >
                       <span
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
@@ -2181,7 +2192,7 @@ function TrainingCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2.5 w-2.5 rounded ring-1 ring-neutral-900" />
           今日
