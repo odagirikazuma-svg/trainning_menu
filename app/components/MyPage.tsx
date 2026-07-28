@@ -561,7 +561,15 @@ export default function MyPage({
     if (!injurySymptom.trim() || !injuryBodyPart.trim()) return;
     setSavingInjury(true);
 
-    const payload = {
+    const editPayload = {
+      expected_recovery_date: injuryRecoveryDate || null,
+      next_hospital_date: injuryNextHospitalUndetermined
+        ? null
+        : injuryNextHospital || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const newPayload = {
       team_id: profile.team_id,
       author_id: profile.id,
       symptom_name: injurySymptom.trim(),
@@ -583,9 +591,9 @@ export default function MyPage({
     const { error } = editingInjuryId
       ? await supabase
           .from("injuries")
-          .update(payload)
+          .update(editPayload)
           .eq("id", editingInjuryId)
-      : await supabase.from("injuries").insert(payload);
+      : await supabase.from("injuries").insert(newPayload);
 
     if (error) {
       setErrorMsg(error.message);
@@ -597,9 +605,16 @@ export default function MyPage({
     setSavingInjury(false);
   }
 
-  async function handleDeleteInjury(id: string) {
-    if (!window.confirm("この怪我の報告を削除しますか？")) return;
-    const { error } = await supabase.from("injuries").delete().eq("id", id);
+  async function handleMarkRecovered(id: string) {
+    if (!window.confirm("この怪我を「完治」として報告しますか？")) return;
+    const { error } = await supabase
+      .from("injuries")
+      .update({
+        is_recovered: true,
+        progress_updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
     if (error) {
       setErrorMsg(error.message);
     } else {
@@ -1785,38 +1800,47 @@ export default function MyPage({
               onSubmit={handleSubmitInjury}
               className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
             >
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                怪我の症状名
-                <input
-                  type="text"
-                  required
-                  value={injurySymptom}
-                  onChange={(e) => setInjurySymptom(e.target.value)}
-                  placeholder="例：前十字靭帯損傷、肉離れ など"
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                発生場所（部位）
-                <input
-                  type="text"
-                  required
-                  value={injuryBodyPart}
-                  onChange={(e) => setInjuryBodyPart(e.target.value)}
-                  placeholder="例：右膝、左足首 など"
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                発生時の詳細
-                <textarea
-                  value={injuryDetail}
-                  onChange={(e) => setInjuryDetail(e.target.value)}
-                  rows={4}
-                  placeholder="いつ・どんな状況で起きたかなど自由に記入してください"
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                />
-              </label>
+              {editingInjuryId && (
+                <p className="rounded bg-neutral-50 p-2 text-[11px] text-neutral-500">
+                  編集では完治見込み日・次回通院日のみ変更できます。他の項目は変更できません。
+                </p>
+              )}
+              {!editingInjuryId && (
+                <>
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    怪我の症状名
+                    <input
+                      type="text"
+                      required
+                      value={injurySymptom}
+                      onChange={(e) => setInjurySymptom(e.target.value)}
+                      placeholder="例：前十字靭帯損傷、肉離れ など"
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    発生場所（部位）
+                    <input
+                      type="text"
+                      required
+                      value={injuryBodyPart}
+                      onChange={(e) => setInjuryBodyPart(e.target.value)}
+                      placeholder="例：右膝、左足首 など"
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    発生時の詳細
+                    <textarea
+                      value={injuryDetail}
+                      onChange={(e) => setInjuryDetail(e.target.value)}
+                      rows={4}
+                      placeholder="いつ・どんな状況で起きたかなど自由に記入してください"
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                </>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
                   完治見込み日
@@ -1849,49 +1873,53 @@ export default function MyPage({
                   </label>
                 </label>
               </div>
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                手術の可能性
-                <select
-                  value={injurySurgery}
-                  onChange={(e) =>
-                    setInjurySurgery(
-                      e.target.value as "yes" | "no" | "unknown"
-                    )
-                  }
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="unknown">未定</option>
-                  <option value="yes">あり</option>
-                  <option value="no">なし</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                マット参加の可否
-                <select
-                  value={injuryMatParticipation}
-                  onChange={(e) =>
-                    setInjuryMatParticipation(
-                      e.target.value as "yes" | "no" | "conditional"
-                    )
-                  }
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="no">非</option>
-                  <option value="yes">可</option>
-                  <option value="conditional">条件付きで可</option>
-                </select>
-              </label>
-              {injuryMatParticipation === "conditional" && (
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
-                  条件の詳細
-                  <textarea
-                    value={injuryMatDetail}
-                    onChange={(e) => setInjuryMatDetail(e.target.value)}
-                    rows={3}
-                    placeholder="例：テイクダウンのみ可、時間短縮など"
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                  />
-                </label>
+              {!editingInjuryId && (
+                <>
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    手術の可能性
+                    <select
+                      value={injurySurgery}
+                      onChange={(e) =>
+                        setInjurySurgery(
+                          e.target.value as "yes" | "no" | "unknown"
+                        )
+                      }
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="unknown">未定</option>
+                      <option value="yes">あり</option>
+                      <option value="no">なし</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                    マット参加の可否
+                    <select
+                      value={injuryMatParticipation}
+                      onChange={(e) =>
+                        setInjuryMatParticipation(
+                          e.target.value as "yes" | "no" | "conditional"
+                        )
+                      }
+                      className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="no">非</option>
+                      <option value="yes">可</option>
+                      <option value="conditional">条件付きで可</option>
+                    </select>
+                  </label>
+                  {injuryMatParticipation === "conditional" && (
+                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                      条件の詳細
+                      <textarea
+                        value={injuryMatDetail}
+                        onChange={(e) => setInjuryMatDetail(e.target.value)}
+                        rows={3}
+                        placeholder="例：打ち込みのみ可、グランド以外可能など"
+                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                  )}
+                </>
               )}
               <div className="flex gap-2">
                 <button
@@ -1990,12 +2018,14 @@ export default function MyPage({
                     >
                       編集
                     </button>
-                    <button
-                      onClick={() => handleDeleteInjury(inj.id)}
-                      className="text-[11px] font-medium text-red-500 underline"
-                    >
-                      削除
-                    </button>
+                    {!inj.is_recovered && (
+                      <button
+                        onClick={() => handleMarkRecovered(inj.id)}
+                        className="text-[11px] font-medium text-emerald-600 underline"
+                      >
+                        完治を報告する
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

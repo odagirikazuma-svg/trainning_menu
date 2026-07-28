@@ -334,6 +334,7 @@ export default function CoachAdminPage({
   const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
     null
   );
+  const [showPastInjuries, setShowPastInjuries] = useState(false);
 
   async function handleUpdateRole(
     memberId: string,
@@ -815,7 +816,7 @@ export default function CoachAdminPage({
             怪我人一覧
           </h2>
           <p className="text-[11px] text-neutral-400">
-            部員がマイページから報告した怪我の一覧です。タップすると詳細が開きます。
+            部員がマイページから報告した怪我の一覧です。タップすると詳細が開きます。完治してから1週間が経過した怪我は、下の「過去の怪我情報を見る」から確認できます。
           </p>
           {loadingInjuries ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
@@ -824,94 +825,93 @@ export default function CoachAdminPage({
               報告されている怪我はありません。
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {injuries.map((inj) => {
-                const isOpen = expandedInjuryId === inj.id;
+            <>
+              {(() => {
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                const activeInjuries = injuries.filter((inj) => {
+                  if (!inj.is_recovered) return true;
+                  if (!inj.progress_updated_at) return true;
+                  return new Date(inj.progress_updated_at) >= oneWeekAgo;
+                });
+
+                if (activeInjuries.length === 0) {
+                  return (
+                    <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+                      現在対応中の怪我はありません。
+                    </p>
+                  );
+                }
+
                 return (
-                  <li
-                    key={inj.id}
-                    className="rounded-lg border border-neutral-200"
-                  >
-                    <button
-                      onClick={() =>
-                        setExpandedInjuryId(isOpen ? null : inj.id)
-                      }
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
-                    >
-                      <span className="flex flex-col">
-                        <span className="font-medium text-neutral-800">
-                          {inj.author?.display_name ?? "不明"}
-                        </span>
-                        <span className="text-neutral-500">
-                          {inj.symptom_name}（{inj.body_part}）
-                          {inj.is_recovered && (
-                            <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                              完治
-                            </span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="text-neutral-300">
-                        {isOpen ? "︿" : "﹀"}
-                      </span>
-                    </button>
-                    {isOpen && (
-                      <div className="flex flex-col gap-1 border-t border-neutral-100 px-3 py-2.5 text-xs text-neutral-600">
-                        {inj.detail && (
-                          <p className="whitespace-pre-wrap">{inj.detail}</p>
-                        )}
-                        <p>
-                          完治見込み日:{" "}
-                          {inj.expected_recovery_date
-                            ? formatMonthDay(inj.expected_recovery_date)
-                            : "未定"}
-                        </p>
-                        <p>
-                          次回通院日:{" "}
-                          {inj.next_hospital_date
-                            ? formatMonthDay(inj.next_hospital_date)
-                            : "未定"}
-                        </p>
-                        <p>
-                          手術の可能性:{" "}
-                          {inj.surgery_possibility === "yes"
-                            ? "あり"
-                            : inj.surgery_possibility === "no"
-                              ? "なし"
-                              : "未定"}
-                        </p>
-                        <p>
-                          マット参加の可否:{" "}
-                          {matParticipationLabel[inj.mat_participation]}
-                        </p>
-                        {inj.mat_participation === "conditional" &&
-                          inj.mat_participation_detail && (
-                            <p>条件: {inj.mat_participation_detail}</p>
-                          )}
-                        {inj.progress_note && (
-                          <p className="rounded bg-neutral-50 p-2">
-                            最新の経過報告: {inj.progress_note}
-                          </p>
-                        )}
-                        {inj.progress_updated_at && (
-                          <p className="text-[10px] text-neutral-400">
-                            経過報告日:{" "}
-                            {formatMonthDay(
-                              toDateKey(new Date(inj.progress_updated_at))
-                            )}
-                          </p>
-                        )}
-                        <p className="text-[10px] text-neutral-400">
-                          報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
-                        </p>
-                      </div>
-                    )}
-                  </li>
+                  <ul className="flex flex-col gap-2">
+                    {activeInjuries.map((inj) => (
+                      <InjuryListItem
+                        key={inj.id}
+                        inj={inj}
+                        isOpen={expandedInjuryId === inj.id}
+                        onToggle={() =>
+                          setExpandedInjuryId(
+                            expandedInjuryId === inj.id ? null : inj.id
+                          )
+                        }
+                      />
+                    ))}
+                  </ul>
                 );
-              })}
-            </ul>
+              })()}
+              <button
+                onClick={() => setShowPastInjuries(true)}
+                className="self-end text-xs font-medium text-neutral-500 underline"
+              >
+                過去の怪我情報を見る
+              </button>
+            </>
           )}
         </section>
+
+        {showPastInjuries && (
+          <div
+            className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+            onClick={() => setShowPastInjuries(false)}
+          >
+            <div
+              className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-lg bg-white p-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowPastInjuries(false)}
+                aria-label="閉じる"
+                className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+              >
+                ✕
+              </button>
+              <h3 className="text-sm font-semibold text-neutral-700">
+                過去の怪我情報
+              </h3>
+              {injuries.length === 0 ? (
+                <p className="text-xs text-neutral-400">
+                  報告されている怪我はありません。
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {injuries.map((inj) => (
+                    <InjuryListItem
+                      key={inj.id}
+                      inj={inj}
+                      isOpen={expandedInjuryId === inj.id}
+                      onToggle={() =>
+                        setExpandedInjuryId(
+                          expandedInjuryId === inj.id ? null : inj.id
+                        )
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 部員の役職を編集 */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
@@ -1274,5 +1274,91 @@ export default function CoachAdminPage({
         </div>
       </div>
     </div>
+  );
+}
+
+function InjuryListItem({
+  inj,
+  isOpen,
+  onToggle,
+}: {
+  inj: InjuryRow;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li
+      className={`rounded-lg border ${
+        inj.is_recovered
+          ? "border-emerald-200 bg-emerald-50"
+          : "border-neutral-200"
+      }`}
+    >
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-black/5"
+      >
+        <span className="flex flex-col">
+          <span className="font-medium text-neutral-800">
+            {inj.author?.display_name ?? "不明"}
+          </span>
+          <span className="text-neutral-500">
+            {inj.symptom_name}（{inj.body_part}）
+            {inj.is_recovered && (
+              <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                完治
+              </span>
+            )}
+          </span>
+        </span>
+        <span className="text-neutral-300">{isOpen ? "︿" : "﹀"}</span>
+      </button>
+      {isOpen && (
+        <div className="flex flex-col gap-1 border-t border-neutral-100 px-3 py-2.5 text-xs text-neutral-600">
+          {inj.detail && <p className="whitespace-pre-wrap">{inj.detail}</p>}
+          <p>
+            完治見込み日:{" "}
+            {inj.expected_recovery_date
+              ? formatMonthDay(inj.expected_recovery_date)
+              : "未定"}
+          </p>
+          <p>
+            次回通院日:{" "}
+            {inj.next_hospital_date
+              ? formatMonthDay(inj.next_hospital_date)
+              : "未定"}
+          </p>
+          <p>
+            手術の可能性:{" "}
+            {inj.surgery_possibility === "yes"
+              ? "あり"
+              : inj.surgery_possibility === "no"
+                ? "なし"
+                : "未定"}
+          </p>
+          <p>
+            マット参加の可否: {matParticipationLabel[inj.mat_participation]}
+          </p>
+          {inj.mat_participation === "conditional" &&
+            inj.mat_participation_detail && (
+              <p>条件: {inj.mat_participation_detail}</p>
+            )}
+          {inj.progress_note && (
+            <p className="rounded bg-white/60 p-2">
+              最新の経過報告: {inj.progress_note}
+            </p>
+          )}
+          {inj.progress_updated_at && (
+            <p className="text-[10px] text-neutral-400">
+              経過報告日:{" "}
+              {formatMonthDay(toDateKey(new Date(inj.progress_updated_at)))}
+            </p>
+          )}
+          <p className="text-[10px] text-neutral-400">
+            報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
+          </p>
+        </div>
+      )}
+    </li>
   );
 }

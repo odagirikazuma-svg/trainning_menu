@@ -645,3 +645,8 @@ alter table injuries add column if not exists mat_participation_detail text;
 alter table injuries add column if not exists is_recovered boolean not null default false;
 alter table injuries add column if not exists progress_note text;
 alter table injuries add column if not exists progress_updated_at timestamptz;
+
+-- ============================================
+-- 追加: 一度報告した怪我は削除できないようにする（編集のみ許可）
+-- ============================================
+drop policy if exists "injuries_delete_self" on injuries;
