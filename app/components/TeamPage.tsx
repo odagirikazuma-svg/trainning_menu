@@ -6,7 +6,6 @@ import { createClient } from "../lib/supabase/client";
 import {
   currentGrade,
   DayType,
-  dayTypeFillColor,
   dayTypeLabel,
   Location,
   locationLabel,
@@ -18,6 +17,12 @@ import {
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
+// ダークテーマ用の合宿/試合バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
+const dayTypeFillColorDark: Record<DayType, string> = {
+  practice: "",
+  camp: "bg-pink-950/40 text-pink-400",
+  match: "bg-red-950/40 text-red-400",
+};
 type MemberRow = {
   id: string;
   display_name: string;
@@ -915,24 +920,24 @@ export default function TeamPage({
     previous: number | null | undefined
   ): { text: string; className: string } {
     if (current == null) {
-      return { text: "-", className: "text-neutral-300" };
+      return { text: "-", className: "text-neutral-600" };
     }
     if (previous == null) {
-      return { text: `${current}`, className: "text-neutral-700" };
+      return { text: `${current}`, className: "text-neutral-200" };
     }
     const diff = current - previous;
     if (diff === 0) {
-      return { text: `${current}（±0）`, className: "text-neutral-500" };
+      return { text: `${current}（±0）`, className: "text-neutral-400" };
     }
     if (diff > 0) {
       return {
         text: `${current}（+${diff}）`,
-        className: "font-semibold text-blue-600",
+        className: "font-semibold text-blue-400",
       };
     }
     return {
       text: `${current}（${diff}）`,
-      className: "font-semibold text-red-600",
+      className: "font-semibold text-red-400",
     };
   }
 
@@ -951,19 +956,22 @@ export default function TeamPage({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col text-neutral-900">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-base font-bold sm:text-lg">チームページ</h1>
-        <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          チームページ
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
           <button
             onClick={() => router.push("/mypage")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             {profile.role === "coach" ? "管理ページ" : "マイページ"}
           </button>
           <button
             onClick={() => router.push("/")}
-            className="rounded border border-neutral-300 px-2.5 py-1.5 active:bg-neutral-100"
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
           >
             掲示板に戻る
           </button>
@@ -972,14 +980,15 @@ export default function TeamPage({
 
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
-          <p className="rounded bg-red-50 p-2 text-xs text-red-600">
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
         )}
 
         {/* 月間の練習スケジュール */}
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-700">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             月間の練習スケジュール
           </h2>
           <div className="flex gap-2">
@@ -989,8 +998,8 @@ export default function TeamPage({
                 onClick={() => setScheduleLocation(loc)}
                 className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
                   scheduleLocation === loc
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-300 text-neutral-500 active:bg-neutral-100"
+                    ? "border-red-600 bg-red-600 text-white"
+                    : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
                 }`}
               >
                 {locationLabel[loc]}
@@ -1000,49 +1009,49 @@ export default function TeamPage({
           {isCoach && (
             <button
               onClick={handleOpenBulk}
-              className="self-start text-xs font-medium text-neutral-500 underline"
+              className="self-start text-xs font-medium text-neutral-400 underline"
             >
               期間でまとめて設定する（オフ・合宿・試合）
             </button>
           )}
           {bulkOpen && (
-            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3">
+            <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-neutral-600">
+                <p className="text-xs font-semibold text-neutral-300">
                   {locationLabel[scheduleLocation]}の期間をまとめて設定
                 </p>
                 <button
                   onClick={() => setBulkOpen(false)}
                   aria-label="閉じる"
-                  className="text-neutral-400"
+                  className="text-neutral-500"
                 >
                   ✕
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col text-[11px] text-neutral-500">
+                <label className="flex flex-col text-[11px] text-neutral-400">
                   開始日
                   <input
                     type="date"
                     value={bulkStartDate}
                     onChange={(e) => setBulkStartDate(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                   />
                 </label>
-                <label className="flex flex-col text-[11px] text-neutral-500">
+                <label className="flex flex-col text-[11px] text-neutral-400">
                   終了日
                   <input
                     type="date"
                     value={bulkEndDate}
                     onChange={(e) => setBulkEndDate(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                   />
                 </label>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-neutral-500">区分</span>
-                <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-200 p-1 text-[11px]">
+                <span className="text-[11px] text-neutral-400">区分</span>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
                   {(
                     [
                       { v: "off", label: "オフ" },
@@ -1056,8 +1065,8 @@ export default function TeamPage({
                       onClick={() => setBulkCategory(opt.v)}
                       className={`rounded-md py-2 font-medium ${
                         bulkCategory === opt.v
-                          ? "bg-white text-neutral-900 shadow"
-                          : "text-neutral-500"
+                          ? "bg-red-600 text-white shadow"
+                          : "text-neutral-400"
                       }`}
                     >
                       {opt.label}
@@ -1076,12 +1085,12 @@ export default function TeamPage({
                       ? "合宿名（例：夏合宿・山梨合宿）"
                       : "試合名（例：インカレ・県大会）"
                   }
-                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                 />
               )}
 
               {(bulkCategory === "camp" || bulkCategory === "match") && (
-                <label className="flex items-center gap-2 text-xs text-neutral-600">
+                <label className="flex items-center gap-2 text-xs text-neutral-300">
                   <input
                     type="checkbox"
                     checked={bulkIncludeSessions}
@@ -1096,10 +1105,10 @@ export default function TeamPage({
                   {bulkSessions.map((s, idx) => (
                     <div
                       key={idx}
-                      className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-2.5"
+                      className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-neutral-500">
+                        <span className="text-[11px] font-semibold text-neutral-400">
                           第{idx + 1}セッション
                         </span>
                         {bulkSessions.length > 1 && (
@@ -1119,7 +1128,7 @@ export default function TeamPage({
                               type: e.target.value as SessionType,
                             })
                           }
-                          className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                         >
                           <option value="mat">マット</option>
                           <option value="running">ラン</option>
@@ -1135,7 +1144,7 @@ export default function TeamPage({
                   {bulkSessions.length < 2 && (
                     <button
                       onClick={addBulkSession}
-                      className="self-start text-xs font-medium text-neutral-600"
+                      className="self-start text-xs font-medium text-neutral-300"
                     >
                       ＋ セッションを追加
                     </button>
@@ -1147,13 +1156,13 @@ export default function TeamPage({
                 <button
                   onClick={handleSaveBulk}
                   disabled={savingBulk}
-                  className="flex-1 rounded-lg bg-neutral-900 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
                 >
                   {savingBulk ? "設定中…" : "この内容でまとめて設定する"}
                 </button>
               </div>
               {bulkResult && (
-                <p className="rounded bg-emerald-50 p-2 text-[11px] text-emerald-700">
+                <p className="rounded bg-emerald-950/40 p-2 text-[11px] text-emerald-400">
                   {bulkResult}
                 </p>
               )}
@@ -1175,13 +1184,13 @@ export default function TeamPage({
                 onClick={handleCloseScheduleDetail}
               >
                 <div
-                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 bg-white p-4 shadow-lg"
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     onClick={handleCloseScheduleDetail}
                     aria-label="閉じる"
-                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-400 shadow active:bg-neutral-100"
+                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-neutral-500 shadow active:bg-neutral-800"
                   >
                     ✕
                   </button>
@@ -1190,14 +1199,14 @@ export default function TeamPage({
                       <button
                         onClick={() => handleShiftScheduleDate(-1)}
                         aria-label="前の日"
-                        className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                        className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
                       >
                         ◀
                       </button>
                       <button
                         onClick={() => handleShiftScheduleDate(1)}
                         aria-label="次の日"
-                        className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm text-neutral-500 shadow active:bg-neutral-100"
+                        className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
                       >
                         ▶
                       </button>
@@ -1206,15 +1215,15 @@ export default function TeamPage({
 
                   {editingSchedule ? (
                     <div className="flex flex-col gap-3 pr-5">
-                      <h3 className="text-sm font-bold text-neutral-800">
+                      <h3 className="text-sm font-bold text-neutral-100">
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(selectedScheduleDate)}の時間割
                       </h3>
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] text-neutral-500">
+                        <span className="text-[11px] text-neutral-400">
                           区分
                         </span>
-                        <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-200 p-1 text-[11px]">
+                        <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
                           {(
                             [
                               { v: "off", label: "オフ" },
@@ -1229,8 +1238,8 @@ export default function TeamPage({
                               onClick={() => setEditCategory(opt.v)}
                               className={`rounded-md py-2 font-medium ${
                                 editCategory === opt.v
-                                  ? "bg-white text-neutral-900 shadow"
-                                  : "text-neutral-500"
+                                  ? "bg-red-600 text-white shadow"
+                                  : "text-neutral-400"
                               }`}
                             >
                               {opt.label}
@@ -1249,12 +1258,12 @@ export default function TeamPage({
                               ? "合宿名（例：夏合宿・山梨合宿）"
                               : "試合名（例：インカレ・県大会）"
                           }
-                          className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                         />
                       )}
 
                       {(editCategory === "camp" || editCategory === "match") && (
-                        <label className="flex items-center gap-2 text-xs text-neutral-600">
+                        <label className="flex items-center gap-2 text-xs text-neutral-300">
                           <input
                             type="checkbox"
                             checked={editIncludeSessions}
@@ -1273,10 +1282,10 @@ export default function TeamPage({
                           {editSessions.map((s, idx) => (
                             <div
                               key={idx}
-                              className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-2.5"
+                              className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
                             >
                               <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-neutral-500">
+                                <span className="text-[11px] font-semibold text-neutral-400">
                                   第{idx + 1}セッション
                                 </span>
                                 {editSessions.length > 1 && (
@@ -1296,7 +1305,7 @@ export default function TeamPage({
                                       type: e.target.value as SessionType,
                                     })
                                   }
-                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                                 >
                                   <option value="mat">マット</option>
                                   <option value="running">ラン</option>
@@ -1309,7 +1318,7 @@ export default function TeamPage({
                                   }
                                 />
                               </div>
-                              <label className="flex items-center gap-2 text-[11px] text-neutral-500">
+                              <label className="flex items-center gap-2 text-[11px] text-neutral-400">
                                 <input
                                   type="checkbox"
                                   checked={s.isJoint}
@@ -1329,7 +1338,7 @@ export default function TeamPage({
                                       jointLocation: e.target.value as Location,
                                     })
                                   }
-                                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                                 >
                                   {locations.map((loc) => (
                                     <option key={loc} value={loc}>
@@ -1343,7 +1352,7 @@ export default function TeamPage({
                           {editSessions.length < 2 && (
                             <button
                               onClick={addEditSession}
-                              className="self-start text-xs font-medium text-neutral-600"
+                              className="self-start text-xs font-medium text-neutral-300"
                             >
                               ＋ セッションを追加
                             </button>
@@ -1355,25 +1364,25 @@ export default function TeamPage({
                         <button
                           onClick={handleSaveSchedule}
                           disabled={savingSchedule}
-                          className="flex-1 rounded-lg bg-neutral-900 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+                          className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
                         >
                           保存する
                         </button>
                         <button
                           onClick={() => setEditingSchedule(false)}
-                          className="flex-1 rounded-lg border border-neutral-300 py-2 text-xs text-neutral-600"
+                          className="flex-1 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-300"
                         >
                           キャンセル
                         </button>
                       </div>
                     </div>
                   ) : loadingDayDetail ? (
-                    <p className="py-6 text-center text-xs text-neutral-400">
+                    <p className="py-6 text-center text-xs text-neutral-500">
                       読み込み中…
                     </p>
                   ) : dayDetail === null ? (
                     <div className="flex flex-col items-center gap-3 py-6 text-center">
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-xs text-neutral-500">
                         {locationLabel[scheduleLocation]}の
                         {formatMonthDay(selectedScheduleDate)}
                         はまだ時間割が決まっていません
@@ -1381,25 +1390,25 @@ export default function TeamPage({
                       {isCoach && (
                         <button
                           onClick={handleStartEditSchedule}
-                          className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white active:bg-neutral-700"
+                          className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white active:bg-red-700"
                         >
                           時間割を設定する
                         </button>
                       )}
                     </div>
                   ) : !dayDetail ? (
-                    <p className="py-6 text-center text-xs text-neutral-400">
+                    <p className="py-6 text-center text-xs text-neutral-500">
                       読み込み中…
                     </p>
                   ) : dayDetail.is_off ? (
                     <div className="flex flex-col items-center gap-3 py-6 text-center">
-                      <p className="text-sm font-bold text-neutral-600">
+                      <p className="text-sm font-bold text-neutral-300">
                         {formatMonthDay(dayDetail.date)}はオフです
                       </p>
                       {isCoach && (
                         <button
                           onClick={handleStartEditSchedule}
-                          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                          className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
                         >
                           時間割を編集する
                         </button>
@@ -1407,14 +1416,14 @@ export default function TeamPage({
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3 pr-5">
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-xs text-neutral-500">
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(dayDetail.date)}
                       </p>
                       {(dayDetail.day_type === "camp" ||
                         dayDetail.day_type === "match") && (
                         <span
-                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColor[dayDetail.day_type]}`}
+                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
                         >
                           {dayTypeLabel[dayDetail.day_type]}
                           {dayDetail.event_name && `：${dayDetail.event_name}`}
@@ -1422,13 +1431,13 @@ export default function TeamPage({
                       )}
                       {dayDetail.sessions.length === 0 && (
                         <div className="flex flex-col items-start gap-2 py-2">
-                          <p className="text-xs text-neutral-400">
+                          <p className="text-xs text-neutral-500">
                             この日は練習セクションの設定はありません。
                           </p>
                           {isCoach && (
                             <button
                               onClick={handleStartEditSchedule}
-                              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
                             >
                               時間割を編集する
                             </button>
@@ -1438,9 +1447,9 @@ export default function TeamPage({
                       {dayDetail.sessions.map((s) => (
                         <div
                           key={s.id}
-                          className="rounded-lg border border-neutral-200 p-3"
+                          className="rounded-lg border border-neutral-800 p-3"
                         >
-                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
                             <span
                               className={`inline-block h-2 w-2 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                             />
@@ -1449,7 +1458,7 @@ export default function TeamPage({
                             {s.start_time.slice(0, 5)}〜
                           </div>
                           {s.is_joint && (
-                            <p className="mb-2 rounded bg-purple-50 px-2 py-1 text-[11px] text-purple-700">
+                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
                               全体練習（
                               {locationLabel[s.joint_location ?? scheduleLocation]}
                               で実施）
@@ -1457,12 +1466,12 @@ export default function TeamPage({
                           )}
                           {s.session_type === "mat" ? (
                             matMenuDetail === undefined ? (
-                              <p className="text-xs text-neutral-400">
+                              <p className="text-xs text-neutral-500">
                                 読み込み中…
                               </p>
                             ) : matMenuDetail === null ? (
                               <div className="flex flex-col items-start gap-2">
-                                <p className="text-xs text-neutral-400">
+                                <p className="text-xs text-neutral-500">
                                   このセッションの練習メニューはまだ掲示板に投稿されていません
                                 </p>
                                 {canEditMatMenu &&
@@ -1474,7 +1483,7 @@ export default function TeamPage({
                                       onClick={() =>
                                         handleGoToMatMenu(s.start_time)
                                       }
-                                      className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-700"
+                                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
                                     >
                                       このセッションの練習メニューを作成する
                                     </button>
@@ -1485,7 +1494,7 @@ export default function TeamPage({
                                 <h4 className="mb-1 text-sm font-bold">
                                   {matMenuDetail.title || "練習メニュー"}
                                 </h4>
-                                <p className="whitespace-pre-wrap text-sm text-neutral-800">
+                                <p className="whitespace-pre-wrap text-sm text-neutral-100">
                                   {matMenuDetail.content}
                                 </p>
                                 {canEditMatMenu &&
@@ -1495,7 +1504,7 @@ export default function TeamPage({
                                   ) && (
                                     <button
                                       onClick={() => handleGoToMatMenu()}
-                                      className="mt-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+                                      className="mt-2 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
                                     >
                                       掲示板で編集する
                                     </button>
@@ -1503,7 +1512,7 @@ export default function TeamPage({
                               </div>
                             )
                           ) : (
-                            <p className="text-xs text-neutral-500">
+                            <p className="text-xs text-neutral-400">
                               各自申告制です。実施状況はマイページの「今日のトレーニングメニュー」から記録できます。
                             </p>
                           )}
@@ -1512,7 +1521,7 @@ export default function TeamPage({
                       {isCoach && (
                         <button
                           onClick={handleStartEditSchedule}
-                          className="self-start text-xs font-medium text-neutral-500 underline"
+                          className="self-start text-xs font-medium text-neutral-400 underline"
                         >
                           時間割を編集する
                         </button>
@@ -1526,15 +1535,18 @@ export default function TeamPage({
         </section>
 
         {/* 部員一覧 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">部員一覧</h2>
-          <p className="text-[11px] text-neutral-400">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            部員一覧
+          </h2>
+          <p className="text-[11px] text-neutral-500">
             タップするとその部員のマイページを閲覧できます。「未提出あり」は直近1週間で実施報告・未実施報告のどちらも提出されていない練習日があることを示し、その日付も表示されます。
           </p>
           {loadingMembers ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
           ) : (
@@ -1548,7 +1560,7 @@ export default function TeamPage({
                 ];
                 return (
                   <div key={group.label} className="flex flex-col gap-1.5">
-                    <h3 className="text-[11px] font-semibold text-neutral-400">
+                    <h3 className="text-[11px] font-semibold text-neutral-500">
                       {group.label}（{group.members.length}人）
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
@@ -1563,16 +1575,16 @@ export default function TeamPage({
                             key={col.label}
                             className="flex flex-col gap-1"
                           >
-                            <p className="text-[10px] text-neutral-400">
+                            <p className="text-[10px] text-neutral-500">
                               {col.label}（{colMembers.length}人）
                             </p>
-                            <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-200">
+                            <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-800">
                               {colMembers.length === 0 ? (
-                                <p className="p-2 text-[10px] text-neutral-300">
+                                <p className="p-2 text-[10px] text-neutral-600">
                                   なし
                                 </p>
                               ) : (
-                                <ul className="divide-y divide-neutral-100">
+                                <ul className="divide-y divide-neutral-800">
                                   {colMembers.map((m) => {
                                     const missingList =
                                       m.isPending || loadingCompliance
@@ -1586,21 +1598,21 @@ export default function TeamPage({
                                       missingList.length > 0;
                                     const content = (
                                       <>
-                                        <span className="truncate font-medium text-neutral-800">
+                                        <span className="truncate font-medium text-neutral-100">
                                           {m.display_name}
                                         </span>
                                         <span className="flex flex-col gap-0.5">
                                           {m.isPending ? (
-                                            <span className="self-start rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                            <span className="self-start rounded bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                                               招待中（未登録）
                                             </span>
                                           ) : missingList === null ? (
-                                            <span className="text-[10px] text-neutral-300">
+                                            <span className="text-[10px] text-neutral-600">
                                               確認中…
                                             </span>
                                           ) : missing ? (
                                             <>
-                                              <span className="self-start rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                                              <span className="self-start rounded bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
                                                 未提出あり
                                               </span>
                                               <span className="text-[10px] leading-tight text-red-500">
@@ -1612,7 +1624,7 @@ export default function TeamPage({
                                               </span>
                                             </>
                                           ) : (
-                                            <span className="self-start rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                                            <span className="self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                                               提出OK
                                             </span>
                                           )}
@@ -1630,7 +1642,7 @@ export default function TeamPage({
                                             onClick={() =>
                                               router.push(`/team/${m.id}`)
                                             }
-                                            className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px] active:bg-neutral-50"
+                                            className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px] active:bg-neutral-800"
                                           >
                                             {content}
                                           </button>
@@ -1653,21 +1665,22 @@ export default function TeamPage({
         </section>
 
         {/* 全員のウェイトMAX */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             ウェイトMAX一覧
           </h2>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-neutral-500">
             コーチが「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。（　）内は前回の計測からの増減です。
           </p>
           {loadingMembers || loadingMaxes ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
+            <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
           ) : weightMaxEvents.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               まだウェイトMAXの計測は行われていません。
             </p>
           ) : (
@@ -1683,15 +1696,15 @@ export default function TeamPage({
                   <details
                     key={event.id}
                     open={eventIdx === 0}
-                    className="rounded-lg border border-neutral-200"
+                    className="rounded-lg border border-neutral-800"
                   >
-                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-700">
+                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
                       {formatMonthDay(event.measurementDate)}計測一覧
                     </summary>
-                    <div className="overflow-x-auto border-t border-neutral-100">
+                    <div className="overflow-x-auto border-t border-neutral-800">
                       <table className="w-full text-xs">
-                        <thead className="bg-white">
-                          <tr className="border-b border-neutral-200 text-neutral-400">
+                        <thead className="bg-neutral-900">
+                          <tr className="border-b border-neutral-800 text-neutral-500">
                             <th className="px-2 py-1.5 text-left font-medium">
                               氏名
                             </th>
@@ -1706,7 +1719,7 @@ export default function TeamPage({
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-neutral-100">
+                        <tbody className="divide-y divide-neutral-800">
                           {members
                             .filter((m) => m.role !== "coach" && !m.isPending)
                             .map((m) => {
@@ -1726,7 +1739,7 @@ export default function TeamPage({
                               );
                               return (
                                 <tr key={m.id}>
-                                  <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-800">
+                                  <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-100">
                                     {m.display_name}
                                   </td>
                                   <td
@@ -1779,7 +1792,7 @@ function ScheduleTimeSelect({
       <select
         value={hour}
         onChange={(e) => onChange(`${e.target.value}:${minute || "00"}`)}
-        className="flex-1 rounded border border-neutral-300 px-1.5 py-1.5 text-xs"
+        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
       >
         {hours.map((h) => (
           <option key={h} value={h}>
@@ -1790,7 +1803,7 @@ function ScheduleTimeSelect({
       <select
         value={minute}
         onChange={(e) => onChange(`${hour || "10"}:${e.target.value}`)}
-        className="flex-1 rounded border border-neutral-300 px-1.5 py-1.5 text-xs"
+        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
       >
         {minutes.map((m) => (
           <option key={m} value={m}>
@@ -1830,11 +1843,11 @@ function MonthlyCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   return (
-    <div className="rounded-lg border border-neutral-200 p-3">
+    <div className="rounded-lg border border-neutral-800 p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => onCursorChange(new Date(year, month - 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
         >
           ＜
         </button>
@@ -1843,16 +1856,16 @@ function MonthlyCalendar({
         </span>
         <button
           onClick={() => onCursorChange(new Date(year, month + 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-100"
+          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
         >
           ＞
         </button>
       </div>
       {loading ? (
-        <p className="text-xs text-neutral-400">読み込み中…</p>
+        <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400">
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
             {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
               <div key={w}>{w}</div>
             ))}
@@ -1869,31 +1882,31 @@ function MonthlyCalendar({
                   onClick={() => onSelectDate(key)}
                   className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
-                      ? "border-neutral-200 bg-neutral-200"
+                      ? "border-neutral-800 bg-neutral-800"
                       : day?.day_type === "camp"
-                        ? "border-pink-200 bg-pink-50"
+                        ? "border-pink-900/60 bg-pink-950/40"
                         : day?.day_type === "match"
-                          ? "border-red-200 bg-red-50"
+                          ? "border-red-900/60 bg-red-950/40"
                           : isHighlighted
-                            ? "border-amber-400 bg-amber-50 ring-1 ring-amber-400"
-                            : "border-neutral-200 active:bg-neutral-50"
+                            ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
+                            : "border-neutral-800 active:bg-neutral-800"
                   }`}
                 >
                   <span
                     className={`text-[11px] font-semibold ${
-                      day?.is_off ? "text-neutral-400" : "text-neutral-700"
+                      day?.is_off ? "text-neutral-500" : "text-neutral-200"
                     }`}
                   >
                     {date.getDate()}
                   </span>
                   {day?.is_off && (
-                    <span className="text-[9px] text-neutral-400">オフ</span>
+                    <span className="text-[9px] text-neutral-500">オフ</span>
                   )}
                   {day &&
                     !day.is_off &&
                     (day.day_type === "camp" || day.day_type === "match") && (
                       <span
-                        className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColor[day.day_type]}`}
+                        className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
                       >
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
@@ -1908,7 +1921,7 @@ function MonthlyCalendar({
                         <span
                           className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                         />
-                        <span className="break-words text-[9px] text-neutral-600">
+                        <span className="break-words text-[9px] text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}〜
                           {s.is_joint &&
@@ -1923,7 +1936,7 @@ function MonthlyCalendar({
               );
             })}
           </div>
-          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
             {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
               <span key={t} className="flex items-center gap-1">
                 <span
@@ -1933,7 +1946,7 @@ function MonthlyCalendar({
               </span>
             ))}
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200" />
+              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-800" />
               オフ
             </span>
           </p>
