@@ -2127,7 +2127,7 @@ function TrainingCalendar({
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs active:bg-neutral-100 ${
                 isHighlighted
                   ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
                   : titleColor
@@ -2158,17 +2158,17 @@ function TrainingCalendar({
                 </span>
               )}
               {(scheduleByDate.get(key) ?? []).length > 0 && (
-                <span
-                  className="flex flex-wrap justify-center gap-0.5"
-                  title={(scheduleByDate.get(key) ?? [])
-                    .map((s) => `${sessionTypeLabel[s.type]}${s.time.slice(0, 5)}〜`)
-                    .join("、")}
-                >
+                <span className="flex flex-col items-center gap-0.5">
                   {(scheduleByDate.get(key) ?? []).map((s, idx) => (
                     <span
                       key={idx}
-                      className={`inline-block h-1.5 w-1.5 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
-                    />
+                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500"
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
+                      />
+                      {s.time.slice(0, 5)}
+                    </span>
                   ))}
                 </span>
               )}
