@@ -114,6 +114,16 @@ export default function MyPage({
   const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [weightMaxTodo, setWeightMaxTodo] = useState<{
+    deadline: string;
+    createdAt: string;
+  } | null>(null);
+  const [weightMaxTodoOpen, setWeightMaxTodoOpen] = useState(false);
+  const [weightMaxBench, setWeightMaxBench] = useState("");
+  const [weightMaxSquat, setWeightMaxSquat] = useState("");
+  const [weightMaxDeadlift, setWeightMaxDeadlift] = useState("");
+  const [savingWeightMaxTodo, setSavingWeightMaxTodo] = useState(false);
+
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
   const [showMatchForm, setShowMatchForm] = useState(false);
@@ -192,6 +202,7 @@ export default function MyPage({
     loadRecentLogs();
     loadRecordDates();
     loadTitleOptions();
+    loadWeightMaxTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -360,6 +371,76 @@ export default function MyPage({
     }
     setEditingMatch(false);
     await loadNextMatch();
+  }
+
+  async function loadWeightMaxTodo() {
+    const { data: eventData, error: eventError } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline, created_at")
+      .eq("team_id", profile.team_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (eventError) {
+      setErrorMsg(eventError.message);
+      return;
+    }
+    if (!eventData) {
+      setWeightMaxTodo(null);
+      return;
+    }
+    const event = eventData as { id: string; deadline: string; created_at: string };
+
+    const { data: maxData, error: maxError } = await supabase
+      .from("weight_maxes")
+      .select("updated_at")
+      .eq("author_id", profile.id)
+      .maybeSingle();
+
+    if (maxError) {
+      setErrorMsg(maxError.message);
+      return;
+    }
+
+    const alreadySubmitted =
+      !!maxData &&
+      new Date((maxData as { updated_at: string }).updated_at) >=
+        new Date(event.created_at);
+
+    setWeightMaxTodo(
+      alreadySubmitted
+        ? null
+        : { deadline: event.deadline, createdAt: event.created_at }
+    );
+  }
+
+  async function handleSaveWeightMaxTodo() {
+    setSavingWeightMaxTodo(true);
+    const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
+
+    const { error } = await supabase.from("weight_maxes").upsert(
+      {
+        team_id: profile.team_id,
+        author_id: profile.id,
+        bench: toNum(weightMaxBench),
+        squat: toNum(weightMaxSquat),
+        deadlift: toNum(weightMaxDeadlift),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "author_id" }
+    );
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setWeightMaxTodo(null);
+      setWeightMaxTodoOpen(false);
+      setWeightMaxBench("");
+      setWeightMaxSquat("");
+      setWeightMaxDeadlift("");
+    }
+    setSavingWeightMaxTodo(false);
   }
 
   async function loadTitleOptions() {
@@ -899,6 +980,83 @@ export default function MyPage({
             やることリスト
           </h2>
 
+          {weightMaxTodo &&
+            (() => {
+              const isOverdue = todayStr > weightMaxTodo.deadline;
+              return (
+                <div
+                  className={`flex flex-col rounded-lg border p-3 text-sm ${
+                    isOverdue
+                      ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                      : "border-amber-200 bg-amber-50 text-left"
+                  }`}
+                >
+                  <button
+                    onClick={() => setWeightMaxTodoOpen((v) => !v)}
+                    className="flex w-full flex-col text-left"
+                  >
+                    <span
+                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-600"}`}
+                    >
+                      {isOverdue
+                        ? `期限切れ！(${weightMaxTodo.deadline}まで)`
+                        : `${weightMaxTodo.deadline}までに提出`}
+                    </span>
+                    <span
+                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-800"}`}
+                    >
+                      ウェイトMAX(BIG3)を提出する
+                    </span>
+                  </button>
+                  {weightMaxTodoOpen && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-lg bg-white p-3 text-neutral-800">
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          ベンチプレス(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={weightMaxBench}
+                            onChange={(e) => setWeightMaxBench(e.target.value)}
+                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          スクワット(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={weightMaxSquat}
+                            onChange={(e) => setWeightMaxSquat(e.target.value)}
+                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          デッドリフト(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={weightMaxDeadlift}
+                            onChange={(e) =>
+                              setWeightMaxDeadlift(e.target.value)
+                            }
+                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        onClick={handleSaveWeightMaxTodo}
+                        disabled={savingWeightMaxTodo}
+                        className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                      >
+                        提出する
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           {!profile.home_location ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
               所属拠点(多摩/大塚)がまだ設定されていません。設定されると、未報告の練習メニューがここに表示されます。
@@ -906,9 +1064,11 @@ export default function MyPage({
           ) : loadingTodo ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : todoMenus.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-              未報告の練習メニューはありません。
-            </p>
+            !weightMaxTodo && (
+              <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+                未報告の練習メニューはありません。
+              </p>
+            )
           ) : (
             <ul className="flex flex-col gap-2">
               {todoMenus.map((m) => (

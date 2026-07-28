@@ -1632,6 +1632,7 @@ function MenuCalendar({
       {
         is_off: boolean;
         day_type: DayType;
+        event_name: string | null;
         sessions: {
           session_type: SessionType;
           start_time: string;
@@ -1652,7 +1653,7 @@ function MenuCalendar({
       const { data } = await supabase
         .from("schedule_days")
         .select(
-          "date, is_off, day_type, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
         )
         .eq("team_id", teamId)
         .eq("location", location)
@@ -1664,6 +1665,7 @@ function MenuCalendar({
         {
           is_off: boolean;
           day_type: DayType;
+        event_name: string | null;
           sessions: {
             session_type: SessionType;
             start_time: string;
@@ -1676,6 +1678,7 @@ function MenuCalendar({
         date: string;
         is_off: boolean;
         day_type: DayType;
+        event_name: string | null;
         sessions: {
           session_type: SessionType;
           start_time: string;
@@ -1686,6 +1689,7 @@ function MenuCalendar({
         map.set(row.date, {
           is_off: row.is_off,
           day_type: row.day_type,
+          event_name: row.event_name,
           sessions: row.sessions,
         });
       }
@@ -1797,9 +1801,9 @@ function MenuCalendar({
                 (schedule.day_type === "camp" ||
                   schedule.day_type === "match") && (
                   <span
-                    className={`rounded px-1 text-[8px] font-semibold ${dayTypeFillColor[schedule.day_type]}`}
+                    className={`max-w-full truncate rounded px-1 text-[8px] font-semibold ${dayTypeFillColor[schedule.day_type]}`}
                   >
-                    {dayTypeLabel[schedule.day_type]}
+                    {schedule.event_name || dayTypeLabel[schedule.day_type]}
                   </span>
                 )}
               {schedule &&

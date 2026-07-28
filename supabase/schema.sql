@@ -536,3 +536,35 @@ alter table weight_logs add column if not exists title text;
 -- 　合宿・試合の日は、練習セクションを入れるかどうかを任意で選べる）
 -- ============================================
 alter table schedule_days add column if not exists day_type text not null default 'practice' check (day_type in ('practice', 'camp', 'match'));
+
+-- ============================================
+-- 追加: 合宿・試合に名前をつけられるようにする
+-- ============================================
+alter table schedule_days add column if not exists event_name text;
+
+-- ============================================
+-- 追加: コーチが「ウェイトMAXを集計する」イベントを作成できるようにする
+-- （締切日までに部員がBIG3のMAXを提出するタスクをやることリストに表示する）
+-- ============================================
+create table if not exists weight_max_events (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  deadline date not null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table weight_max_events enable row level security;
+
+create policy "weight_max_events_select_same_team" on weight_max_events
+  for select using (team_id = get_my_team_id());
+
+create policy "weight_max_events_insert_coach" on weight_max_events
+  for insert with check (
+    team_id = get_my_team_id()
+    and exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+create policy "weight_max_events_delete_coach" on weight_max_events
+  for delete using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );

@@ -29,6 +29,12 @@ type MenuRow = {
   is_off: boolean;
 };
 
+type WeightMaxEventRow = {
+  id: string;
+  deadline: string;
+  created_at: string;
+};
+
 type RosterRow = {
   id: string;
   display_name: string;
@@ -102,6 +108,13 @@ export default function CoachAdminPage({
   const [savingEmail, setSavingEmail] = useState(false);
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
 
+  const [weightMaxEvent, setWeightMaxEvent] = useState<
+    WeightMaxEventRow | null | undefined
+  >(undefined);
+  const [weightMaxSubmittedCount, setWeightMaxSubmittedCount] = useState(0);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [savingWeightMaxEvent, setSavingWeightMaxEvent] = useState(false);
+
   const rosterEntryYearOptions: number[] = (() => {
     const now = new Date();
     const academicYear =
@@ -113,6 +126,7 @@ export default function CoachAdminPage({
     loadMembers();
     loadReports();
     loadRoster();
+    loadWeightMaxEvent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -189,6 +203,70 @@ export default function CoachAdminPage({
   }
 
   const loading = loadingMembers || loadingReports;
+
+  async function loadWeightMaxEvent() {
+    const { data, error } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline, created_at")
+      .eq("team_id", profile.team_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    const event = (data as WeightMaxEventRow | null) ?? null;
+    setWeightMaxEvent(event);
+
+    if (event) {
+      const { data: maxData, error: maxError } = await supabase
+        .from("weight_maxes")
+        .select("author_id, updated_at")
+        .eq("team_id", profile.team_id)
+        .gte("updated_at", event.created_at);
+      if (maxError) {
+        setErrorMsg(maxError.message);
+      } else {
+        setWeightMaxSubmittedCount((maxData ?? []).length);
+      }
+    }
+  }
+
+  async function handleCreateWeightMaxEvent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDeadline) return;
+    setSavingWeightMaxEvent(true);
+
+    const { error } = await supabase.from("weight_max_events").insert({
+      team_id: profile.team_id,
+      deadline: newDeadline,
+      created_by: profile.id,
+    });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setNewDeadline("");
+      await loadWeightMaxEvent();
+    }
+    setSavingWeightMaxEvent(false);
+  }
+
+  async function handleEndWeightMaxEvent() {
+    if (!weightMaxEvent) return;
+    if (!window.confirm("このウェイトMAX集計を終了しますか？")) return;
+    const { error } = await supabase
+      .from("weight_max_events")
+      .delete()
+      .eq("id", weightMaxEvent.id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      await loadWeightMaxEvent();
+    }
+  }
 
   async function loadRoster() {
     setLoadingRoster(true);
@@ -539,6 +617,61 @@ export default function CoachAdminPage({
                 })}
               </ul>
             </div>
+          )}
+        </section>
+
+        {/* ウェイトMAXを集計する */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            ウェイトMAXを集計する
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            締切日を設定すると、部員のマイページの「やることリスト」にBIG3(ベンチプレス・スクワット・デッドリフト)のMAX重量を提出するタスクが表示されます。提出内容はチームページの「ウェイトMAX一覧」で確認できます。
+          </p>
+
+          {weightMaxEvent === undefined ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : weightMaxEvent ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3">
+              <p className="text-sm text-neutral-700">
+                締切:{" "}
+                <span className="font-semibold">
+                  {weightMaxEvent.deadline}
+                </span>
+              </p>
+              <p className="text-xs text-neutral-500">
+                提出済み {weightMaxSubmittedCount}人 / {members.length}人
+              </p>
+              <button
+                onClick={handleEndWeightMaxEvent}
+                className="self-start rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-100"
+              >
+                この集計を終了する
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleCreateWeightMaxEvent}
+              className="flex items-end gap-2"
+            >
+              <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500">
+                締切日
+                <input
+                  type="date"
+                  required
+                  value={newDeadline}
+                  onChange={(e) => setNewDeadline(e.target.value)}
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={savingWeightMaxEvent}
+                className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
+              >
+                集計を開始する
+              </button>
+            </form>
           )}
         </section>
 

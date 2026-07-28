@@ -45,6 +45,7 @@ type ScheduleDayRow = {
   location: Location;
   is_off: boolean;
   day_type: DayType;
+  event_name: string | null;
   sessions: ScheduleSessionRow[];
 };
 
@@ -160,6 +161,7 @@ export default function TeamPage({
     "practice"
   );
   const [editIncludeSessions, setEditIncludeSessions] = useState(true);
+  const [editEventName, setEditEventName] = useState("");
   const [editSessions, setEditSessions] = useState<
     {
       type: SessionType;
@@ -176,6 +178,7 @@ export default function TeamPage({
   const [bulkCategory, setBulkCategory] = useState<"off" | "camp" | "match">(
     "off"
   );
+  const [bulkEventName, setBulkEventName] = useState("");
   const [bulkIncludeSessions, setBulkIncludeSessions] = useState(false);
   const [bulkSessions, setBulkSessions] = useState<
     {
@@ -282,7 +285,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, day_type, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -332,7 +335,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, day_type, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -414,6 +417,7 @@ export default function TeamPage({
       ? "off"
       : (dayDetail?.day_type ?? "practice");
     setEditCategory(category);
+    setEditEventName(dayDetail?.event_name ?? "");
     setEditIncludeSessions(
       category === "practice" || (dayDetail?.sessions.length ?? 0) > 0
     );
@@ -510,6 +514,7 @@ export default function TeamPage({
     setBulkStartDate(selectedScheduleDate ?? todayStr);
     setBulkEndDate(selectedScheduleDate ?? todayStr);
     setBulkCategory("off");
+    setBulkEventName("");
     setBulkIncludeSessions(false);
     setBulkSessions([
       {
@@ -555,7 +560,8 @@ export default function TeamPage({
         d,
         bulkCategory,
         bulkSessions,
-        bulkIncludeSessions
+        bulkIncludeSessions,
+        bulkEventName
       );
       if (errorMessage) failCount++;
     }
@@ -582,7 +588,8 @@ export default function TeamPage({
       isJoint: boolean;
       jointLocation: Location;
     }[],
-    includeSessionsFlag: boolean
+    includeSessionsFlag: boolean,
+    eventName: string = ""
   ): Promise<string | null> {
     const isOff = category === "off";
     const dayType: DayType = isOff ? "practice" : (category as DayType);
@@ -591,6 +598,8 @@ export default function TeamPage({
       : dayType === "practice"
         ? true
         : includeSessionsFlag;
+    const trimmedEventName =
+      dayType === "camp" || dayType === "match" ? eventName.trim() || null : null;
 
     const { data: dayRow, error: dayError } = await supabase
       .from("schedule_days")
@@ -601,6 +610,7 @@ export default function TeamPage({
           date: dateStr,
           is_off: isOff,
           day_type: dayType,
+          event_name: trimmedEventName,
           created_by: profile.id,
           updated_at: new Date().toISOString(),
         },
@@ -647,7 +657,12 @@ export default function TeamPage({
     }
 
     if (!isOff && (dayType === "camp" || dayType === "match")) {
-      await propagateDayType(dateStr, scheduleLocation, dayType);
+      await propagateDayType(
+        dateStr,
+        scheduleLocation,
+        dayType,
+        trimmedEventName
+      );
     }
 
     return null;
@@ -661,7 +676,8 @@ export default function TeamPage({
       selectedScheduleDate,
       editCategory,
       editSessions,
-      editIncludeSessions
+      editIncludeSessions,
+      editEventName
     );
 
     if (errorMessage) {
@@ -679,7 +695,8 @@ export default function TeamPage({
   async function propagateDayType(
     dateStr: string,
     editingLocation: Location,
-    dayType: DayType
+    dayType: DayType,
+    eventName: string | null = null
   ) {
     const otherLocation: Location =
       editingLocation === "tama" ? "otsuka" : "tama";
@@ -691,6 +708,7 @@ export default function TeamPage({
         date: dateStr,
         is_off: false,
         day_type: dayType,
+        event_name: eventName,
         created_by: profile.id,
         updated_at: new Date().toISOString(),
       },
@@ -980,6 +998,20 @@ export default function TeamPage({
               </div>
 
               {(bulkCategory === "camp" || bulkCategory === "match") && (
+                <input
+                  type="text"
+                  value={bulkEventName}
+                  onChange={(e) => setBulkEventName(e.target.value)}
+                  placeholder={
+                    bulkCategory === "camp"
+                      ? "合宿名（例：夏合宿・山梨合宿）"
+                      : "試合名（例：インカレ・県大会）"
+                  }
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                />
+              )}
+
+              {(bulkCategory === "camp" || bulkCategory === "match") && (
                 <label className="flex items-center gap-2 text-xs text-neutral-600">
                   <input
                     type="checkbox"
@@ -1137,6 +1169,20 @@ export default function TeamPage({
                           ))}
                         </div>
                       </div>
+
+                      {(editCategory === "camp" || editCategory === "match") && (
+                        <input
+                          type="text"
+                          value={editEventName}
+                          onChange={(e) => setEditEventName(e.target.value)}
+                          placeholder={
+                            editCategory === "camp"
+                              ? "合宿名（例：夏合宿・山梨合宿）"
+                              : "試合名（例：インカレ・県大会）"
+                          }
+                          className="rounded border border-neutral-300 px-2 py-1.5 text-xs"
+                        />
+                      )}
 
                       {(editCategory === "camp" || editCategory === "match") && (
                         <label className="flex items-center gap-2 text-xs text-neutral-600">
@@ -1302,6 +1348,7 @@ export default function TeamPage({
                           className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColor[dayDetail.day_type]}`}
                         >
                           {dayTypeLabel[dayDetail.day_type]}
+                          {dayDetail.event_name && `：${dayDetail.event_name}`}
                         </span>
                       )}
                       {dayDetail.sessions.length === 0 && (
@@ -1542,7 +1589,7 @@ export default function TeamPage({
             ウェイトMAX一覧
           </h2>
           <p className="text-[11px] text-neutral-400">
-            コーチが計測イベントを作成すると、部員が提出した記録がここに反映される予定です（準備中）。
+            コーチが「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。
           </p>
           {loadingMembers || loadingMaxes ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
@@ -1552,49 +1599,47 @@ export default function TeamPage({
             </p>
           ) : (
             <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <ul className="divide-y divide-neutral-100">
-                {members.map((m) => {
-                  const max = maxByAuthor.get(m.id);
-                  const fmt = (v: number | null | undefined) =>
-                    v != null ? `${v}kg` : "未登録";
-                  return (
-                    <li
-                      key={m.id}
-                      className="flex flex-col gap-1.5 px-3 py-2.5 text-xs"
-                    >
-                      <span className="font-medium text-neutral-800">
-                        {m.display_name}
-                      </span>
-                      <span className="grid grid-cols-3 gap-2 text-center">
-                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
-                          <span className="text-[10px] text-neutral-400">
-                            ベンチ
-                          </span>
-                          <span className="font-semibold text-neutral-700">
-                            {fmt(max?.bench)}
-                          </span>
-                        </span>
-                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
-                          <span className="text-[10px] text-neutral-400">
-                            スクワット
-                          </span>
-                          <span className="font-semibold text-neutral-700">
-                            {fmt(max?.squat)}
-                          </span>
-                        </span>
-                        <span className="flex flex-col gap-0.5 rounded bg-neutral-50 px-1.5 py-1.5">
-                          <span className="text-[10px] text-neutral-400">
-                            デッドリフト
-                          </span>
-                          <span className="font-semibold text-neutral-700">
-                            {fmt(max?.deadlift)}
-                          </span>
-                        </span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-white">
+                  <tr className="border-b border-neutral-200 text-neutral-400">
+                    <th className="px-2 py-1.5 text-left font-medium">
+                      氏名
+                    </th>
+                    <th className="px-1 py-1.5 text-right font-medium">
+                      BP
+                    </th>
+                    <th className="px-1 py-1.5 text-right font-medium">
+                      SQ
+                    </th>
+                    <th className="px-2 py-1.5 text-right font-medium">
+                      DL
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {members.map((m) => {
+                    const max = maxByAuthor.get(m.id);
+                    const fmt = (v: number | null | undefined) =>
+                      v != null ? `${v}` : "-";
+                    return (
+                      <tr key={m.id}>
+                        <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-800">
+                          {m.display_name}
+                        </td>
+                        <td className="px-1 py-1.5 text-right text-neutral-600">
+                          {fmt(max?.bench)}
+                        </td>
+                        <td className="px-1 py-1.5 text-right text-neutral-600">
+                          {fmt(max?.squat)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-neutral-600">
+                          {fmt(max?.deadlift)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
@@ -1735,9 +1780,9 @@ function MonthlyCalendar({
                     !day.is_off &&
                     (day.day_type === "camp" || day.day_type === "match") && (
                       <span
-                        className={`rounded px-1 text-[9px] font-semibold ${dayTypeFillColor[day.day_type]}`}
+                        className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColor[day.day_type]}`}
                       >
-                        {dayTypeLabel[day.day_type]}
+                        {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
                     )}
                   {day &&
