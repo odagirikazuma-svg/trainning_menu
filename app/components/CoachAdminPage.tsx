@@ -42,8 +42,19 @@ type InjuryRow = {
   expected_recovery_date: string | null;
   surgery_possibility: "yes" | "no" | "unknown";
   next_hospital_date: string | null;
+  mat_participation: "yes" | "no" | "conditional";
+  mat_participation_detail: string | null;
+  is_recovered: boolean;
+  progress_note: string | null;
+  progress_updated_at: string | null;
   created_at: string;
   author: { display_name: string } | null;
+};
+
+const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
+  yes: "可",
+  no: "非",
+  conditional: "条件付きで可",
 };
 
 type MenuRow = {
@@ -167,7 +178,7 @@ export default function CoachAdminPage({
     const { data, error } = await supabase
       .from("injuries")
       .select(
-        "id, author_id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, created_at, author:profiles!injuries_author_id_fkey(display_name)"
+        "id, author_id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, mat_participation, mat_participation_detail, is_recovered, progress_note, progress_updated_at, created_at, author:profiles!injuries_author_id_fkey(display_name)"
       )
       .eq("team_id", profile.team_id)
       .order("created_at", { ascending: false });
@@ -833,6 +844,11 @@ export default function CoachAdminPage({
                         </span>
                         <span className="text-neutral-500">
                           {inj.symptom_name}（{inj.body_part}）
+                          {inj.is_recovered && (
+                            <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                              完治
+                            </span>
+                          )}
                         </span>
                       </span>
                       <span className="text-neutral-300">
@@ -864,6 +880,27 @@ export default function CoachAdminPage({
                               ? "なし"
                               : "未定"}
                         </p>
+                        <p>
+                          マット参加の可否:{" "}
+                          {matParticipationLabel[inj.mat_participation]}
+                        </p>
+                        {inj.mat_participation === "conditional" &&
+                          inj.mat_participation_detail && (
+                            <p>条件: {inj.mat_participation_detail}</p>
+                          )}
+                        {inj.progress_note && (
+                          <p className="rounded bg-neutral-50 p-2">
+                            最新の経過報告: {inj.progress_note}
+                          </p>
+                        )}
+                        {inj.progress_updated_at && (
+                          <p className="text-[10px] text-neutral-400">
+                            経過報告日:{" "}
+                            {formatMonthDay(
+                              toDateKey(new Date(inj.progress_updated_at))
+                            )}
+                          </p>
+                        )}
                         <p className="text-[10px] text-neutral-400">
                           報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
                         </p>

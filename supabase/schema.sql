@@ -636,3 +636,12 @@ create policy "injuries_update_self" on injuries
 
 create policy "injuries_delete_self" on injuries
   for delete using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: 怪我管理の拡張（マット参加の可否、完治・進捗報告）
+-- ============================================
+alter table injuries add column if not exists mat_participation text not null default 'no' check (mat_participation in ('yes', 'no', 'conditional'));
+alter table injuries add column if not exists mat_participation_detail text;
+alter table injuries add column if not exists is_recovered boolean not null default false;
+alter table injuries add column if not exists progress_note text;
+alter table injuries add column if not exists progress_updated_at timestamptz;

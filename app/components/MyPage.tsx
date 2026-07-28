@@ -42,7 +42,18 @@ type InjuryRow = {
   expected_recovery_date: string | null;
   surgery_possibility: "yes" | "no" | "unknown";
   next_hospital_date: string | null;
+  mat_participation: "yes" | "no" | "conditional";
+  mat_participation_detail: string | null;
+  is_recovered: boolean;
+  progress_note: string | null;
+  progress_updated_at: string | null;
   created_at: string;
+};
+
+const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
+  yes: "可",
+  no: "非",
+  conditional: "条件付きで可",
 };
 
 type WeightLogRow = {
@@ -151,7 +162,25 @@ export default function MyPage({
     "unknown"
   );
   const [injuryNextHospital, setInjuryNextHospital] = useState("");
+  const [injuryNextHospitalUndetermined, setInjuryNextHospitalUndetermined] =
+    useState(false);
+  const [injuryMatParticipation, setInjuryMatParticipation] = useState<
+    "yes" | "no" | "conditional"
+  >("no");
+  const [injuryMatDetail, setInjuryMatDetail] = useState("");
   const [savingInjury, setSavingInjury] = useState(false);
+
+  const [progressInjuryId, setProgressInjuryId] = useState<string | null>(
+    null
+  );
+  const [progressIsRecovered, setProgressIsRecovered] = useState(true);
+  const [progressRecoveryDate, setProgressRecoveryDate] = useState("");
+  const [progressNote, setProgressNote] = useState("");
+  const [progressMatParticipation, setProgressMatParticipation] = useState<
+    "yes" | "no" | "conditional"
+  >("no");
+  const [progressMatDetail, setProgressMatDetail] = useState("");
+  const [savingProgress, setSavingProgress] = useState(false);
 
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
@@ -482,7 +511,7 @@ export default function MyPage({
     const { data, error } = await supabase
       .from("injuries")
       .select(
-        "id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, created_at"
+        "id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, mat_participation, mat_participation_detail, is_recovered, progress_note, progress_updated_at, created_at"
       )
       .eq("author_id", profile.id)
       .order("created_at", { ascending: false });
@@ -503,6 +532,9 @@ export default function MyPage({
     setInjuryRecoveryDate("");
     setInjurySurgery("unknown");
     setInjuryNextHospital("");
+    setInjuryNextHospitalUndetermined(false);
+    setInjuryMatParticipation("no");
+    setInjuryMatDetail("");
   }
 
   function handleStartNewInjury() {
@@ -518,6 +550,9 @@ export default function MyPage({
     setInjuryRecoveryDate(row.expected_recovery_date ?? "");
     setInjurySurgery(row.surgery_possibility);
     setInjuryNextHospital(row.next_hospital_date ?? "");
+    setInjuryNextHospitalUndetermined(!row.next_hospital_date);
+    setInjuryMatParticipation(row.mat_participation);
+    setInjuryMatDetail(row.mat_participation_detail ?? "");
     setShowInjuryForm(true);
   }
 
@@ -534,7 +569,14 @@ export default function MyPage({
       detail: injuryDetail.trim() || null,
       expected_recovery_date: injuryRecoveryDate || null,
       surgery_possibility: injurySurgery,
-      next_hospital_date: injuryNextHospital || null,
+      next_hospital_date: injuryNextHospitalUndetermined
+        ? null
+        : injuryNextHospital || null,
+      mat_participation: injuryMatParticipation,
+      mat_participation_detail:
+        injuryMatParticipation === "conditional"
+          ? injuryMatDetail.trim() || null
+          : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -563,6 +605,69 @@ export default function MyPage({
     } else {
       await loadInjuries();
     }
+  }
+
+  // 完治見込み日 or 次回通院日が来ているのに、まだ進捗報告していない怪我を判定する
+  function injuryNeedsProgressUpdate(inj: InjuryRow): boolean {
+    if (inj.is_recovered) return false;
+    const triggerDates = [inj.expected_recovery_date, inj.next_hospital_date]
+      .filter((d): d is string => !!d)
+      .sort();
+    if (triggerDates.length === 0) return false;
+    const earliestTrigger = triggerDates[0];
+    if (earliestTrigger > todayStr) return false;
+    if (inj.progress_updated_at) {
+      const updatedDateStr = toDateKey(new Date(inj.progress_updated_at));
+      if (updatedDateStr >= todayStr) return false;
+    }
+    return true;
+  }
+
+  function handleStartProgress(inj: InjuryRow) {
+    setProgressInjuryId(inj.id);
+    setProgressIsRecovered(true);
+    setProgressRecoveryDate(inj.expected_recovery_date ?? "");
+    setProgressNote("");
+    setProgressMatParticipation(inj.mat_participation);
+    setProgressMatDetail(inj.mat_participation_detail ?? "");
+  }
+
+  async function handleSubmitProgress() {
+    if (!progressInjuryId) return;
+    setSavingProgress(true);
+
+    const payload = progressIsRecovered
+      ? {
+          is_recovered: true,
+          progress_note: progressNote.trim() || null,
+          progress_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      : {
+          is_recovered: false,
+          expected_recovery_date: progressRecoveryDate || null,
+          progress_note: progressNote.trim() || null,
+          mat_participation: progressMatParticipation,
+          mat_participation_detail:
+            progressMatParticipation === "conditional"
+              ? progressMatDetail.trim() || null
+              : null,
+          progress_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+    const { error } = await supabase
+      .from("injuries")
+      .update(payload)
+      .eq("id", progressInjuryId);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setProgressInjuryId(null);
+      await loadInjuries();
+    }
+    setSavingProgress(false);
   }
 
   async function loadTitleOptions() {
@@ -1126,11 +1231,14 @@ export default function MyPage({
           )}
         </section>
 
-        {/* やることリスト */}
+        {/* タスク一覧 */}
         <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            やることリスト
+            タスク一覧
           </h2>
+          <p className="text-[11px] text-neutral-400">
+            提出・完了するまで一覧から消えません。期日を過ぎたタスクは赤く強調表示されます。
+          </p>
 
           {weightMaxTodo &&
             (() => {
@@ -1209,6 +1317,124 @@ export default function MyPage({
               );
             })()}
 
+          {injuries.filter(injuryNeedsProgressUpdate).map((inj) => {
+            const isOpen = progressInjuryId === inj.id;
+            return (
+              <div
+                key={inj.id}
+                className="flex flex-col rounded-lg border border-red-600 bg-red-600 p-3 text-sm text-white shadow-lg ring-2 ring-red-400"
+              >
+                <button
+                  onClick={() =>
+                    isOpen ? setProgressInjuryId(null) : handleStartProgress(inj)
+                  }
+                  className="flex w-full flex-col text-left"
+                >
+                  <span className="text-[11px] text-white">
+                    完治見込み日・通院日が到来しています
+                  </span>
+                  <span className="font-medium text-white">
+                    「{inj.symptom_name}」の経過を報告する
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="mt-3 flex flex-col gap-2 rounded-lg bg-white p-3 text-neutral-800">
+                    <div className="flex gap-2 rounded-lg bg-neutral-200 p-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setProgressIsRecovered(true)}
+                        className={`flex-1 rounded-md py-2 font-medium ${
+                          progressIsRecovered
+                            ? "bg-white text-neutral-900 shadow"
+                            : "text-neutral-500"
+                        }`}
+                      >
+                        完治した
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProgressIsRecovered(false)}
+                        className={`flex-1 rounded-md py-2 font-medium ${
+                          !progressIsRecovered
+                            ? "bg-white text-neutral-900 shadow"
+                            : "text-neutral-500"
+                        }`}
+                      >
+                        まだ完治していない
+                      </button>
+                    </div>
+
+                    {!progressIsRecovered && (
+                      <>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          新しい完治見込み日
+                          <input
+                            type="date"
+                            value={progressRecoveryDate}
+                            onChange={(e) =>
+                              setProgressRecoveryDate(e.target.value)
+                            }
+                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                          マット参加の可否
+                          <select
+                            value={progressMatParticipation}
+                            onChange={(e) =>
+                              setProgressMatParticipation(
+                                e.target.value as "yes" | "no" | "conditional"
+                              )
+                            }
+                            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                          >
+                            <option value="no">非</option>
+                            <option value="yes">可</option>
+                            <option value="conditional">条件付きで可</option>
+                          </select>
+                        </label>
+                        {progressMatParticipation === "conditional" && (
+                          <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                            条件の詳細
+                            <textarea
+                              value={progressMatDetail}
+                              onChange={(e) =>
+                                setProgressMatDetail(e.target.value)
+                              }
+                              rows={2}
+                              className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                        )}
+                      </>
+                    )}
+                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                      理由・経過（自由記述）
+                      <textarea
+                        value={progressNote}
+                        onChange={(e) => setProgressNote(e.target.value)}
+                        rows={3}
+                        placeholder={
+                          progressIsRecovered
+                            ? "任意で記入できます"
+                            : "完治していない理由や現在の状態など"
+                        }
+                        className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <button
+                      onClick={handleSubmitProgress}
+                      disabled={savingProgress}
+                      className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                    >
+                      提出する
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
           {!profile.home_location ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
               所属拠点(多摩/大塚)がまだ設定されていません。設定されると、未報告の練習メニューがここに表示されます。
@@ -1216,28 +1442,41 @@ export default function MyPage({
           ) : loadingTodo ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : todoMenus.length === 0 ? (
-            !weightMaxTodo && (
+            !weightMaxTodo &&
+            injuries.filter(injuryNeedsProgressUpdate).length === 0 && (
               <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
                 未報告の練習メニューはありません。
               </p>
             )
           ) : (
             <ul className="flex flex-col gap-2">
-              {todoMenus.map((m) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => goToMenu(m)}
-                    className="flex w-full flex-col rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-sm active:bg-amber-100"
-                  >
-                    <span className="text-[11px] text-amber-600">
-                      {locationLabel[m.location]}・実施報告 未提出
-                    </span>
-                    <span className="font-medium text-neutral-800">
-                      {m.title || formatShortDateTime(m.date, m.start_time)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {todoMenus.map((m) => {
+                const isOverdue = m.date < todayStr;
+                return (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => goToMenu(m)}
+                      className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
+                        isOverdue
+                          ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                          : "border-amber-200 bg-amber-50 active:bg-amber-100"
+                      }`}
+                    >
+                      <span
+                        className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-600"}`}
+                      >
+                        {locationLabel[m.location]}・実施報告 未提出
+                        {isOverdue && "（期限切れ）"}
+                      </span>
+                      <span
+                        className={`font-medium ${isOverdue ? "text-white" : "text-neutral-800"}`}
+                      >
+                        {m.title || formatShortDateTime(m.date, m.start_time)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -1593,9 +1832,21 @@ export default function MyPage({
                   <input
                     type="date"
                     value={injuryNextHospital}
+                    disabled={injuryNextHospitalUndetermined}
                     onChange={(e) => setInjuryNextHospital(e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100"
                   />
+                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                    <input
+                      type="checkbox"
+                      checked={injuryNextHospitalUndetermined}
+                      onChange={(e) => {
+                        setInjuryNextHospitalUndetermined(e.target.checked);
+                        if (e.target.checked) setInjuryNextHospital("");
+                      }}
+                    />
+                    未定
+                  </label>
                 </label>
               </div>
               <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
@@ -1614,6 +1865,34 @@ export default function MyPage({
                   <option value="no">なし</option>
                 </select>
               </label>
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                マット参加の可否
+                <select
+                  value={injuryMatParticipation}
+                  onChange={(e) =>
+                    setInjuryMatParticipation(
+                      e.target.value as "yes" | "no" | "conditional"
+                    )
+                  }
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="no">非</option>
+                  <option value="yes">可</option>
+                  <option value="conditional">条件付きで可</option>
+                </select>
+              </label>
+              {injuryMatParticipation === "conditional" && (
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  条件の詳細
+                  <textarea
+                    value={injuryMatDetail}
+                    onChange={(e) => setInjuryMatDetail(e.target.value)}
+                    rows={3}
+                    placeholder="例：テイクダウンのみ可、時間短縮など"
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -1652,6 +1931,11 @@ export default function MyPage({
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-neutral-800">
                       {inj.symptom_name}（{inj.body_part}）
+                      {inj.is_recovered && (
+                        <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          完治
+                        </span>
+                      )}
                     </span>
                     <span className="text-[10px] text-neutral-400">
                       {formatMonthDay(toDateKey(new Date(inj.created_at)))}報告
@@ -1683,7 +1967,22 @@ export default function MyPage({
                           ? "なし"
                           : "未定"}
                     </span>
+                    <span>
+                      マット参加:{" "}
+                      {matParticipationLabel[inj.mat_participation]}
+                    </span>
                   </div>
+                  {inj.mat_participation === "conditional" &&
+                    inj.mat_participation_detail && (
+                      <p className="text-[11px] text-neutral-500">
+                        条件: {inj.mat_participation_detail}
+                      </p>
+                    )}
+                  {inj.progress_note && (
+                    <p className="rounded bg-neutral-50 p-2 text-[11px] text-neutral-500">
+                      最新の経過: {inj.progress_note}
+                    </p>
+                  )}
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleStartEditInjury(inj)}

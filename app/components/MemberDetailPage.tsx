@@ -616,10 +616,10 @@ export default function MemberDetailPage({
           )}
         </section>
 
-        {/* やることリスト */}
+        {/* タスク一覧 */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            やることリスト
+            タスク一覧
           </h2>
           <p className="text-[11px] text-neutral-400">
             閲覧専用です。ここから編集や提出はできません。
