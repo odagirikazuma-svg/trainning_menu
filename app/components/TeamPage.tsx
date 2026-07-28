@@ -1615,7 +1615,9 @@ export default function TeamPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {members.map((m) => {
+                  {members
+                    .filter((m) => m.role !== "coach" && !m.isPending)
+                    .map((m) => {
                     const max = maxByAuthor.get(m.id);
                     const fmt = (v: number | null | undefined) =>
                       v != null ? `${v}` : "-";

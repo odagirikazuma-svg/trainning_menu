@@ -637,10 +637,10 @@ export default function CoachAdminPage({
             直近1週間の提出状況
           </h2>
           <p className="text-[11px] text-neutral-400">
-            各部員の所属拠点のメニューに対して、実施報告・未実施報告のいずれかを提出済みかどうかを表示しています。「対象外」はその日の練習がオフ、またはメニュー自体が作成されていない場合です。
+            「マ」は実施報告・未実施報告(マット)、「他」はマット以外(ラン・ウェイト)のセッションがある日にマイページの「今日のトレーニングメニュー」を保存しているかどうかです。それぞれ緑=提出済み、赤=未提出、グレー=対象外(その日にそのセッション自体がない場合)を表します。
           </p>
 
-          {loading ? (
+          {loading || loadingSelfLogs ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : members.length === 0 ? (
             <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
@@ -676,136 +676,71 @@ export default function CoachAdminPage({
                                 `${date}:${m.home_location}`
                               )
                             : undefined;
-                          const status = !menu
+                          const matStatus = !menu
                             ? "n/a"
                             : submittedKeys.has(`${m.id}:${menu.id}`)
                               ? "done"
                               : "missing";
-                          return (
-                            <div
-                              key={date}
-                              title={formatMonthDay(date)}
-                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${
-                                status === "done"
-                                  ? "bg-emerald-50"
-                                  : status === "missing"
-                                    ? "bg-red-50"
-                                    : "bg-neutral-50"
-                              }`}
-                            >
-                              <span className="text-[9px] text-neutral-400">
-                                {date.slice(8, 10)}日
-                              </span>
-                              <span
-                                className={`text-[9px] font-semibold ${
-                                  status === "done"
-                                    ? "text-emerald-600"
-                                    : status === "missing"
-                                      ? "text-red-600"
-                                      : "text-neutral-400"
-                                }`}
-                              >
-                                {status === "done"
-                                  ? "済"
-                                  : status === "missing"
-                                    ? "未"
-                                    : "−"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </section>
 
-        {/* 自己トレーニング記録（ラン・ウェイト等）の提出状況 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
-          <h2 className="text-sm font-semibold text-neutral-700">
-            自己トレーニング記録の提出状況
-          </h2>
-          <p className="text-[11px] text-neutral-400">
-            マット以外(ラン・ウェイト)のセッションがある日に、マイページの「今日のトレーニングメニュー」を保存しているかどうかを表示しています。ラン・ウェイト・その他のいずれかを保存していればOKです。「対象外」はその日にマット以外のセッションが設定されていない場合です。
-          </p>
-
-          {loadingMembers || loadingSelfLogs ? (
-            <p className="text-xs text-neutral-400">読み込み中…</p>
-          ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-              部員が登録されていません。
-            </p>
-          ) : (
-            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-200">
-              <ul className="divide-y divide-neutral-100">
-                {members.map((m) => {
-                  const gradeLabel =
-                    m.entry_year != null
-                      ? `${currentGrade(m.entry_year)}年`
-                      : null;
-                  return (
-                    <li
-                      key={m.id}
-                      className="flex flex-col gap-1.5 px-3 py-2.5 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-neutral-800">
-                          {m.display_name}
-                        </span>
-                        {gradeLabel && (
-                          <span className="text-neutral-400">{gradeLabel}</span>
-                        )}
-                        {m.home_location && (
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
-                            {locationLabel[m.home_location]}
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {recentDates.map((date) => {
                           const hasOtherSession = m.home_location
                             ? otherSessionByDateLocation.has(
                                 `${date}:${m.home_location}`
                               )
                             : false;
-                          const status = !hasOtherSession
+                          const otherStatus = !hasOtherSession
                             ? "n/a"
                             : selfLogKeys.has(`${m.id}:${date}`)
                               ? "done"
                               : "missing";
+
+                          const anyMissing =
+                            matStatus === "missing" || otherStatus === "missing";
+                          const bothNA =
+                            matStatus === "n/a" && otherStatus === "n/a";
+                          const cellColor = bothNA
+                            ? "bg-neutral-50"
+                            : anyMissing
+                              ? "bg-red-50"
+                              : "bg-emerald-50";
+
+                          const badgeClass = (s: "n/a" | "done" | "missing") =>
+                            s === "done"
+                              ? "text-emerald-600"
+                              : s === "missing"
+                                ? "text-red-600"
+                                : "text-neutral-300";
+
                           return (
                             <div
                               key={date}
                               title={formatMonthDay(date)}
-                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${
-                                status === "done"
-                                  ? "bg-emerald-50"
-                                  : status === "missing"
-                                    ? "bg-red-50"
-                                    : "bg-neutral-50"
-                              }`}
+                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${cellColor}`}
                             >
                               <span className="text-[9px] text-neutral-400">
                                 {date.slice(8, 10)}日
                               </span>
-                              <span
-                                className={`text-[9px] font-semibold ${
-                                  status === "done"
-                                    ? "text-emerald-600"
-                                    : status === "missing"
-                                      ? "text-red-600"
-                                      : "text-neutral-400"
-                                }`}
-                              >
-                                {status === "done"
-                                  ? "済"
-                                  : status === "missing"
-                                    ? "未"
-                                    : "−"}
-                              </span>
+                              {bothNA ? (
+                                <span className="text-[9px] font-semibold text-neutral-400">
+                                  −
+                                </span>
+                              ) : (
+                                <span className="flex gap-0.5">
+                                  {matStatus !== "n/a" && (
+                                    <span
+                                      className={`text-[9px] font-semibold ${badgeClass(matStatus)}`}
+                                    >
+                                      マ
+                                    </span>
+                                  )}
+                                  {otherStatus !== "n/a" && (
+                                    <span
+                                      className={`text-[9px] font-semibold ${badgeClass(otherStatus)}`}
+                                    >
+                                      他
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                             </div>
                           );
                         })}
