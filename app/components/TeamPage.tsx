@@ -122,10 +122,8 @@ function groupMembersByGrade(
 
 export default function TeamPage({
   profile,
-  signOut,
 }: {
   profile: Profile;
-  signOut: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();

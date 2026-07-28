@@ -6,7 +6,7 @@ import TeamPage from "../components/TeamPage";
 export default function TeamRoute() {
   return (
     <AuthGate>
-      {(profile, signOut) => <TeamPage profile={profile} signOut={signOut} />}
+      {(profile) => <TeamPage profile={profile} />}
     </AuthGate>
   );
 }

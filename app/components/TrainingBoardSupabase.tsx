@@ -82,10 +82,8 @@ function isReportOpen(menu: MenuRow): boolean {
 
 export default function TrainingBoardSupabase({
   profile,
-  signOut,
 }: {
   profile: Profile;
-  signOut: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -1333,7 +1331,6 @@ export default function TrainingBoardSupabase({
           </h3>
           <MenuCalendar
             menus={menus}
-            selectedId={selectedId}
             viewDate={viewDate}
             onSelect={selectMenu}
             submissionMap={submissionMap}
@@ -1585,7 +1582,6 @@ function toDateKey(d: Date) {
 
 function MenuCalendar({
   menus,
-  selectedId,
   viewDate,
   onSelect,
   submissionMap,
@@ -1597,7 +1593,6 @@ function MenuCalendar({
   location,
 }: {
   menus: MenuRow[];
-  selectedId: string | null;
   viewDate: string;
   onSelect: (id: string) => void;
   submissionMap: Record<
