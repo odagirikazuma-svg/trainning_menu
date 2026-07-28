@@ -604,3 +604,35 @@ where event_id is null
 alter table weight_maxes drop constraint if exists weight_maxes_author_id_key;
 alter table weight_maxes drop constraint if exists weight_maxes_author_event_unique;
 alter table weight_maxes add constraint weight_maxes_author_event_unique unique (author_id, event_id);
+
+-- ============================================
+-- 追加: 怪我管理（部員がマイページから報告し、コーチが管理ページで確認できる）
+-- ============================================
+create table if not exists injuries (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  symptom_name text not null,
+  body_part text not null,
+  detail text,
+  expected_recovery_date date,
+  surgery_possibility text not null default 'unknown' check (surgery_possibility in ('yes', 'no', 'unknown')),
+  next_hospital_date date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table injuries enable row level security;
+
+create policy "injuries_select_same_team" on injuries
+  for select using (team_id = get_my_team_id());
+
+create policy "injuries_insert_self" on injuries
+  for insert with check (
+    author_id = auth.uid() and team_id = get_my_team_id()
+  );
+
+create policy "injuries_update_self" on injuries
+  for update using (author_id = auth.uid());
+
+create policy "injuries_delete_self" on injuries
+  for delete using (author_id = auth.uid());

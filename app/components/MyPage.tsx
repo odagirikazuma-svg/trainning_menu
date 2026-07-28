@@ -8,6 +8,9 @@ import {
   getTitleColor,
   Location,
   locationLabel,
+  SessionType,
+  sessionTypeDotColor,
+  sessionTypeLabel,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
@@ -29,6 +32,17 @@ type MatchRow = {
   name: string;
   date: string;
   member_id: string | null;
+};
+
+type InjuryRow = {
+  id: string;
+  symptom_name: string;
+  body_part: string;
+  detail: string | null;
+  expected_recovery_date: string | null;
+  surgery_possibility: "yes" | "no" | "unknown";
+  next_hospital_date: string | null;
+  created_at: string;
 };
 
 type WeightLogRow = {
@@ -125,6 +139,20 @@ export default function MyPage({
   const [weightMaxDeadlift, setWeightMaxDeadlift] = useState("");
   const [savingWeightMaxTodo, setSavingWeightMaxTodo] = useState(false);
 
+  const [injuries, setInjuries] = useState<InjuryRow[]>([]);
+  const [loadingInjuries, setLoadingInjuries] = useState(true);
+  const [showInjuryForm, setShowInjuryForm] = useState(false);
+  const [editingInjuryId, setEditingInjuryId] = useState<string | null>(null);
+  const [injurySymptom, setInjurySymptom] = useState("");
+  const [injuryBodyPart, setInjuryBodyPart] = useState("");
+  const [injuryDetail, setInjuryDetail] = useState("");
+  const [injuryRecoveryDate, setInjuryRecoveryDate] = useState("");
+  const [injurySurgery, setInjurySurgery] = useState<"yes" | "no" | "unknown">(
+    "unknown"
+  );
+  const [injuryNextHospital, setInjuryNextHospital] = useState("");
+  const [savingInjury, setSavingInjury] = useState(false);
+
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
   const [showMatchForm, setShowMatchForm] = useState(false);
@@ -158,6 +186,9 @@ export default function MyPage({
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
     { date: string; type: TrainingType; title: string | null }[]
   >([]);
+  const [calendarSchedule, setCalendarSchedule] = useState<
+    Map<string, { type: SessionType; time: string }[]>
+  >(new Map());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
@@ -204,6 +235,7 @@ export default function MyPage({
     loadRecordDates();
     loadTitleOptions();
     loadWeightMaxTodo();
+    loadInjuries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -443,6 +475,94 @@ export default function MyPage({
       setWeightMaxDeadlift("");
     }
     setSavingWeightMaxTodo(false);
+  }
+
+  async function loadInjuries() {
+    setLoadingInjuries(true);
+    const { data, error } = await supabase
+      .from("injuries")
+      .select(
+        "id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, created_at"
+      )
+      .eq("author_id", profile.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setInjuries((data ?? []) as InjuryRow[]);
+    }
+    setLoadingInjuries(false);
+  }
+
+  function resetInjuryForm() {
+    setEditingInjuryId(null);
+    setInjurySymptom("");
+    setInjuryBodyPart("");
+    setInjuryDetail("");
+    setInjuryRecoveryDate("");
+    setInjurySurgery("unknown");
+    setInjuryNextHospital("");
+  }
+
+  function handleStartNewInjury() {
+    resetInjuryForm();
+    setShowInjuryForm(true);
+  }
+
+  function handleStartEditInjury(row: InjuryRow) {
+    setEditingInjuryId(row.id);
+    setInjurySymptom(row.symptom_name);
+    setInjuryBodyPart(row.body_part);
+    setInjuryDetail(row.detail ?? "");
+    setInjuryRecoveryDate(row.expected_recovery_date ?? "");
+    setInjurySurgery(row.surgery_possibility);
+    setInjuryNextHospital(row.next_hospital_date ?? "");
+    setShowInjuryForm(true);
+  }
+
+  async function handleSubmitInjury(e: React.FormEvent) {
+    e.preventDefault();
+    if (!injurySymptom.trim() || !injuryBodyPart.trim()) return;
+    setSavingInjury(true);
+
+    const payload = {
+      team_id: profile.team_id,
+      author_id: profile.id,
+      symptom_name: injurySymptom.trim(),
+      body_part: injuryBodyPart.trim(),
+      detail: injuryDetail.trim() || null,
+      expected_recovery_date: injuryRecoveryDate || null,
+      surgery_possibility: injurySurgery,
+      next_hospital_date: injuryNextHospital || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = editingInjuryId
+      ? await supabase
+          .from("injuries")
+          .update(payload)
+          .eq("id", editingInjuryId)
+      : await supabase.from("injuries").insert(payload);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      resetInjuryForm();
+      setShowInjuryForm(false);
+      await loadInjuries();
+    }
+    setSavingInjury(false);
+  }
+
+  async function handleDeleteInjury(id: string) {
+    if (!window.confirm("この怪我の報告を削除しますか？")) return;
+    const { error } = await supabase.from("injuries").delete().eq("id", id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      await loadInjuries();
+    }
   }
 
   async function loadTitleOptions() {
@@ -687,6 +807,36 @@ export default function MyPage({
         )
         .map((r) => ({ date: r.menu!.date, type: r.alt_type, title: null }));
       setCalendarAbsentLogs(filtered);
+    }
+
+    if (profile.home_location) {
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from("schedule_days")
+        .select(
+          "date, is_off, sessions:schedule_sessions(session_type, start_time)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("location", profile.home_location)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+
+      if (scheduleError) {
+        setErrorMsg(scheduleError.message);
+      } else {
+        const map = new Map<string, { type: SessionType; time: string }[]>();
+        for (const row of (scheduleData ?? []) as unknown as {
+          date: string;
+          is_off: boolean;
+          sessions: { session_type: SessionType; start_time: string }[];
+        }[]) {
+          if (row.is_off) continue;
+          const nonMat = row.sessions
+            .filter((s) => s.session_type !== "mat")
+            .map((s) => ({ type: s.session_type, time: s.start_time }));
+          if (nonMat.length > 0) map.set(row.date, nonMat);
+        }
+        setCalendarSchedule(map);
+      }
     }
   }
 
@@ -1253,6 +1403,7 @@ export default function MyPage({
               onCursorChange={setCalendarCursor}
               weightLogs={calendarWeightLogs}
               absentLogs={calendarAbsentLogs}
+              scheduleByDate={calendarSchedule}
               onSelectDate={handleSelectCalendarDate}
               highlightDate={selectedCalendarDate}
               todayDate={todayStr}
@@ -1292,6 +1443,30 @@ export default function MyPage({
                       ▶
                     </button>
                   )}
+
+                  {selectedCalendarDate &&
+                    (calendarSchedule.get(selectedCalendarDate) ?? []).length >
+                      0 && (
+                      <div className="mb-3 flex flex-col gap-1 rounded-lg bg-neutral-50 p-2">
+                        <p className="text-[10px] font-semibold text-neutral-400">
+                          この日の予定
+                        </p>
+                        {(calendarSchedule.get(selectedCalendarDate) ?? []).map(
+                          (s, idx) => (
+                            <span
+                              key={idx}
+                              className="flex items-center gap-1 text-xs text-neutral-600"
+                            >
+                              <span
+                                className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[s.type]}`}
+                              />
+                              {sessionTypeLabel[s.type]}
+                              {s.time.slice(0, 5)}〜
+                            </span>
+                          )
+                        )}
+                      </div>
+                    )}
 
                   {loadingPopupRecord ? (
                     <p className="py-6 text-center text-xs text-neutral-400">
@@ -1356,9 +1531,177 @@ export default function MyPage({
           <h2 className="text-sm font-semibold text-neutral-700">
             怪我の記録・復帰計画
           </h2>
-          <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
-            準備中です。
-          </p>
+
+          {!showInjuryForm && (
+            <button
+              onClick={handleStartNewInjury}
+              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700"
+            >
+              ＋ 怪我を報告する
+            </button>
+          )}
+
+          {showInjuryForm && (
+            <form
+              onSubmit={handleSubmitInjury}
+              className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3"
+            >
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                怪我の症状名
+                <input
+                  type="text"
+                  required
+                  value={injurySymptom}
+                  onChange={(e) => setInjurySymptom(e.target.value)}
+                  placeholder="例：前十字靭帯損傷、肉離れ など"
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                発生場所（部位）
+                <input
+                  type="text"
+                  required
+                  value={injuryBodyPart}
+                  onChange={(e) => setInjuryBodyPart(e.target.value)}
+                  placeholder="例：右膝、左足首 など"
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                発生時の詳細
+                <textarea
+                  value={injuryDetail}
+                  onChange={(e) => setInjuryDetail(e.target.value)}
+                  rows={4}
+                  placeholder="いつ・どんな状況で起きたかなど自由に記入してください"
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  完治見込み日
+                  <input
+                    type="date"
+                    value={injuryRecoveryDate}
+                    onChange={(e) => setInjuryRecoveryDate(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                  次回通院日
+                  <input
+                    type="date"
+                    value={injuryNextHospital}
+                    onChange={(e) => setInjuryNextHospital(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-500">
+                手術の可能性
+                <select
+                  value={injurySurgery}
+                  onChange={(e) =>
+                    setInjurySurgery(
+                      e.target.value as "yes" | "no" | "unknown"
+                    )
+                  }
+                  className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="unknown">未定</option>
+                  <option value="yes">あり</option>
+                  <option value="no">なし</option>
+                </select>
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={savingInjury}
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                >
+                  {editingInjuryId ? "更新する" : "報告する"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetInjuryForm();
+                    setShowInjuryForm(false);
+                  }}
+                  className="flex-1 rounded-lg border border-neutral-300 py-2.5 text-sm text-neutral-600"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          )}
+
+          {loadingInjuries ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : injuries.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              報告されている怪我はありません。
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {injuries.map((inj) => (
+                <li
+                  key={inj.id}
+                  className="flex flex-col gap-1 rounded-lg border border-neutral-200 p-3 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-neutral-800">
+                      {inj.symptom_name}（{inj.body_part}）
+                    </span>
+                    <span className="text-[10px] text-neutral-400">
+                      {formatMonthDay(toDateKey(new Date(inj.created_at)))}報告
+                    </span>
+                  </div>
+                  {inj.detail && (
+                    <p className="whitespace-pre-wrap text-neutral-600">
+                      {inj.detail}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-[11px] text-neutral-500">
+                    <span>
+                      完治見込み:{" "}
+                      {inj.expected_recovery_date
+                        ? formatMonthDay(inj.expected_recovery_date)
+                        : "未定"}
+                    </span>
+                    <span>
+                      次回通院:{" "}
+                      {inj.next_hospital_date
+                        ? formatMonthDay(inj.next_hospital_date)
+                        : "未定"}
+                    </span>
+                    <span>
+                      手術:{" "}
+                      {inj.surgery_possibility === "yes"
+                        ? "あり"
+                        : inj.surgery_possibility === "no"
+                          ? "なし"
+                          : "未定"}
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleStartEditInjury(inj)}
+                      className="text-[11px] font-medium text-neutral-500 underline"
+                    >
+                      編集
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInjury(inj.id)}
+                      className="text-[11px] font-medium text-red-500 underline"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* ログアウト（一番下に配置） */}
@@ -1380,6 +1723,7 @@ function TrainingCalendar({
   onCursorChange,
   weightLogs,
   absentLogs,
+  scheduleByDate,
   onSelectDate,
   highlightDate,
   todayDate,
@@ -1389,6 +1733,7 @@ function TrainingCalendar({
   onCursorChange: (d: Date) => void;
   weightLogs: { date: string; type: TrainingType; title: string | null }[];
   absentLogs: { date: string; type: TrainingType; title: string | null }[];
+  scheduleByDate: Map<string, { type: SessionType; time: string }[]>;
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
   todayDate?: string;
@@ -1483,6 +1828,21 @@ function TrainingCalendar({
                   ))}
                 </span>
               )}
+              {(scheduleByDate.get(key) ?? []).length > 0 && (
+                <span
+                  className="flex flex-wrap justify-center gap-0.5"
+                  title={(scheduleByDate.get(key) ?? [])
+                    .map((s) => `${sessionTypeLabel[s.type]}${s.time.slice(0, 5)}〜`)
+                    .join("、")}
+                >
+                  {(scheduleByDate.get(key) ?? []).map((s, idx) => (
+                    <span
+                      key={idx}
+                      className={`inline-block h-1.5 w-1.5 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
+                    />
+                  ))}
+                </span>
+              )}
               {isMatchDay && (
                 <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1 text-[8px] font-bold text-white">
                   試合
@@ -1509,6 +1869,10 @@ function TrainingCalendar({
             {trainingTypeLabel[t]}
           </span>
         ))}
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 rounded-full border border-neutral-400 bg-transparent" />
+          予定（未実施）
+        </span>
       </p>
     </div>
   );

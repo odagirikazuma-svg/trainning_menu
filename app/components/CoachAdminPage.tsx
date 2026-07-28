@@ -33,6 +33,19 @@ type MemberRow = {
   role: MemberRoleForEdit;
 };
 
+type InjuryRow = {
+  id: string;
+  author_id: string;
+  symptom_name: string;
+  body_part: string;
+  detail: string | null;
+  expected_recovery_date: string | null;
+  surgery_possibility: "yes" | "no" | "unknown";
+  next_hospital_date: string | null;
+  created_at: string;
+  author: { display_name: string } | null;
+};
+
 type MenuRow = {
   id: string;
   date: string;
@@ -145,8 +158,27 @@ export default function CoachAdminPage({
     loadSelfLogs();
     loadRoster();
     loadWeightMaxEvent();
+    loadInjuries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadInjuries() {
+    setLoadingInjuries(true);
+    const { data, error } = await supabase
+      .from("injuries")
+      .select(
+        "id, author_id, symptom_name, body_part, detail, expected_recovery_date, surgery_possibility, next_hospital_date, created_at, author:profiles!injuries_author_id_fkey(display_name)"
+      )
+      .eq("team_id", profile.team_id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setInjuries((data ?? []) as unknown as InjuryRow[]);
+    }
+    setLoadingInjuries(false);
+  }
 
   async function loadMembers() {
     setLoadingMembers(true);
@@ -285,6 +317,12 @@ export default function CoachAdminPage({
 
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+
+  const [injuries, setInjuries] = useState<InjuryRow[]>([]);
+  const [loadingInjuries, setLoadingInjuries] = useState(true);
+  const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
+    null
+  );
 
   async function handleUpdateRole(
     memberId: string,
@@ -757,6 +795,84 @@ export default function CoachAdminPage({
                 })}
               </ul>
             </div>
+          )}
+        </section>
+
+        {/* 怪我人一覧 */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            怪我人一覧
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            部員がマイページから報告した怪我の一覧です。タップすると詳細が開きます。
+          </p>
+          {loadingInjuries ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : injuries.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              報告されている怪我はありません。
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {injuries.map((inj) => {
+                const isOpen = expandedInjuryId === inj.id;
+                return (
+                  <li
+                    key={inj.id}
+                    className="rounded-lg border border-neutral-200"
+                  >
+                    <button
+                      onClick={() =>
+                        setExpandedInjuryId(isOpen ? null : inj.id)
+                      }
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-neutral-50"
+                    >
+                      <span className="flex flex-col">
+                        <span className="font-medium text-neutral-800">
+                          {inj.author?.display_name ?? "不明"}
+                        </span>
+                        <span className="text-neutral-500">
+                          {inj.symptom_name}（{inj.body_part}）
+                        </span>
+                      </span>
+                      <span className="text-neutral-300">
+                        {isOpen ? "︿" : "﹀"}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="flex flex-col gap-1 border-t border-neutral-100 px-3 py-2.5 text-xs text-neutral-600">
+                        {inj.detail && (
+                          <p className="whitespace-pre-wrap">{inj.detail}</p>
+                        )}
+                        <p>
+                          完治見込み日:{" "}
+                          {inj.expected_recovery_date
+                            ? formatMonthDay(inj.expected_recovery_date)
+                            : "未定"}
+                        </p>
+                        <p>
+                          次回通院日:{" "}
+                          {inj.next_hospital_date
+                            ? formatMonthDay(inj.next_hospital_date)
+                            : "未定"}
+                        </p>
+                        <p>
+                          手術の可能性:{" "}
+                          {inj.surgery_possibility === "yes"
+                            ? "あり"
+                            : inj.surgery_possibility === "no"
+                              ? "なし"
+                              : "未定"}
+                        </p>
+                        <p className="text-[10px] text-neutral-400">
+                          報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
 
