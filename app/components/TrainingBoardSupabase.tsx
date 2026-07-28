@@ -181,6 +181,7 @@ export default function TrainingBoardSupabase({
   }, []);
 
   useEffect(() => {
+    setJointNoticeDate(null);
     (async () => {
       const [rows, jointMap] = await Promise.all([
         loadMenus(),
@@ -646,7 +647,7 @@ export default function TrainingBoardSupabase({
 
   const centerItem: NeighborItem | null = selected
     ? { kind: "menu", menu: selected, sortKey: referenceKey }
-    : jointNoticeDate
+    : jointNoticeDate && jointElsewhere.get(jointNoticeDate)
     ? {
         kind: "joint",
         date: jointNoticeDate,
@@ -721,17 +722,6 @@ export default function TrainingBoardSupabase({
 
         {/* メニュー一覧（横スクロール、スマホ向け） */}
         <div className="flex flex-col gap-2">
-          {canCreateMenu(profile.role) && (
-            <button
-              onClick={() => handleOpenNewForm()}
-              className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white active:bg-neutral-700"
-            >
-              {showNewForm
-                ? "キャンセル"
-                : `＋ ${locationLabel[activeLocation]}のメニューを作成`}
-            </button>
-          )}
-
           {showNewForm && canCreateMenu(profile.role) && (
             <form
               onSubmit={handleCreateMenu}
@@ -849,19 +839,28 @@ export default function TrainingBoardSupabase({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      newDate &&
-                      (newMenuType === "off" || newContent)
-                    )
-                      setConfirmingNew(true);
-                  }}
-                  className="rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
-                >
-                  確認する
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewForm(false)}
+                    className="flex-1 rounded-lg border border-neutral-300 py-3 text-sm text-neutral-600"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        newDate &&
+                        (newMenuType === "off" || newContent)
+                      )
+                        setConfirmingNew(true);
+                    }}
+                    className="flex-1 rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
+                  >
+                    確認する
+                  </button>
+                </div>
               )}
             </form>
           )}
