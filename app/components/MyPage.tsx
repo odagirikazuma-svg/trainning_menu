@@ -374,6 +374,8 @@ export default function MyPage({
   }
 
   async function loadWeightMaxTodo() {
+    if (profile.role === "coach") return;
+
     const { data: eventData, error: eventError } = await supabase
       .from("weight_max_events")
       .select("id, deadline, created_at")

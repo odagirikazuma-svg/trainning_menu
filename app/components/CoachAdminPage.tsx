@@ -15,11 +15,22 @@ const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   member: "役職なし",
 };
 
+type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "member";
+
+const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
+  captain: "主将",
+  vice_captain: "副主将",
+  leader: "リーダー",
+  vice_leader: "副リーダー",
+  member: "役職なし",
+};
+
 type MemberRow = {
   id: string;
   display_name: string;
   home_location: Location | null;
   entry_year: number | null;
+  role: MemberRoleForEdit;
 };
 
 type MenuRow = {
@@ -73,10 +84,10 @@ export default function CoachAdminPage({
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 直近3日間（今日は提出期間中の可能性があるため、昨日から3日分をさかのぼる）
+  // 直近1週間（今日は提出期間中の可能性があるため、昨日から7日分をさかのぼる）
   const [recentDates] = useState<string[]>(() => {
     const dates: string[] = [];
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 7; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       dates.push(toDateKey(d));
@@ -134,7 +145,7 @@ export default function CoachAdminPage({
     setLoadingMembers(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, home_location, entry_year")
+      .select("id, display_name, home_location, entry_year, role")
       .eq("team_id", profile.team_id)
       .neq("role", "coach")
       .order("display_name", { ascending: true });
@@ -203,6 +214,30 @@ export default function CoachAdminPage({
   }
 
   const loading = loadingMembers || loadingReports;
+
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+
+  async function handleUpdateRole(
+    memberId: string,
+    newRole: MemberRoleForEdit
+  ) {
+    setSavingRoleId(memberId);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", memberId);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
+      );
+      setEditingRoleId(null);
+    }
+    setSavingRoleId(null);
+  }
 
   async function loadWeightMaxEvent() {
     const { data, error } = await supabase
@@ -532,7 +567,7 @@ export default function CoachAdminPage({
 
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">
-            直近3日間の提出状況
+            直近1週間の提出状況
           </h2>
           <p className="text-[11px] text-neutral-400">
             各部員の所属拠点のメニューに対して、実施報告・未実施報告のいずれかを提出済みかどうかを表示しています。「対象外」はその日の練習がオフ、またはメニュー自体が作成されていない場合です。
@@ -567,7 +602,7 @@ export default function CoachAdminPage({
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-4 gap-1.5">
                         {recentDates.map((date) => {
                           const menu = m.home_location
                             ? menusByDateLocation.get(
@@ -615,6 +650,70 @@ export default function CoachAdminPage({
                     </li>
                   );
                 })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* 部員の役職を編集 */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            部員の役職を編集
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            主将・副主将・リーダー・副リーダー・役職なし、から選べます。
+          </p>
+          {loadingMembers ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : members.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              部員が登録されていません。
+            </p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-200">
+              <ul className="divide-y divide-neutral-100">
+                {members.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs"
+                  >
+                    <span className="font-medium text-neutral-800">
+                      {m.display_name}
+                    </span>
+                    {editingRoleId === m.id ? (
+                      <select
+                        autoFocus
+                        value={m.role}
+                        disabled={savingRoleId === m.id}
+                        onChange={(e) =>
+                          handleUpdateRole(
+                            m.id,
+                            e.target.value as MemberRoleForEdit
+                          )
+                        }
+                        onBlur={() => setEditingRoleId(null)}
+                        className="rounded border border-neutral-300 px-2 py-1 text-xs"
+                      >
+                        {(
+                          Object.keys(
+                            memberRoleEditLabel
+                          ) as MemberRoleForEdit[]
+                        ).map((r) => (
+                          <option key={r} value={r}>
+                            {memberRoleEditLabel[r]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        onClick={() => setEditingRoleId(m.id)}
+                        className="rounded bg-neutral-100 px-2 py-1 text-neutral-600 active:bg-neutral-200"
+                      >
+                        {memberRoleEditLabel[m.role]}
+                      </button>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
           )}

@@ -568,3 +568,21 @@ create policy "weight_max_events_delete_coach" on weight_max_events
   for delete using (
     exists (select 1 from profiles where id = auth.uid() and role = 'coach')
   );
+
+-- ============================================
+-- 追加: 部員の役職に「リーダー」「副リーダー」を追加できるようにする
+-- （主将・副主将に加えて、学年やグループ単位のリーダーなどを設定できるようにする）
+-- ============================================
+alter type member_role add value if not exists 'leader';
+alter type member_role add value if not exists 'vice_leader';
+
+-- ============================================
+-- 追加: コーチが同じチームの部員の役職を編集できるようにする
+-- ============================================
+create policy "profiles_update_coach" on profiles
+  for update using (
+    team_id = get_my_team_id()
+    and exists (
+      select 1 from profiles where id = auth.uid() and role = 'coach'
+    )
+  );
