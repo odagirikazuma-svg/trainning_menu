@@ -55,6 +55,22 @@ type PopupRecordRow = {
   isAlternative: boolean;
 };
 
+type MenuRow = {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  location: Location;
+  start_time: string | null;
+  is_off: boolean;
+};
+
+function isReportOpen(menu: MenuRow): boolean {
+  if (!menu.start_time) return true;
+  const threshold = new Date(`${menu.date}T${menu.start_time}`);
+  return new Date() >= threshold;
+}
+
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -97,6 +113,9 @@ export default function MemberDetailPage({
   const [recentLogs, setRecentLogs] = useState<RecentRecord[]>([]);
   const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
 
+  const [todoMenus, setTodoMenus] = useState<MenuRow[]>([]);
+  const [loadingTodo, setLoadingTodo] = useState(true);
+
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -126,6 +145,7 @@ export default function MemberDetailPage({
     loadNextMatch();
     loadRecentLogs();
     loadRecordDates();
+    loadTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
@@ -147,6 +167,88 @@ export default function MemberDetailPage({
     } else {
       setMember((data as MemberProfile | null) ?? null);
     }
+  }
+
+  async function loadTodo() {
+    if (!member || !member.home_location) {
+      setLoadingTodo(false);
+      return;
+    }
+    setLoadingTodo(true);
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const rangeStart = toDateKey(twoWeeksAgo);
+    const todayStr = toDateKey(new Date());
+
+    const { data: ownMenuData, error: ownMenuError } = await supabase
+      .from("menus")
+      .select("id, date, title, content, location, start_time, is_off")
+      .eq("team_id", profile.team_id)
+      .eq("location", member.home_location)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (ownMenuError) {
+      setErrorMsg(ownMenuError.message);
+      setLoadingTodo(false);
+      return;
+    }
+
+    const { data: jointMenuData, error: jointMenuError } = await supabase
+      .from("menus")
+      .select("id, date, title, content, location, start_time, is_off")
+      .eq("team_id", profile.team_id)
+      .eq("is_joint", true)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (jointMenuError) {
+      setErrorMsg(jointMenuError.message);
+      setLoadingTodo(false);
+      return;
+    }
+
+    const menuMap = new Map<string, MenuRow>();
+    for (const m of (ownMenuData ?? []) as unknown as MenuRow[]) {
+      menuMap.set(m.id, m);
+    }
+    for (const m of (jointMenuData ?? []) as unknown as MenuRow[]) {
+      menuMap.set(m.id, m);
+    }
+    const menus = Array.from(menuMap.values()).sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
+    const openMenus = menus.filter((m) => isReportOpen(m));
+
+    if (openMenus.length === 0) {
+      setTodoMenus([]);
+      setLoadingTodo(false);
+      return;
+    }
+
+    const { data: commentData, error: commentError } = await supabase
+      .from("comments")
+      .select("menu_id, kind")
+      .eq("author_id", memberId)
+      .in(
+        "menu_id",
+        openMenus.map((m) => m.id)
+      )
+      .in("kind", ["report", "absent"]);
+
+    if (commentError) {
+      setErrorMsg(commentError.message);
+      setLoadingTodo(false);
+      return;
+    }
+
+    const respondedIds = new Set(
+      ((commentData ?? []) as { menu_id: string }[]).map((c) => c.menu_id)
+    );
+    setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
+    setLoadingTodo(false);
   }
 
   async function loadNextMatch() {
@@ -514,6 +616,43 @@ export default function MemberDetailPage({
           )}
         </section>
 
+        {/* やることリスト */}
+        <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            やることリスト
+          </h2>
+          <p className="text-[11px] text-neutral-400">
+            閲覧専用です。ここから編集や提出はできません。
+          </p>
+          {!member.home_location ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              所属拠点が設定されていません。
+            </p>
+          ) : loadingTodo ? (
+            <p className="text-xs text-neutral-400">読み込み中…</p>
+          ) : todoMenus.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 p-4 text-xs text-neutral-400">
+              未報告の練習メニューはありません。
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {todoMenus.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex flex-col rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-sm"
+                >
+                  <span className="text-[11px] text-amber-600">
+                    {locationLabel[m.location]}・実施報告 未提出
+                  </span>
+                  <span className="font-medium text-neutral-800">
+                    {m.title || formatMonthDay(m.date)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* 直近のトレーニング記録 */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
@@ -564,10 +703,10 @@ export default function MemberDetailPage({
           )}
         </section>
 
-        {/* トレーニングカレンダー */}
+        {/* 記録カレンダー */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            トレーニングカレンダー
+            記録カレンダー
           </h2>
           <div className="relative">
             <MemberTrainingCalendar

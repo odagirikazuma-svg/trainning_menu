@@ -1194,6 +1194,9 @@ export default function MyPage({
           <h2 className="text-sm font-semibold text-neutral-700">
             直近のトレーニング記録
           </h2>
+          <p className="text-[11px] text-neutral-400">
+            過去にトレーニングを行った直近3日間のメニューが表示されます。それ以外のメニューは下の「記録カレンダー」から閲覧できます。
+          </p>
           {loadingRecentLogs ? (
             <p className="text-xs text-neutral-400">読み込み中…</p>
           ) : recentLogs.length === 0 ? (
@@ -1239,10 +1242,10 @@ export default function MyPage({
           )}
         </section>
 
-        {/* トレーニングカレンダー */}
+        {/* 記録カレンダー */}
         <section className="flex flex-col gap-2 border-t border-neutral-200 pt-4">
           <h2 className="text-sm font-semibold text-neutral-700">
-            トレーニングカレンダー
+            記録カレンダー
           </h2>
           <div className="relative">
             <TrainingCalendar
@@ -1252,6 +1255,8 @@ export default function MyPage({
               absentLogs={calendarAbsentLogs}
               onSelectDate={handleSelectCalendarDate}
               highlightDate={selectedCalendarDate}
+              todayDate={todayStr}
+              nextMatchDate={nextMatch?.date ?? null}
             />
             {selectedCalendarDate && (
               <div
@@ -1377,6 +1382,8 @@ function TrainingCalendar({
   absentLogs,
   onSelectDate,
   highlightDate,
+  todayDate,
+  nextMatchDate,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -1384,6 +1391,8 @@ function TrainingCalendar({
   absentLogs: { date: string; type: TrainingType; title: string | null }[];
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
+  todayDate?: string;
+  nextMatchDate?: string | null;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
@@ -1438,16 +1447,24 @@ function TrainingCalendar({
           const title = titleByDate.get(key);
           const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
+          const isToday = key === todayDate;
+          const isMatchDay = !!nextMatchDate && key === nextMatchDate;
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
+              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-100 ${
                 isHighlighted
                   ? "bg-amber-50 font-bold text-amber-700 ring-2 ring-amber-400"
                   : titleColor
                     ? `${titleColor.fill} text-neutral-700`
                     : "text-neutral-600"
+              } ${
+                isMatchDay
+                  ? "ring-2 ring-red-400"
+                  : isToday
+                    ? "ring-1 ring-neutral-900"
+                    : ""
               }`}
               title={title ?? undefined}
             >
@@ -1466,11 +1483,24 @@ function TrainingCalendar({
                   ))}
                 </span>
               )}
+              {isMatchDay && (
+                <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1 text-[8px] font-bold text-white">
+                  試合
+                </span>
+              )}
             </button>
           );
         })}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded ring-1 ring-neutral-900" />
+          今日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded ring-2 ring-red-400" />
+          次の試合日
+        </span>
         {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
           <span key={t} className="flex items-center gap-1">
             <span

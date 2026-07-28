@@ -1688,9 +1688,9 @@ export default function TeamPage({
                     <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-700">
                       {formatMonthDay(event.measurementDate)}計測一覧
                     </summary>
-                    <div className="max-h-[60vh] overflow-y-auto border-t border-neutral-100">
+                    <div className="overflow-x-auto border-t border-neutral-100">
                       <table className="w-full text-xs">
-                        <thead className="sticky top-0 bg-white">
+                        <thead className="bg-white">
                           <tr className="border-b border-neutral-200 text-neutral-400">
                             <th className="px-2 py-1.5 text-left font-medium">
                               氏名
