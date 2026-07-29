@@ -65,6 +65,15 @@ type MenuRow = {
   is_off: boolean;
 };
 
+type InjuryTaskRow = {
+  id: string;
+  symptom_name: string;
+  expected_recovery_date: string | null;
+  next_hospital_date: string | null;
+  is_recovered: boolean;
+  progress_updated_at: string | null;
+};
+
 function isReportOpen(menu: MenuRow): boolean {
   if (!menu.start_time) return true;
   const threshold = new Date(`${menu.date}T${menu.start_time}`);
@@ -116,6 +125,11 @@ export default function MemberDetailPage({
   const [todoMenus, setTodoMenus] = useState<MenuRow[]>([]);
   const [loadingTodo, setLoadingTodo] = useState(true);
 
+  const [weightMaxTodo, setWeightMaxTodo] = useState<{
+    deadline: string;
+  } | null>(null);
+  const [injuries, setInjuries] = useState<InjuryTaskRow[]>([]);
+
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -146,6 +160,8 @@ export default function MemberDetailPage({
     loadRecentLogs();
     loadRecordDates();
     loadTodo();
+    loadWeightMaxTodo();
+    loadInjuries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
@@ -249,6 +265,81 @@ export default function MemberDetailPage({
     );
     setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
     setLoadingTodo(false);
+  }
+
+  async function loadWeightMaxTodo() {
+    if (!member || member.role === "coach" || member.role === "manager") {
+      setWeightMaxTodo(null);
+      return;
+    }
+    const { data: eventData, error: eventError } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline")
+      .eq("team_id", profile.team_id)
+      .is("closed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (eventError) {
+      setErrorMsg(eventError.message);
+      return;
+    }
+    if (!eventData) {
+      setWeightMaxTodo(null);
+      return;
+    }
+    const event = eventData as { id: string; deadline: string };
+
+    const { data: maxData, error: maxError } = await supabase
+      .from("weight_maxes")
+      .select("id")
+      .eq("author_id", memberId)
+      .eq("event_id", event.id)
+      .maybeSingle();
+
+    if (maxError) {
+      setErrorMsg(maxError.message);
+      return;
+    }
+
+    setWeightMaxTodo(maxData ? null : { deadline: event.deadline });
+  }
+
+  async function loadInjuries() {
+    if (!member || member.role === "coach" || member.role === "manager") {
+      setInjuries([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("injuries")
+      .select(
+        "id, symptom_name, expected_recovery_date, next_hospital_date, is_recovered, progress_updated_at"
+      )
+      .eq("author_id", memberId);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setInjuries((data ?? []) as InjuryTaskRow[]);
+    }
+  }
+
+  // 完治見込み日 or 次回通院日が来ているのに、まだ進捗報告していない怪我を判定する
+  function injuryNeedsProgressUpdate(inj: InjuryTaskRow): boolean {
+    if (inj.is_recovered) return false;
+    const todayStr = toDateKey(new Date());
+    const triggerDates = [inj.expected_recovery_date, inj.next_hospital_date]
+      .filter((d): d is string => !!d)
+      .sort();
+    if (triggerDates.length === 0) return false;
+    const earliestTrigger = triggerDates[0];
+    if (earliestTrigger > todayStr) return false;
+    if (inj.progress_updated_at) {
+      const updatedDateStr = toDateKey(new Date(inj.progress_updated_at));
+      if (updatedDateStr >= todayStr) return false;
+    }
+    return true;
   }
 
   async function loadNextMatch() {
@@ -629,6 +720,49 @@ export default function MemberDetailPage({
           <p className="text-[11px] text-neutral-500">
             閲覧専用です。ここから編集や提出はできません。
           </p>
+
+          {weightMaxTodo &&
+            (() => {
+              const todayStr = toDateKey(new Date());
+              const isOverdue = todayStr > weightMaxTodo.deadline;
+              return (
+                <div
+                  className={`flex flex-col rounded-lg border p-3 text-sm ${
+                    isOverdue
+                      ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                      : "border-amber-900/60 bg-amber-950/40"
+                  }`}
+                >
+                  <span
+                    className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                  >
+                    {isOverdue
+                      ? `期限切れ！(${weightMaxTodo.deadline}まで)`
+                      : `${weightMaxTodo.deadline}までに提出`}
+                  </span>
+                  <span
+                    className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                  >
+                    ウェイトMAX(BIG3)を提出する
+                  </span>
+                </div>
+              );
+            })()}
+
+          {injuries.filter(injuryNeedsProgressUpdate).map((inj) => (
+            <div
+              key={inj.id}
+              className="flex flex-col rounded-lg border border-red-600 bg-red-600 p-3 text-sm text-white shadow-lg ring-2 ring-red-400"
+            >
+              <span className="text-[11px] text-white">
+                完治見込み日・通院日が到来しています
+              </span>
+              <span className="font-medium text-white">
+                「{inj.symptom_name}」の経過を報告する
+              </span>
+            </div>
+          ))}
+
           {!member.home_location ? (
             <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               所属拠点が設定されていません。
@@ -636,9 +770,12 @@ export default function MemberDetailPage({
           ) : loadingTodo ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : todoMenus.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-              未報告の練習メニューはありません。
-            </p>
+            !weightMaxTodo &&
+            injuries.filter(injuryNeedsProgressUpdate).length === 0 && (
+              <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                未報告の練習メニューはありません。
+              </p>
+            )
           ) : (
             <ul className="flex flex-col gap-2">
               {todoMenus.map((m) => (
