@@ -1674,7 +1674,7 @@ export default function TeamPage({
             ウェイトMAX一覧
           </h2>
           <p className="text-[11px] text-neutral-500">
-            コーチが「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。（　）内は前回の計測からの増減です。
+            管理者が「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。（　）内は前回の計測からの増減です。
           </p>
           {loadingMembers || loadingMaxes ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>

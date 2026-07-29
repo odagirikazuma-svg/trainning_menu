@@ -92,7 +92,7 @@ export const roleLabel: Record<Role, string> = {
   leader: "リーダー",
   vice_leader: "副主将",
   captain: "主将",
-  coach: "コーチ",
+  coach: "管理者",
   manager: "マネージャー",
   member: "部員",
 };

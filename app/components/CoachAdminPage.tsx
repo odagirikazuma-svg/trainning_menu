@@ -11,7 +11,7 @@ type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "manager" | "memb
 const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   captain: "主将",
   vice_captain: "副主将",
-  coach: "コーチ",
+  coach: "管理者",
   manager: "マネージャー",
   member: "役職なし",
 };

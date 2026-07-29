@@ -28,7 +28,7 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
 const rosterRoleDisplayLabel: Record<string, string> = {
   captain: "主将",
   vice_captain: "副主将",
-  coach: "コーチ",
+  coach: "管理者",
   manager: "マネージャー",
   member: "役職なし",
 };
@@ -261,7 +261,7 @@ export default function AuthGate({
       const usingRosterPreview = Boolean(inviteToken && rosterPreview);
       if (!usingRosterPreview) {
         if (!signupCategory) {
-          setErrorMsg("部員かコーチかマネージャーを選択してください。");
+          setErrorMsg("部員か管理者かマネージャーを選択してください。");
           setSubmitting(false);
           return;
         }
@@ -368,7 +368,7 @@ export default function AuthGate({
                 区分:{" "}
                 <span className="font-medium">
                   {rosterPreview.role === "coach"
-                    ? "コーチ"
+                    ? "管理者"
                     : rosterPreview.role === "manager"
                       ? "マネージャー"
                       : "部員"}
@@ -416,7 +416,7 @@ export default function AuthGate({
                     {(
                       [
                         { v: "member", label: "部員" },
-                        { v: "coach", label: "コーチ" },
+                        { v: "coach", label: "管理者" },
                         { v: "manager", label: "マネージャー" },
                       ] as const
                     ).map((opt) => (

@@ -167,7 +167,7 @@ export default function TrainingBoardSupabase({
   const [viewDate, setViewDate] = useState<string>(() => toDateKey(new Date()));
 
   useEffect(() => {
-    // 練習に参加しうる部員を、コーチを除いて拠点ごとに集計する
+    // 練習に参加しうる部員を、管理者を除いて拠点ごとに集計する
     supabase
       .from("profiles")
       .select("home_location")
@@ -233,7 +233,7 @@ export default function TrainingBoardSupabase({
   }, [viewDate, activeLocation]);
 
   // 「＋ メニューを作成」ボタン：閉じている場合は開き、
-  // コーチが設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
+  // 管理者が設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
   function handleOpenNewForm() {
     if (showNewForm) {
       setShowNewForm(false);
@@ -670,7 +670,7 @@ export default function TrainingBoardSupabase({
       ...(nextItem ? [{ item: nextItem, role: "next" as const }] : []),
     ];
 
-  // 表示中の日付にコーチが設定した「マット」セッションがあれば、その時刻を取得
+  // 表示中の日付に管理者が設定した「マット」セッションがあれば、その時刻を取得
   const matSessionForViewDate =
     viewDateSchedule && !viewDateSchedule.is_off
       ? viewDateSchedule.sessions.find((s) => s.session_type === "mat")
