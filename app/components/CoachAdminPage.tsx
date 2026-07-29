@@ -122,6 +122,13 @@ export default function CoachAdminPage({
     return dates.sort();
   });
 
+  // 未提出者がいる限り古い日付も表示し続けるため、データ自体は60日分さかのぼって取得する
+  const [extendedRangeStart] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 60);
+    return toDateKey(d);
+  });
+
   const [menusByDateLocation, setMenusByDateLocation] = useState<
     Map<string, MenuRow>
   >(new Map());
@@ -207,7 +214,7 @@ export default function CoachAdminPage({
 
   async function loadReports() {
     setLoadingReports(true);
-    const rangeStart = recentDates[0];
+    const rangeStart = extendedRangeStart;
     const rangeEnd = recentDates[recentDates.length - 1];
 
     const { data: menuData, error: menuError } = await supabase
@@ -265,7 +272,7 @@ export default function CoachAdminPage({
   // その部員が自己申告のトレーニング記録（weight_logs）を保存しているかを調べる
   async function loadSelfLogs() {
     setLoadingSelfLogs(true);
-    const rangeStart = recentDates[0];
+    const rangeStart = extendedRangeStart;
     const rangeEnd = recentDates[recentDates.length - 1];
 
     const { data: sessionData, error: sessionError } = await supabase
@@ -558,10 +565,10 @@ export default function CoachAdminPage({
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            直近1週間の提出状況
+            メニューの提出状況
           </h2>
           <p className="text-[11px] text-neutral-500">
-            日付ごとに、多摩・大塚それぞれ何人中何人が提出済みかを表示しています(実施報告・未実施報告、マット以外のセッションがある日の「今日のトレーニングメニュー」を合わせて判定)。タップすると、誰が未提出で誰が提出済みかが分かります。
+            日付ごとに、多摩・大塚それぞれ何人中何人が提出済みかを表示しています(実施報告・未実施報告、マット以外のセッションがある日の「今日のトレーニングメニュー」を合わせて判定)。タップすると、誰が未提出で誰が提出済みかが分かります。直近1週間より古い日付は、未提出者がいなくなると表示から消えます。
           </p>
 
           {loading || loadingSelfLogs ? (
@@ -571,121 +578,161 @@ export default function CoachAdminPage({
               部員が登録されていません。
             </p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {recentDates.map((date) => {
-                function computeStatus(m: MemberRow) {
-                  const menu = m.home_location
-                    ? menusByDateLocation.get(`${date}:${m.home_location}`)
-                    : undefined;
-                  const matStatus = !menu
-                    ? "n/a"
-                    : submittedKeys.has(`${m.id}:${menu.id}`)
-                      ? "done"
-                      : "missing";
-                  const hasOther = m.home_location
-                    ? otherSessionByDateLocation.has(
-                        `${date}:${m.home_location}`
-                      )
-                    : false;
-                  const otherStatus = !hasOther
-                    ? "n/a"
-                    : selfLogKeys.has(`${m.id}:${date}`)
-                      ? "done"
-                      : "missing";
-                  const applicable = matStatus !== "n/a" || otherStatus !== "n/a";
-                  const done = matStatus !== "missing" && otherStatus !== "missing";
-                  return { applicable, done };
-                }
-
-                function locStats(loc: Location) {
-                  const items = members
-                    .filter(
-                      (m) => m.role !== "manager" && m.home_location === loc
+            (() => {
+              function computeStatus(m: MemberRow, date: string) {
+                const menu = m.home_location
+                  ? menusByDateLocation.get(`${date}:${m.home_location}`)
+                  : undefined;
+                const matStatus = !menu
+                  ? "n/a"
+                  : submittedKeys.has(`${m.id}:${menu.id}`)
+                    ? "done"
+                    : "missing";
+                const hasOther = m.home_location
+                  ? otherSessionByDateLocation.has(
+                      `${date}:${m.home_location}`
                     )
-                    .map((m) => ({ m, ...computeStatus(m) }))
-                    .filter((x) => x.applicable);
-                  const doneCount = items.filter((x) => x.done).length;
-                  return { total: items.length, done: doneCount, items };
-                }
+                  : false;
+                const otherStatus = !hasOther
+                  ? "n/a"
+                  : selfLogKeys.has(`${m.id}:${date}`)
+                    ? "done"
+                    : "missing";
+                const applicable = matStatus !== "n/a" || otherStatus !== "n/a";
+                const done = matStatus !== "missing" && otherStatus !== "missing";
+                return { applicable, done };
+              }
 
-                const statsByLoc: Record<Location, ReturnType<typeof locStats>> = {
-                  tama: locStats("tama"),
-                  otsuka: locStats("otsuka"),
-                };
+              function locStats(loc: Location, date: string) {
+                const items = members
+                  .filter(
+                    (m) => m.role !== "manager" && m.home_location === loc
+                  )
+                  .map((m) => ({ m, ...computeStatus(m, date) }))
+                  .filter((x) => x.applicable);
+                const doneCount = items.filter((x) => x.done).length;
+                return { total: items.length, done: doneCount, items };
+              }
 
+              function getStatsByLoc(date: string) {
+                return {
+                  tama: locStats("tama", date),
+                  otsuka: locStats("otsuka", date),
+                } as Record<Location, ReturnType<typeof locStats>>;
+              }
+
+              const rangeEnd = recentDates[recentDates.length - 1];
+              const allDatesSet = new Set<string>(recentDates);
+              for (const key of menusByDateLocation.keys()) {
+                allDatesSet.add(key.split(":")[0]);
+              }
+              for (const key of otherSessionByDateLocation.keys()) {
+                allDatesSet.add(key.split(":")[0]);
+              }
+
+              const displayDates = Array.from(allDatesSet)
+                .filter((d) => d >= extendedRangeStart && d <= rangeEnd)
+                .filter((d) => {
+                  if (recentDates.includes(d)) return true;
+                  const stats = getStatsByLoc(d);
+                  return locations.some((loc) => {
+                    const s = stats[loc];
+                    return s.total > 0 && s.done < s.total;
+                  });
+                })
+                .sort((a, b) => b.localeCompare(a));
+
+              if (displayDates.length === 0) {
                 return (
-                  <div
-                    key={date}
-                    className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-                  >
-                    <p className="mb-2 text-xs font-semibold text-neutral-300">
-                      {formatMonthDay(date)}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {locations.map((loc) => {
-                        const stats = statsByLoc[loc];
-                        const isExpanded =
-                          expandedDateLoc?.date === date &&
-                          expandedDateLoc?.location === loc;
-                        const allDone =
-                          stats.total > 0 && stats.done === stats.total;
-                        return (
-                          <button
-                            key={loc}
-                            onClick={() =>
-                              setExpandedDateLoc(
-                                isExpanded ? null : { date, location: loc }
-                              )
-                            }
-                            className={`rounded-lg border p-2 text-left text-xs ${
-                              stats.total === 0
-                                ? "border-neutral-800 bg-neutral-800/50 text-neutral-600"
-                                : allDone
-                                  ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-400"
-                                  : "border-red-900/60 bg-red-950/40 text-red-400"
-                            } ${isExpanded ? "ring-2 ring-neutral-400" : ""}`}
-                          >
-                            <span className="block font-medium">
-                              {locationLabel[loc]}
-                            </span>
-                            <span className="block text-sm font-bold">
-                              {stats.total === 0
-                                ? "対象者なし"
-                                : `${stats.done} / ${stats.total}人`}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {expandedDateLoc?.date === date &&
-                      (() => {
-                        const stats = statsByLoc[expandedDateLoc.location];
-                        const notDone = stats.items
-                          .filter((x) => !x.done)
-                          .map((x) => x.m.display_name);
-                        const done = stats.items
-                          .filter((x) => x.done)
-                          .map((x) => x.m.display_name);
-                        return (
-                          <div className="mt-2 flex flex-col gap-1 rounded-lg bg-neutral-800/60 p-2 text-xs">
-                            <p className="text-red-400">
-                              未提出:{" "}
-                              {notDone.length === 0
-                                ? "なし"
-                                : notDone.join("、")}
-                            </p>
-                            <p className="text-emerald-400">
-                              提出済み:{" "}
-                              {done.length === 0 ? "なし" : done.join("、")}
-                            </p>
-                          </div>
-                        );
-                      })()}
-                  </div>
+                  <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                    表示する日付がありません。
+                  </p>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <div className="flex flex-col gap-1">
+                  {displayDates.map((date) => {
+                    const statsByLoc = getStatsByLoc(date);
+                    return (
+                      <div
+                        key={date}
+                        className="rounded-lg border border-neutral-800 bg-neutral-900 p-1.5"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-12 shrink-0 text-[10px] font-semibold text-neutral-300">
+                            {formatMonthDay(date)}
+                          </span>
+                          <div className="grid flex-1 grid-cols-2 gap-1.5">
+                            {locations.map((loc) => {
+                              const stats = statsByLoc[loc];
+                              const isExpanded =
+                                expandedDateLoc?.date === date &&
+                                expandedDateLoc?.location === loc;
+                              const allDone =
+                                stats.total > 0 && stats.done === stats.total;
+                              return (
+                                <button
+                                  key={loc}
+                                  onClick={() =>
+                                    setExpandedDateLoc(
+                                      isExpanded
+                                        ? null
+                                        : { date, location: loc }
+                                    )
+                                  }
+                                  className={`flex items-center justify-between rounded px-2 py-1 text-[11px] ${
+                                    stats.total === 0
+                                      ? "bg-neutral-800/50 text-neutral-600"
+                                      : allDone
+                                        ? "bg-emerald-950/40 text-emerald-400"
+                                        : "bg-red-950/40 text-red-400"
+                                  } ${isExpanded ? "ring-1 ring-neutral-400" : ""}`}
+                                >
+                                  <span>{locationLabel[loc]}</span>
+                                  <span className="font-bold">
+                                    {stats.total === 0
+                                      ? "-"
+                                      : `${stats.done}/${stats.total}`}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {expandedDateLoc?.date === date &&
+                          (() => {
+                            const stats = statsByLoc[expandedDateLoc.location];
+                            const notDone = stats.items
+                              .filter((x) => !x.done)
+                              .map((x) => x.m.display_name);
+                            const done = stats.items
+                              .filter((x) => x.done)
+                              .map((x) => x.m.display_name);
+                            return (
+                              <div className="mt-1.5 flex flex-col gap-1 rounded-lg bg-neutral-800/60 p-2 text-xs">
+                                <p className="text-red-400">
+                                  未提出:{" "}
+                                  {notDone.length === 0
+                                    ? "なし"
+                                    : notDone.join("、")}
+                                </p>
+                                <p className="text-emerald-400">
+                                  提出済み:{" "}
+                                  {done.length === 0
+                                    ? "なし"
+                                    : done.join("、")}
+                                </p>
+                              </div>
+                            );
+                          })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           )}
         </section>
 
