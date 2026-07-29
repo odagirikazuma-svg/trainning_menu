@@ -1866,9 +1866,20 @@ function MonthlyCalendar({
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
-            {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
-              <div key={w}>{w}</div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+            {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
+              <div
+                key={w}
+                className={
+                  idx === 0
+                    ? "font-semibold text-red-400"
+                    : idx === 6
+                      ? "font-semibold text-blue-400"
+                      : "text-neutral-500"
+                }
+              >
+                {w}
+              </div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-1">
@@ -1877,6 +1888,7 @@ function MonthlyCalendar({
               const key = toDateKey(date);
               const day = scheduleDays.get(key);
               const isHighlighted = key === highlightDate;
+              const weekday = date.getDay();
               return (
                 <button
                   key={i}
@@ -1895,7 +1907,13 @@ function MonthlyCalendar({
                 >
                   <span
                     className={`text-[11px] font-semibold ${
-                      day?.is_off ? "text-neutral-500" : "text-neutral-200"
+                      day?.is_off
+                        ? "text-neutral-500"
+                        : !isHighlighted && weekday === 0
+                          ? "border-b-2 border-red-500 text-red-400"
+                          : !isHighlighted && weekday === 6
+                            ? "border-b-2 border-blue-500 text-blue-400"
+                            : "text-neutral-200"
                     }`}
                   >
                     {date.getDate()}

@@ -1744,9 +1744,20 @@ function MenuCalendar({
           ＞
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
-        {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
-          <div key={w}>{w}</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+        {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
+          <div
+            key={w}
+            className={
+              idx === 0
+                ? "font-semibold text-red-400"
+                : idx === 6
+                  ? "font-semibold text-blue-400"
+                  : "text-neutral-500"
+            }
+          >
+            {w}
+          </div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -1762,6 +1773,7 @@ function MenuCalendar({
           const isViewDate = key === viewDate;
           const isPast = key < todayKey;
           const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
+          const weekday = date.getDay();
           return (
             <button
               key={i}
@@ -1770,20 +1782,24 @@ function MenuCalendar({
                 else if (jointInfo) onSelectJoint(key);
                 else onSelectEmpty(key);
               }}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-800 pt-1 text-xs ${
                 isViewDate && hasMenu
                   ? "bg-blue-600 font-semibold text-white"
                   : isOff || schedule?.is_off
-                    ? "bg-neutral-800 font-medium text-neutral-400 active:bg-neutral-300"
+                    ? "bg-neutral-800 font-medium text-neutral-400 active:bg-neutral-700"
                     : schedule?.day_type === "camp"
-                      ? "bg-pink-50 font-medium text-pink-700 active:bg-pink-100"
+                      ? "bg-pink-950/40 font-medium text-pink-400 active:bg-pink-900/40"
                       : schedule?.day_type === "match"
                         ? "bg-red-950/40 font-medium text-red-400 active:bg-red-900/40"
                         : hasMenu
                           ? "bg-blue-950/40 font-medium text-blue-400 active:bg-blue-900/40"
                           : jointInfo
                             ? "bg-purple-950/40 font-medium text-purple-400 active:bg-purple-900/40"
-                            : "text-neutral-600 active:bg-neutral-800"
+                            : weekday === 0
+                              ? "border-b-2 border-red-500 text-red-400 active:bg-neutral-800"
+                              : weekday === 6
+                                ? "border-b-2 border-blue-500 text-blue-400 active:bg-neutral-800"
+                                : "text-neutral-600 active:bg-neutral-800"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               {date.getDate()}

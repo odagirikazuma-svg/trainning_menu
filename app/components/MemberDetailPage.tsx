@@ -880,9 +880,20 @@ function MemberTrainingCalendar({
           {">"}
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
-        {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
-          <div key={w}>{w}</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+        {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
+          <div
+            key={w}
+            className={
+              idx === 0
+                ? "font-semibold text-red-400"
+                : idx === 6
+                  ? "font-semibold text-blue-400"
+                  : "text-neutral-500"
+            }
+          >
+            {w}
+          </div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -893,20 +904,33 @@ function MemberTrainingCalendar({
           const title = titleByDate.get(key);
           const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
+          const weekday = date.getDay();
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs active:bg-neutral-800 ${
+              className={`flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-800 pt-1 text-xs active:bg-neutral-800 ${
                 isHighlighted
-                  ? "bg-amber-950/40 font-bold text-amber-700 ring-2 ring-amber-400"
+                  ? "bg-amber-950/40 font-bold text-amber-400 ring-2 ring-amber-400"
                   : titleColor
                     ? `${titleColor.fill} text-neutral-200`
                     : "text-neutral-300"
               }`}
               title={title ?? undefined}
             >
-              <span>{date.getDate()}</span>
+              <span
+                className={
+                  !isHighlighted && !titleColor
+                    ? weekday === 0
+                      ? "border-b-2 border-red-500 px-1 text-red-400"
+                      : weekday === 6
+                        ? "border-b-2 border-blue-500 px-1 text-blue-400"
+                        : ""
+                    : ""
+                }
+              >
+                {date.getDate()}
+              </span>
               {dots.length > 0 && (
                 <span className="flex flex-wrap justify-center gap-0.5">
                   {dots.map((t, idx) => (

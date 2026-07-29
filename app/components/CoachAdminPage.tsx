@@ -140,10 +140,6 @@ export default function CoachAdminPage({
   const [rosterRole, setRosterRole] = useState<RosterRoleChoice>("member");
   const [savingRoster, setSavingRoster] = useState(false);
 
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [importingCsv, setImportingCsv] = useState(false);
-  const [csvResult, setCsvResult] = useState<string | null>(null);
-
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [editingEmailValue, setEditingEmailValue] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
@@ -473,148 +469,6 @@ export default function CoachAdminPage({
       await loadRoster();
     }
     setSavingRoster(false);
-  }
-
-  const rosterRoleFromLabel: Record<string, RosterRoleChoice> = {
-    主将: "captain",
-    副主将: "vice_captain",
-    コーチ: "coach",
-    役職なし: "member",
-    captain: "captain",
-    vice_captain: "vice_captain",
-    coach: "coach",
-    member: "member",
-  };
-
-  const locationFromLabel: Record<string, Location> = {
-    多摩: "tama",
-    大塚: "otsuka",
-    tama: "tama",
-    otsuka: "otsuka",
-  };
-
-  // シンプルなCSVパーサー（ダブルクォートで囲まれたカンマ・改行にも対応）
-  function parseCsvText(text: string): string[][] {
-    const rows: string[][] = [];
-    let row: string[] = [];
-    let field = "";
-    let inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (inQuotes) {
-        if (c === '"') {
-          if (text[i + 1] === '"') {
-            field += '"';
-            i++;
-          } else {
-            inQuotes = false;
-          }
-        } else {
-          field += c;
-        }
-      } else if (c === '"') {
-        inQuotes = true;
-      } else if (c === ",") {
-        row.push(field);
-        field = "";
-      } else if (c === "\n" || c === "\r") {
-        if (c === "\r" && text[i + 1] === "\n") i++;
-        row.push(field);
-        field = "";
-        if (row.some((v) => v.trim() !== "")) rows.push(row);
-        row = [];
-      } else {
-        field += c;
-      }
-    }
-    if (field !== "" || row.length > 0) {
-      row.push(field);
-      if (row.some((v) => v.trim() !== "")) rows.push(row);
-    }
-    return rows;
-  }
-
-  async function handleImportCsv() {
-    if (!csvFile) return;
-    setImportingCsv(true);
-    setCsvResult(null);
-
-    const text = await csvFile.text();
-    const rows = parseCsvText(text);
-
-    if (rows.length === 0) {
-      setCsvResult("CSVにデータが見つかりませんでした。");
-      setImportingCsv(false);
-      return;
-    }
-
-    // 1行目が見出し（「氏名」や"name"を含む）ならスキップする
-    const header = (rows[0][0] ?? "").trim().toLowerCase();
-    const dataRows =
-      header.includes("氏名") || header.includes("name")
-        ? rows.slice(1)
-        : rows;
-
-    const inserts: Record<string, unknown>[] = [];
-    const skipped: number[] = [];
-
-    dataRows.forEach((r, idx) => {
-      const name = (r[0] ?? "").trim();
-      const email = (r[1] ?? "").trim();
-      const roleRaw = (r[2] ?? "").trim();
-      const locationRaw = (r[3] ?? "").trim();
-      const entryYearRaw = (r[4] ?? "").trim();
-
-      if (!name) {
-        skipped.push(idx + 1);
-        return;
-      }
-
-      const role = rosterRoleFromLabel[roleRaw] ?? "member";
-      const location =
-        role === "coach" ? null : locationFromLabel[locationRaw] ?? "tama";
-      // 「2023年」のように「年」が付いていても数字だけ取り出せるようにする
-      const entryYearDigits = entryYearRaw.match(/\d+/)?.[0];
-      const entryYearNum = entryYearDigits ? Number(entryYearDigits) : NaN;
-      const entryYear =
-        role === "coach" || !entryYearDigits || Number.isNaN(entryYearNum)
-          ? null
-          : entryYearNum;
-
-      inserts.push({
-        team_id: profile.team_id,
-        display_name: name,
-        email: email || null,
-        role,
-        home_location: location,
-        entry_year: entryYear,
-        created_by: profile.id,
-      });
-    });
-
-    if (inserts.length === 0) {
-      setCsvResult("有効な行が見つかりませんでした。");
-      setImportingCsv(false);
-      return;
-    }
-
-    const { error } = await supabase
-      .from("member_roster")
-      .upsert(inserts, { onConflict: "team_id,email" });
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setCsvResult(
-        `${inserts.length}件を登録しました。` +
-          (skipped.length > 0
-            ? `（氏名またはメールアドレスが空のためスキップした行: ${skipped.join("、")}行目）`
-            : "")
-      );
-      setCsvFile(null);
-      await loadRoster();
-    }
-    setImportingCsv(false);
   }
 
   function handleStartEditEmail(row: RosterRow) {
@@ -1234,42 +1088,6 @@ export default function CoachAdminPage({
               追加する
             </button>
           </form>
-
-          <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
-            <p className="text-xs font-semibold text-neutral-300">
-              CSVから一括登録
-            </p>
-            <p className="text-[11px] text-neutral-500">
-              1行目に見出し、2行目以降に「氏名, メールアドレス, 役職,
-              拠点, 入学年」の順で入力したCSVファイルを選んでください。
-              <br />
-              メールアドレスはまだ分からなければ空欄でも登録できます(あとで一覧から個別に追加できます)。
-              <br />
-              役職は「主将・副主将・コーチ・役職なし」、拠点は「多摩・大塚」で入力できます(空欄は「役職なし」「多摩」として扱われます)。コーチの場合、拠点・入学年は空欄でかまいません。
-              <br />
-              例: <code>田中太郎,tanaka@example.com,役職なし,多摩,2024</code>
-              <br />
-              例(メール未定): <code>田中太郎,,役職なし,多摩,2024</code>
-            </p>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-              className="text-xs"
-            />
-            <button
-              onClick={handleImportCsv}
-              disabled={!csvFile || importingCsv}
-              className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-            >
-              {importingCsv ? "インポート中…" : "インポートする"}
-            </button>
-            {csvResult && (
-              <p className="rounded bg-emerald-950/40 p-2 text-[11px] text-emerald-400">
-                {csvResult}
-              </p>
-            )}
-          </div>
         </section>
 
         <div className="border-t border-neutral-800 pt-4">

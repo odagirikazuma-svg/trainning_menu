@@ -1114,35 +1114,37 @@ export default function MyPage({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
-        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
-          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
-          マイページ
-        </h1>
-        <div className="flex flex-col items-end text-[11px] leading-tight text-neutral-400">
-          <span>{formatFullDate(todayStr)}</span>
-          <span className="font-semibold text-neutral-200">
+      <header className="sticky top-0 z-10 flex flex-col gap-1 border-b border-neutral-800 bg-neutral-900/95 px-3 py-2 backdrop-blur">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="flex items-center gap-1.5 whitespace-nowrap text-sm font-bold text-white">
+            <span className="inline-block h-3.5 w-1 shrink-0 rounded-full bg-red-600" />
+            マイページ
+          </h1>
+          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+            <button
+              onClick={() => router.push("/")}
+              className="rounded border border-neutral-700 px-2 py-1 active:bg-neutral-800"
+            >
+              掲示板
+            </button>
+            <button
+              onClick={() => router.push("/team")}
+              className="rounded border border-neutral-700 px-2 py-1 active:bg-neutral-800"
+            >
+              チーム
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-[10px] text-neutral-400">
+          <span className="truncate font-semibold text-neutral-200">
             {profile.display_name}
             {gradeLabel && ` ${gradeLabel}`}
           </span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-          <button
-            onClick={() => router.push("/")}
-            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-          >
-            掲示板に戻る
-          </button>
-          <button
-            onClick={() => router.push("/team")}
-            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-          >
-            チームページ
-          </button>
+          <span className="shrink-0">{formatFullDate(todayStr)}</span>
         </div>
       </header>
 
-      <div className="flex flex-col gap-5 p-4 sm:p-5">
+      <div className="flex flex-col gap-4 p-3 sm:gap-5 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
@@ -1784,16 +1786,6 @@ export default function MyPage({
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            目標
-          </h2>
-          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-            準備中です。
-          </p>
-        </section>
-
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我の記録・復帰計画
           </h2>
 
@@ -2119,9 +2111,20 @@ function TrainingCalendar({
           ＞
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-500">
-        {["日", "月", "火", "水", "木", "金", "土"].map((w) => (
-          <div key={w}>{w}</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+        {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
+          <div
+            key={w}
+            className={
+              idx === 0
+                ? "font-semibold text-red-400"
+                : idx === 6
+                  ? "font-semibold text-blue-400"
+                  : "text-neutral-500"
+            }
+          >
+            {w}
+          </div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -2134,11 +2137,12 @@ function TrainingCalendar({
           const isHighlighted = key === highlightDate;
           const isToday = key === todayDate;
           const isMatchDay = !!nextMatchDate && key === nextMatchDate;
+          const weekday = date.getDay();
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg pt-1 text-xs active:bg-neutral-800 ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-800 pt-1 text-xs active:bg-neutral-800 ${
                 isHighlighted
                   ? "bg-amber-950/40 font-bold text-amber-400 ring-2 ring-amber-400"
                   : titleColor
@@ -2148,12 +2152,24 @@ function TrainingCalendar({
                 isMatchDay
                   ? "ring-2 ring-red-400"
                   : isToday
-                    ? "ring-1 ring-neutral-900"
+                    ? "ring-1 ring-neutral-400"
                     : ""
               }`}
               title={title ?? undefined}
             >
-              <span>{date.getDate()}</span>
+              <span
+                className={
+                  !isHighlighted && !titleColor
+                    ? weekday === 0
+                      ? "border-b-2 border-red-500 px-1 text-red-400"
+                      : weekday === 6
+                        ? "border-b-2 border-blue-500 px-1 text-blue-400"
+                        : ""
+                    : ""
+                }
+              >
+                {date.getDate()}
+              </span>
               {dots.length > 0 && (
                 <span className="flex flex-wrap justify-center gap-0.5">
                   {dots.map((t, idx) => (
