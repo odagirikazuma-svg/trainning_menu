@@ -905,14 +905,14 @@ export default function CoachAdminPage({
           )}
         </section>
 
-        {/* 部員の事前登録 */}
+        {/* 新規メンバー登録 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            部員の事前登録
+            新規メンバー登録
           </h2>
           <p className="text-[11px] text-neutral-500">
-            氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
+            部員だけでなく、管理者・マネージャーもここから事前登録できます。氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
           </p>
 
           {loadingRoster ? (
