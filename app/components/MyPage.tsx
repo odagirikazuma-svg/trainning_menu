@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
+import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
   currentGrade,
   getTitleColor,
@@ -139,6 +140,10 @@ export default function MyPage({
   const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
   const [weightMaxTodo, setWeightMaxTodo] = useState<{
     eventId: string;
     deadline: string;
@@ -265,6 +270,7 @@ export default function MyPage({
     loadTitleOptions();
     loadWeightMaxTodo();
     loadInjuries();
+    checkPushSubscription();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -504,6 +510,71 @@ export default function MyPage({
       setWeightMaxDeadlift("");
     }
     setSavingWeightMaxTodo(false);
+  }
+
+  async function checkPushSubscription() {
+    if (!isPushSupported()) {
+      setPushSupported(false);
+      return;
+    }
+    setPushSupported(true);
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+      const existing = await registration?.pushManager.getSubscription();
+      setPushSubscribed(!!existing);
+    } catch {
+      setPushSubscribed(false);
+    }
+  }
+
+  async function handleEnablePush() {
+    if (!isPushSupported()) return;
+    setPushLoading(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setErrorMsg("通知が許可されませんでした。端末の設定から通知を許可してください。");
+        setPushLoading(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        setErrorMsg("通知の設定が未完了です(コーチ・管理者に連絡してください)。");
+        setPushLoading(false);
+        return;
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+
+      const json = subscription.toJSON();
+      const { error } = await supabase.from("push_subscriptions").upsert(
+        {
+          author_id: profile.id,
+          endpoint: json.endpoint!,
+          p256dh: json.keys!.p256dh,
+          auth: json.keys!.auth,
+        },
+        { onConflict: "endpoint" }
+      );
+
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        setPushSubscribed(true);
+      }
+    } catch (e) {
+      setErrorMsg(
+        e instanceof Error ? e.message : "通知の設定中にエラーが発生しました。"
+      );
+    }
+    setPushLoading(false);
   }
 
   async function loadInjuries() {
@@ -1149,6 +1220,21 @@ export default function MyPage({
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
+        )}
+
+        {pushSupported && !pushSubscribed && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs">
+            <span className="text-neutral-300">
+              未完了のタスクがある日、夜に通知でお知らせします。
+            </span>
+            <button
+              onClick={handleEnablePush}
+              disabled={pushLoading}
+              className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+            >
+              {pushLoading ? "設定中…" : "通知を有効にする"}
+            </button>
+          </div>
         )}
 
         {/* 次の試合まで */}

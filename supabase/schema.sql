@@ -656,3 +656,25 @@ drop policy if exists "injuries_delete_self" on injuries;
 -- （マイページを持たず、掲示板・チームページを閲覧のみできる立場）
 -- ============================================
 alter type member_role add value if not exists 'manager';
+
+-- ============================================
+-- 追加: プッシュ通知の購読情報を保存するテーブル
+-- ============================================
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+alter table push_subscriptions enable row level security;
+
+create policy "push_subscriptions_select_self" on push_subscriptions
+  for select using (author_id = auth.uid());
+
+create policy "push_subscriptions_insert_self" on push_subscriptions
+  for insert with check (author_id = auth.uid());
+
+create policy "push_subscriptions_delete_self" on push_subscriptions
+  for delete using (author_id = auth.uid());
