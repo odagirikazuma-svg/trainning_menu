@@ -6,22 +6,24 @@ import { createClient } from "../lib/supabase/client";
 import { currentGrade, Location, locationLabel, locations } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
-type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "member";
+type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "manager" | "member";
 
 const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   captain: "主将",
   vice_captain: "副主将",
   coach: "コーチ",
+  manager: "マネージャー",
   member: "役職なし",
 };
 
-type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "member";
+type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member";
 
 const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
   captain: "主将",
   vice_captain: "副主将",
   leader: "リーダー",
   vice_leader: "副リーダー",
+  manager: "マネージャー",
   member: "役職なし",
 };
 
@@ -450,9 +452,12 @@ export default function CoachAdminPage({
       display_name: rosterName.trim(),
       email: rosterEmail.trim() || null,
       role: rosterRole,
-      home_location: rosterRole === "coach" ? null : rosterLocation,
+      home_location:
+        rosterRole === "coach" || rosterRole === "manager"
+          ? null
+          : rosterLocation,
       entry_year:
-        rosterRole === "coach" || !rosterEntryYear
+        rosterRole === "coach" || rosterRole === "manager" || !rosterEntryYear
           ? null
           : Number(rosterEntryYear),
       created_by: profile.id,
@@ -557,17 +562,19 @@ export default function CoachAdminPage({
 
           {loading || loadingSelfLogs ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : members.length === 0 ? (
+          ) : members.filter((m) => m.role !== "manager").length === 0 ? (
             <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
           ) : (
             <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-800">
               <ul className="divide-y divide-neutral-800">
-                {members.map((m) => {
-                  const gradeLabel =
-                    m.entry_year != null
-                      ? `${currentGrade(m.entry_year)}年`
+                {members
+                  .filter((m) => m.role !== "manager")
+                  .map((m) => {
+                    const gradeLabel =
+                      m.entry_year != null
+                        ? `${currentGrade(m.entry_year)}年`
                       : null;
                   return (
                     <li key={m.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
@@ -810,14 +817,18 @@ export default function CoachAdminPage({
                           )
                         }
                         onBlur={() => setEditingRoleId(null)}
-                        className="rounded border border-neutral-700 px-2 py-1 text-xs"
+                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
                       >
                         {(
                           Object.keys(
                             memberRoleEditLabel
                           ) as MemberRoleForEdit[]
                         ).map((r) => (
-                          <option key={r} value={r}>
+                          <option
+                            key={r}
+                            value={r}
+                            className="bg-neutral-900 text-neutral-100"
+                          >
                             {memberRoleEditLabel[r]}
                           </option>
                         ))}
@@ -858,7 +869,8 @@ export default function CoachAdminPage({
                 </span>
               </p>
               <p className="text-xs text-neutral-400">
-                提出済み {weightMaxSubmittedCount}人 / {members.length}人
+                提出済み {weightMaxSubmittedCount}人 /{" "}
+                {members.filter((m) => m.role !== "manager").length}人
               </p>
               <button
                 onClick={handleEndWeightMaxEvent}
@@ -1050,7 +1062,7 @@ export default function CoachAdminPage({
                   </option>
                 ))}
               </select>
-              {rosterRole !== "coach" && (
+              {rosterRole !== "coach" && rosterRole !== "manager" && (
                 <select
                   value={rosterLocation}
                   onChange={(e) =>
@@ -1066,7 +1078,7 @@ export default function CoachAdminPage({
                 </select>
               )}
             </div>
-            {rosterRole !== "coach" && (
+            {rosterRole !== "coach" && rosterRole !== "manager" && (
               <select
                 value={rosterEntryYear}
                 onChange={(e) => setRosterEntryYear(e.target.value)}

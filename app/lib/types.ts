@@ -1,4 +1,4 @@
-export type Role = "leader" | "vice_leader" | "captain" | "coach" | "member";
+export type Role = "leader" | "vice_leader" | "captain" | "coach" | "manager" | "member";
 
 export type Location = "tama" | "otsuka";
 
@@ -93,6 +93,7 @@ export const roleLabel: Record<Role, string> = {
   vice_leader: "副主将",
   captain: "主将",
   coach: "コーチ",
+  manager: "マネージャー",
   member: "部員",
 };
 

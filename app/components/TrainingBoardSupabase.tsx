@@ -591,6 +591,7 @@ export default function TrainingBoardSupabase({
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
   const isCoach = profile.role === "coach";
+  const isViewOnly = profile.role === "coach" || profile.role === "manager";
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
   const reportSubmittedCount = selectedSubmission
@@ -684,12 +685,14 @@ export default function TrainingBoardSupabase({
           <span className="hidden sm:inline">
             {profile.display_name}（{roleLabel[profile.role]}）
           </span>
-          <button
-            onClick={() => router.push("/mypage")}
-            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-          >
-            {profile.role === "coach" ? "管理ページ" : "マイページ"}
-          </button>
+          {profile.role !== "manager" && (
+            <button
+              onClick={() => router.push("/mypage")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              {profile.role === "coach" ? "管理ページ" : "マイページ"}
+            </button>
+          )}
           <button
             onClick={() => router.push("/team")}
             className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
@@ -1140,7 +1143,7 @@ export default function TrainingBoardSupabase({
                 ))}
               </ul>
 
-              {isCoach ? (
+              {isViewOnly ? (
                 <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
                   <p className="mb-1.5 font-semibold text-neutral-400">
                     実施報告を提出したメンバー
@@ -1218,7 +1221,7 @@ export default function TrainingBoardSupabase({
                   />
                 ))}
               </ul>
-              {isCoach ? (
+              {isViewOnly ? (
                 <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
                   <p className="mb-1.5 font-semibold text-neutral-400">
                     未実施報告を提出したメンバー
@@ -1795,14 +1798,22 @@ function MenuCalendar({
                           ? "bg-blue-950/40 font-medium text-blue-400 active:bg-blue-900/40"
                           : jointInfo
                             ? "bg-purple-950/40 font-medium text-purple-400 active:bg-purple-900/40"
-                            : weekday === 0
-                              ? "border-b-2 border-red-500 text-red-400 active:bg-neutral-800"
-                              : weekday === 6
-                                ? "border-b-2 border-blue-500 text-blue-400 active:bg-neutral-800"
-                                : "text-neutral-600 active:bg-neutral-800"
+                            : "text-neutral-600 active:bg-neutral-800"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
-              {date.getDate()}
+              <span
+                className={
+                  !isViewDate && !hasMenu && !isOff && !schedule?.is_off
+                    ? weekday === 0
+                      ? "border-b-2 border-red-500 px-1 text-red-400"
+                      : weekday === 6
+                        ? "border-b-2 border-blue-500 px-1 text-blue-400"
+                        : ""
+                    : ""
+                }
+              >
+                {date.getDate()}
+              </span>
               {isToday && (
                 <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white" />
               )}

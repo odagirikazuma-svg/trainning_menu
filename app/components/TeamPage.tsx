@@ -964,12 +964,14 @@ export default function TeamPage({
           チームページ
         </h1>
         <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-          <button
-            onClick={() => router.push("/mypage")}
-            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-          >
-            {profile.role === "coach" ? "管理ページ" : "マイページ"}
-          </button>
+          {profile.role !== "manager" && (
+            <button
+              onClick={() => router.push("/mypage")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              {profile.role === "coach" ? "管理ページ" : "マイページ"}
+            </button>
+          )}
           <button
             onClick={() => router.push("/")}
             className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
@@ -1553,7 +1555,7 @@ export default function TeamPage({
           ) : (
             <div className="flex flex-col gap-4">
               {groupMembersByGrade(
-                members.filter((m) => m.role !== "coach")
+                members.filter((m) => m.role !== "coach" && m.role !== "manager")
               ).map((group) => {
                 const columns: { label: string; loc: Location | null }[] = [
                   { label: locationLabel.tama, loc: "tama" },
@@ -1722,7 +1724,7 @@ export default function TeamPage({
                         </thead>
                         <tbody className="divide-y divide-neutral-800">
                           {members
-                            .filter((m) => m.role !== "coach" && !m.isPending)
+                            .filter((m) => m.role !== "coach" && m.role !== "manager" && !m.isPending)
                             .map((m) => {
                               const max = currentMap?.get(m.id);
                               const prev = previousMap?.get(m.id);

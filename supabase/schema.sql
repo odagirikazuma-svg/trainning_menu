@@ -650,3 +650,9 @@ alter table injuries add column if not exists progress_updated_at timestamptz;
 -- 追加: 一度報告した怪我は削除できないようにする（編集のみ許可）
 -- ============================================
 drop policy if exists "injuries_delete_self" on injuries;
+
+-- ============================================
+-- 追加: 部員の役職に「マネージャー」を追加する
+-- （マイページを持たず、掲示板・チームページを閲覧のみできる立場）
+-- ============================================
+alter type member_role add value if not exists 'manager';

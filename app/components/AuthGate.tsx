@@ -14,7 +14,7 @@ export type Profile = {
   entry_year: number | null;
 };
 
-type SignupCategory = "member" | "coach";
+type SignupCategory = "member" | "coach" | "manager";
 type SignupRoleChoice = "captain" | "vice_leader" | "leader" | "member";
 
 const roleChoiceLabel: Record<SignupRoleChoice, string> = {
@@ -29,6 +29,7 @@ const rosterRoleDisplayLabel: Record<string, string> = {
   captain: "主将",
   vice_captain: "副主将",
   coach: "コーチ",
+  manager: "マネージャー",
   member: "役職なし",
 };
 
@@ -144,7 +145,7 @@ export default function AuthGate({
       id: string;
       team_id: string;
       display_name: string;
-      role: SignupRoleChoice | "coach";
+      role: SignupRoleChoice | "coach" | "manager";
       home_location: Location | null;
       entry_year: number | null;
     };
@@ -205,7 +206,9 @@ export default function AuthGate({
     const metaRole =
       metaCategory === "coach"
         ? "coach"
-        : ((meta?.role_choice as SignupRoleChoice | undefined) ?? "member");
+        : metaCategory === "manager"
+          ? "manager"
+          : ((meta?.role_choice as SignupRoleChoice | undefined) ?? "member");
     const metaLocation =
       metaCategory === "member"
         ? ((meta?.home_location as Location | undefined) ?? null)
@@ -258,7 +261,7 @@ export default function AuthGate({
       const usingRosterPreview = Boolean(inviteToken && rosterPreview);
       if (!usingRosterPreview) {
         if (!signupCategory) {
-          setErrorMsg("部員かコーチかを選択してください。");
+          setErrorMsg("部員かコーチかマネージャーを選択してください。");
           setSubmitting(false);
           return;
         }
@@ -364,9 +367,11 @@ export default function AuthGate({
               <p>
                 区分:{" "}
                 <span className="font-medium">
-                  {rosterRoleDisplayLabel[rosterPreview.role] === "コーチ"
+                  {rosterPreview.role === "coach"
                     ? "コーチ"
-                    : "部員"}
+                    : rosterPreview.role === "manager"
+                      ? "マネージャー"
+                      : "部員"}
                 </span>
               </p>
               {rosterPreview.home_location && (
@@ -412,6 +417,7 @@ export default function AuthGate({
                       [
                         { v: "member", label: "部員" },
                         { v: "coach", label: "コーチ" },
+                        { v: "manager", label: "マネージャー" },
                       ] as const
                     ).map((opt) => (
                       <button
