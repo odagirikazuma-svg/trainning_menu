@@ -329,6 +329,10 @@ export default function CoachAdminPage({
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
+  const [expandedDateLoc, setExpandedDateLoc] = useState<{
+    date: string;
+    location: Location;
+  } | null>(null);
   const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
     null
   );
@@ -557,7 +561,7 @@ export default function CoachAdminPage({
             直近1週間の提出状況
           </h2>
           <p className="text-[11px] text-neutral-500">
-            「マ」は実施報告・未実施報告(マット)、「他」はマット以外(ラン・ウェイト)のセッションがある日にマイページの「今日のトレーニングメニュー」を保存しているかどうかです。それぞれ緑=提出済み、赤=未提出、グレー=対象外(その日にそのセッション自体がない場合)を表します。
+            日付ごとに、多摩・大塚それぞれ何人中何人が提出済みかを表示しています(実施報告・未実施報告、マット以外のセッションがある日の「今日のトレーニングメニュー」を合わせて判定)。タップすると、誰が未提出で誰が提出済みかが分かります。
           </p>
 
           {loading || loadingSelfLogs ? (
@@ -567,110 +571,120 @@ export default function CoachAdminPage({
               部員が登録されていません。
             </p>
           ) : (
-            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-neutral-800">
-              <ul className="divide-y divide-neutral-800">
-                {members
-                  .filter((m) => m.role !== "manager")
-                  .map((m) => {
-                    const gradeLabel =
-                      m.entry_year != null
-                        ? `${currentGrade(m.entry_year)}年`
-                      : null;
-                  return (
-                    <li key={m.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-neutral-100">
-                          {m.display_name}
-                        </span>
-                        {gradeLabel && (
-                          <span className="text-neutral-500">{gradeLabel}</span>
-                        )}
-                        {m.home_location && (
-                          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-400">
-                            {locationLabel[m.home_location]}
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {recentDates.map((date) => {
-                          const menu = m.home_location
-                            ? menusByDateLocation.get(
-                                `${date}:${m.home_location}`
+            <div className="flex flex-col gap-2">
+              {recentDates.map((date) => {
+                function computeStatus(m: MemberRow) {
+                  const menu = m.home_location
+                    ? menusByDateLocation.get(`${date}:${m.home_location}`)
+                    : undefined;
+                  const matStatus = !menu
+                    ? "n/a"
+                    : submittedKeys.has(`${m.id}:${menu.id}`)
+                      ? "done"
+                      : "missing";
+                  const hasOther = m.home_location
+                    ? otherSessionByDateLocation.has(
+                        `${date}:${m.home_location}`
+                      )
+                    : false;
+                  const otherStatus = !hasOther
+                    ? "n/a"
+                    : selfLogKeys.has(`${m.id}:${date}`)
+                      ? "done"
+                      : "missing";
+                  const applicable = matStatus !== "n/a" || otherStatus !== "n/a";
+                  const done = matStatus !== "missing" && otherStatus !== "missing";
+                  return { applicable, done };
+                }
+
+                function locStats(loc: Location) {
+                  const items = members
+                    .filter(
+                      (m) => m.role !== "manager" && m.home_location === loc
+                    )
+                    .map((m) => ({ m, ...computeStatus(m) }))
+                    .filter((x) => x.applicable);
+                  const doneCount = items.filter((x) => x.done).length;
+                  return { total: items.length, done: doneCount, items };
+                }
+
+                const statsByLoc: Record<Location, ReturnType<typeof locStats>> = {
+                  tama: locStats("tama"),
+                  otsuka: locStats("otsuka"),
+                };
+
+                return (
+                  <div
+                    key={date}
+                    className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+                  >
+                    <p className="mb-2 text-xs font-semibold text-neutral-300">
+                      {formatMonthDay(date)}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {locations.map((loc) => {
+                        const stats = statsByLoc[loc];
+                        const isExpanded =
+                          expandedDateLoc?.date === date &&
+                          expandedDateLoc?.location === loc;
+                        const allDone =
+                          stats.total > 0 && stats.done === stats.total;
+                        return (
+                          <button
+                            key={loc}
+                            onClick={() =>
+                              setExpandedDateLoc(
+                                isExpanded ? null : { date, location: loc }
                               )
-                            : undefined;
-                          const matStatus = !menu
-                            ? "n/a"
-                            : submittedKeys.has(`${m.id}:${menu.id}`)
-                              ? "done"
-                              : "missing";
+                            }
+                            className={`rounded-lg border p-2 text-left text-xs ${
+                              stats.total === 0
+                                ? "border-neutral-800 bg-neutral-800/50 text-neutral-600"
+                                : allDone
+                                  ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-400"
+                                  : "border-red-900/60 bg-red-950/40 text-red-400"
+                            } ${isExpanded ? "ring-2 ring-neutral-400" : ""}`}
+                          >
+                            <span className="block font-medium">
+                              {locationLabel[loc]}
+                            </span>
+                            <span className="block text-sm font-bold">
+                              {stats.total === 0
+                                ? "対象者なし"
+                                : `${stats.done} / ${stats.total}人`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                          const hasOtherSession = m.home_location
-                            ? otherSessionByDateLocation.has(
-                                `${date}:${m.home_location}`
-                              )
-                            : false;
-                          const otherStatus = !hasOtherSession
-                            ? "n/a"
-                            : selfLogKeys.has(`${m.id}:${date}`)
-                              ? "done"
-                              : "missing";
-
-                          const anyMissing =
-                            matStatus === "missing" || otherStatus === "missing";
-                          const bothNA =
-                            matStatus === "n/a" && otherStatus === "n/a";
-                          const cellColor = bothNA
-                            ? "bg-neutral-900"
-                            : anyMissing
-                              ? "bg-red-950/40"
-                              : "bg-emerald-950/40";
-
-                          const badgeClass = (s: "n/a" | "done" | "missing") =>
-                            s === "done"
-                              ? "text-emerald-400"
-                              : s === "missing"
-                                ? "text-red-400"
-                                : "text-neutral-600";
-
-                          return (
-                            <div
-                              key={date}
-                              title={formatMonthDay(date)}
-                              className={`flex flex-col items-center gap-0.5 rounded px-0.5 py-1 ${cellColor}`}
-                            >
-                              <span className="text-[9px] text-neutral-500">
-                                {date.slice(8, 10)}日
-                              </span>
-                              {bothNA ? (
-                                <span className="text-[9px] font-semibold text-neutral-500">
-                                  −
-                                </span>
-                              ) : (
-                                <span className="flex gap-0.5">
-                                  {matStatus !== "n/a" && (
-                                    <span
-                                      className={`text-[9px] font-semibold ${badgeClass(matStatus)}`}
-                                    >
-                                      マ
-                                    </span>
-                                  )}
-                                  {otherStatus !== "n/a" && (
-                                    <span
-                                      className={`text-[9px] font-semibold ${badgeClass(otherStatus)}`}
-                                    >
-                                      他
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                    {expandedDateLoc?.date === date &&
+                      (() => {
+                        const stats = statsByLoc[expandedDateLoc.location];
+                        const notDone = stats.items
+                          .filter((x) => !x.done)
+                          .map((x) => x.m.display_name);
+                        const done = stats.items
+                          .filter((x) => x.done)
+                          .map((x) => x.m.display_name);
+                        return (
+                          <div className="mt-2 flex flex-col gap-1 rounded-lg bg-neutral-800/60 p-2 text-xs">
+                            <p className="text-red-400">
+                              未提出:{" "}
+                              {notDone.length === 0
+                                ? "なし"
+                                : notDone.join("、")}
+                            </p>
+                            <p className="text-emerald-400">
+                              提出済み:{" "}
+                              {done.length === 0 ? "なし" : done.join("、")}
+                            </p>
+                          </div>
+                        );
+                      })()}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
