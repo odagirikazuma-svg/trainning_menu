@@ -862,7 +862,7 @@ function MemberTrainingCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   return (
-    <div className="rounded-lg border border-neutral-800 p-3">
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => onCursorChange(new Date(year, month - 1, 1))}
@@ -909,12 +909,12 @@ function MemberTrainingCalendar({
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-800 pt-1 text-xs active:bg-neutral-800 ${
+              className={`flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-700 pt-1 text-xs active:bg-neutral-700 ${
                 isHighlighted
                   ? "bg-amber-950/40 font-bold text-amber-400 ring-2 ring-amber-400"
                   : titleColor
                     ? `${titleColor.fill} text-neutral-200`
-                    : "text-neutral-300"
+                    : "bg-neutral-800 text-neutral-300"
               }`}
               title={title ?? undefined}
             >

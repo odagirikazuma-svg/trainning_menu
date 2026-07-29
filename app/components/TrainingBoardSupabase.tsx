@@ -1742,7 +1742,7 @@ function MenuCalendar({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-800 p-3">
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => setCursor(new Date(year, month - 1, 1))}
@@ -1798,7 +1798,7 @@ function MenuCalendar({
                 else if (jointInfo) onSelectJoint(key);
                 else onSelectEmpty(key);
               }}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-800 pt-1 text-xs ${
+              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-700 pt-1 text-xs ${
                 isViewDate && hasMenu
                   ? "bg-blue-600 font-semibold text-white"
                   : isOff || schedule?.is_off
@@ -1811,7 +1811,7 @@ function MenuCalendar({
                           ? "bg-blue-950/40 font-medium text-blue-400 active:bg-blue-900/40"
                           : jointInfo
                             ? "bg-purple-950/40 font-medium text-purple-400 active:bg-purple-900/40"
-                            : "text-neutral-600 active:bg-neutral-800"
+                            : "bg-neutral-800 text-neutral-300 active:bg-neutral-700"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               <span

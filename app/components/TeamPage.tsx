@@ -1846,7 +1846,7 @@ function MonthlyCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   return (
-    <div className="rounded-lg border border-neutral-800 p-3">
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => onCursorChange(new Date(year, month - 1, 1))}
@@ -1897,14 +1897,14 @@ function MonthlyCalendar({
                   onClick={() => onSelectDate(key)}
                   className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
-                      ? "border-neutral-800 bg-neutral-800"
+                      ? "border-neutral-700 bg-neutral-800"
                       : day?.day_type === "camp"
                         ? "border-pink-900/60 bg-pink-950/40"
                         : day?.day_type === "match"
                           ? "border-red-900/60 bg-red-950/40"
                           : isHighlighted
                             ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
-                            : "border-neutral-800 active:bg-neutral-800"
+                            : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
                   }`}
                 >
                   <span
