@@ -6,7 +6,9 @@ import TrainingBoardSupabase from "./components/TrainingBoardSupabase";
 export default function Home() {
   return (
     <AuthGate>
-      {(profile) => <TrainingBoardSupabase profile={profile} />}
+      {(profile, signOut) => (
+        <TrainingBoardSupabase profile={profile} signOut={signOut} />
+      )}
     </AuthGate>
   );
 }

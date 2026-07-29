@@ -82,8 +82,10 @@ function isReportOpen(menu: MenuRow): boolean {
 
 export default function TrainingBoardSupabase({
   profile,
+  signOut,
 }: {
   profile: Profile;
+  signOut: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -1349,6 +1351,17 @@ export default function TrainingBoardSupabase({
             location={activeLocation}
           />
         </section>
+
+        {profile.role === "manager" && (
+          <div className="border-t border-neutral-800 pt-4">
+            <button
+              onClick={signOut}
+              className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
+            >
+              ログアウト
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
