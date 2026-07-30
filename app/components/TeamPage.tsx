@@ -439,6 +439,49 @@ export default function TeamPage({
     router.push("/");
   }
 
+  // 出稽古・合宿の予定を削除する（コーチのみ・この拠点の予定のみ削除）
+  async function handleDeleteAwayLikeSchedule() {
+    if (!isCoach || !selectedScheduleDate || !dayDetail) return;
+    if (dayDetail.day_type !== "camp" && dayDetail.day_type !== "away") return;
+
+    const label = `${dayTypeLabel[dayDetail.day_type]}${
+      dayDetail.event_name ? `：${dayDetail.event_name}` : ""
+    }`;
+    const ok = window.confirm(
+      `${locationLabel[scheduleLocation]}・${formatMonthDay(
+        selectedScheduleDate
+      )}の「${label}」予定を削除します。よろしいですか？\n（この拠点の予定のみ削除されます。もう一方の拠点にも登録している場合は、そちらは別途削除してください）`
+    );
+    if (!ok) return;
+
+    setErrorMsg(null);
+    const { data: dayRow, error: findError } = await supabase
+      .from("schedule_days")
+      .select("id")
+      .eq("team_id", profile.team_id)
+      .eq("location", scheduleLocation)
+      .eq("date", selectedScheduleDate)
+      .maybeSingle();
+
+    if (findError) {
+      setErrorMsg(findError.message);
+      return;
+    }
+    if (dayRow) {
+      const { error: deleteError } = await supabase
+        .from("schedule_days")
+        .delete()
+        .eq("id", (dayRow as { id: string }).id);
+      if (deleteError) {
+        setErrorMsg(deleteError.message);
+        return;
+      }
+    }
+
+    await loadMonthSchedule();
+    await loadDayDetail(selectedScheduleDate);
+  }
+
   function handleStartEditSchedule() {
     const category: "off" | DayType = dayDetail?.is_off
       ? "off"
@@ -1626,12 +1669,25 @@ export default function TeamPage({
                       {(dayDetail.day_type === "camp" ||
                         dayDetail.day_type === "match" ||
                         dayDetail.day_type === "away") && (
-                        <span
-                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
-                        >
-                          {dayTypeLabel[dayDetail.day_type]}
-                          {dayDetail.event_name && `：${dayDetail.event_name}`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
+                          >
+                            {dayTypeLabel[dayDetail.day_type]}
+                            {dayDetail.event_name &&
+                              `：${dayDetail.event_name}`}
+                          </span>
+                          {isCoach &&
+                            (dayDetail.day_type === "camp" ||
+                              dayDetail.day_type === "away") && (
+                              <button
+                                onClick={handleDeleteAwayLikeSchedule}
+                                className="rounded px-2 py-1 text-[11px] font-medium text-red-400 underline"
+                              >
+                                この予定を削除する
+                              </button>
+                            )}
+                        </div>
                       )}
                       {dayDetail.sessions.length === 0 && (
                         <div className="flex flex-col items-start gap-2 py-2">

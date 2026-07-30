@@ -121,6 +121,7 @@ export default function TrainingBoardSupabase({
     return { initialLocation: "tama", initialDate: null, initialStartTime: null };
   });
   const usedInitialJump = useRef(false);
+  const pendingJumpDateRef = useRef<string | null>(null);
   const [activeLocation, setActiveLocation] =
     useState<Location>(initialLocation);
   const [menus, setMenus] = useState<MenuRow[]>([]);
@@ -203,18 +204,51 @@ export default function TrainingBoardSupabase({
         loadJointElsewhere(),
       ]);
       const isInitialJump = !usedInitialJump.current && !!initialDate;
+      const pendingDate = pendingJumpDateRef.current;
+      pendingJumpDateRef.current = null;
       const targetDate = isInitialJump
         ? (initialDate as string)
-        : toDateKey(new Date());
+        : (pendingDate ?? toDateKey(new Date()));
       usedInitialJump.current = true;
       applySelectionForDate(targetDate, rows, jointMap);
 
       if (isInitialJump) {
         const hasMenu = rows.some((m) => m.date === targetDate);
         if (!hasMenu && canCreateMenu(profile.role)) {
-          setNewMenuType("normal");
           setNewDate(targetDate);
           setNewStartTime(initialStartTime ?? "");
+
+          // この日が出稽古・合宿で両拠点に反映されている場合は自動で両拠点登録、
+          // 通常の全体練習セッションの場合は自動で「全体練習」を選択する
+          const { data: dayData } = await supabase
+            .from("schedule_days")
+            .select(
+              "day_type, sessions:schedule_sessions(session_type, is_joint, joint_location)"
+            )
+            .eq("team_id", profile.team_id)
+            .eq("location", activeLocation)
+            .eq("date", targetDate)
+            .maybeSingle();
+          const dayRow = dayData as {
+            day_type: DayType;
+            sessions: {
+              session_type: SessionType;
+              is_joint: boolean;
+              joint_location: Location | null;
+            }[];
+          } | null;
+          const isAwayLikeDay =
+            dayRow?.day_type === "camp" || dayRow?.day_type === "away";
+          const matSession = dayRow?.sessions.find(
+            (s) => s.session_type === "mat"
+          );
+          const isRegularJoint = !isAwayLikeDay && !!matSession?.is_joint;
+          setNewMenuType(isRegularJoint ? "joint" : "normal");
+          setNewJointLocation(matSession?.joint_location ?? activeLocation);
+          setNewOffBothLocations(
+            isAwayLikeDay ? !!matSession?.is_joint : false
+          );
+
           setShowNewForm(true);
         }
       }
@@ -253,7 +287,9 @@ export default function TrainingBoardSupabase({
       return;
     }
     setConfirmingNew(false);
-    setNewMenuType("normal");
+    const isRegularJoint =
+      !isAwayLikeForViewDate && !!matSessionForViewDate?.is_joint;
+    setNewMenuType(isRegularJoint ? "joint" : "normal");
     setNewOffBothLocations(
       isAwayLikeForViewDate ? !!matSessionForViewDate?.is_joint : false
     );
@@ -1061,6 +1097,7 @@ export default function TrainingBoardSupabase({
             <button
               onClick={() => {
                 const loc = jointElsewhere.get(jointNoticeDate)?.location;
+                pendingJumpDateRef.current = jointNoticeDate;
                 setJointNoticeDate(null);
                 setSelectedId(null);
                 if (loc) setActiveLocation(loc);
