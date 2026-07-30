@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
@@ -129,6 +129,7 @@ export default function MemberHome({
   onCalendarDateSelect?: (date: string) => void;
 }) {
   const supabase = createClient();
+  const logSectionRef = useRef<HTMLDivElement>(null);
   const todayStr = toDateKey(new Date());
   // マネージャーは多摩所属として扱う(他ページの拠点制限ロジックと統一)
   const effectiveHomeLocation: Location | null =
@@ -197,7 +198,7 @@ export default function MemberHome({
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [logDate, setLogDate] = useState<string>(todayStr);
   const [todayLogText, setTodayLogText] = useState("");
-  const [todayLogType, setTodayLogType] = useState<TrainingType>("weight");
+  const [todayLogType, setTodayLogType] = useState<TrainingType | null>(null);
   const [todayLogTitle, setTodayLogTitle] = useState("");
   const [titleOptions, setTitleOptions] = useState<string[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
@@ -910,7 +911,7 @@ export default function MemberHome({
     } else {
       setTodayLog(null);
       setTodayLogText("");
-      setTodayLogType("weight");
+      setTodayLogType(null);
       setTodayLogTitle("");
     }
     setLoadingLog(false);
@@ -1033,6 +1034,7 @@ export default function MemberHome({
   }
 
   async function handleSaveLog() {
+    if (!todayLogType) return;
     setSavingLog(true);
     const trimmedTitle = todayLogTitle.trim();
     const { data, error } = await supabase
@@ -1693,7 +1695,13 @@ export default function MemberHome({
               return (
                 <li key={`self-${date}`}>
                   <button
-                    onClick={() => loadLogForDate(date)}
+                    onClick={() => {
+                      loadLogForDate(date);
+                      logSectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }}
                     className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
                       isOverdue
                         ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
@@ -1742,7 +1750,10 @@ export default function MemberHome({
 
 
       {/* トレーニングメニュー記入欄 */}
-      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+      <section
+        ref={logSectionRef}
+        className="flex flex-col gap-2 border-t border-neutral-800 pt-4"
+      >
         <div className="flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
@@ -1836,7 +1847,7 @@ export default function MemberHome({
             />
             <button
               onClick={handleSaveLog}
-              disabled={savingLog}
+              disabled={savingLog || !todayLogType}
               className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
             >
               {todayLog ? "更新する" : "保存する"}
@@ -1846,50 +1857,26 @@ export default function MemberHome({
                 保存済みです。内容を変えてから「更新する」を押すと上書きされます。
               </p>
             )}
-          </div>
-        )}
-      </section>
 
-      {/* 直近のトレーニング記録 */}
-      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          直近のトレーニングメニュー
-        </h2>
-        {loadingRecentLogs ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : recentLogs.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-            まだ記録がありません。
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recentLogs.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-              >
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
-                  />
-                  {formatMonthDay(r.date)}・{trainingTypeLabel[r.type]}
-                  {r.title && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
-                      {r.title}
-                    </span>
-                  )}
-                  {r.isAlternative && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
-                      未実施報告の代替メニュー
-                    </span>
-                  )}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                  {r.content}
-                </p>
-              </div>
-            ))}
+            {todayLogType === "running" && (
+              <RecentTypeLogs
+                supabase={supabase}
+                authorId={profile.id}
+                excludeDate={logDate}
+                type="running"
+                label="直近のランメニュー"
+              />
+            )}
+            {todayLogType === "weight" && todayLogTitle.trim() && (
+              <RecentTypeLogs
+                supabase={supabase}
+                authorId={profile.id}
+                excludeDate={logDate}
+                type="weight"
+                title={todayLogTitle.trim()}
+                label={`直近の${todayLogTitle.trim()}のトレーニングメニュー`}
+              />
+            )}
           </div>
         )}
       </section>
@@ -2163,6 +2150,74 @@ export default function MemberHome({
         </button>
       </div>
     </>
+  );
+}
+
+function RecentTypeLogs({
+  supabase,
+  authorId,
+  excludeDate,
+  type,
+  title,
+  label,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  authorId: string;
+  excludeDate: string;
+  type: TrainingType;
+  title?: string;
+  label: string;
+}) {
+  const [logs, setLogs] = useState<WeightLogRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLogs(null);
+    const timeout = setTimeout(async () => {
+      let query = supabase
+        .from("weight_logs")
+        .select("id, date, content, type, title")
+        .eq("author_id", authorId)
+        .eq("type", type)
+        .neq("date", excludeDate)
+        .order("date", { ascending: false })
+        .limit(3);
+      if (type === "weight" && title) {
+        query = query.eq("title", title);
+      }
+      const { data } = await query;
+      if (!cancelled) setLogs((data ?? []) as WeightLogRow[]);
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorId, excludeDate, type, title]);
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-neutral-800 pt-3">
+      <h3 className="text-xs font-semibold text-neutral-400">{label}</h3>
+      {logs === null ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : logs.length === 0 ? (
+        <p className="text-xs text-neutral-500">まだ記録がありません。</p>
+      ) : (
+        logs.map((r) => (
+          <div
+            key={r.id}
+            className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+          >
+            <p className="mb-1 text-[11px] font-semibold text-neutral-500">
+              {formatMonthDay(r.date)}
+            </p>
+            <p className="whitespace-pre-wrap text-sm text-neutral-100">
+              {r.content}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
   );
 }
 
