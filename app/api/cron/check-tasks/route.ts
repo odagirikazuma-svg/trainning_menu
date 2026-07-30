@@ -260,7 +260,7 @@ export async function GET(request: NextRequest) {
   const payload = JSON.stringify({
     title: "練習ノート",
     body: "完了していないタスクがあります",
-    url: "/mypage",
+    url: "/",
   });
 
   let notified = 0;

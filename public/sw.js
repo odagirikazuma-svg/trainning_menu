@@ -11,7 +11,7 @@ self.addEventListener("push", function (event) {
     body: data.body || "",
     icon: "/favicon.ico",
     badge: "/favicon.ico",
-    data: { url: data.url || "/mypage" },
+    data: { url: data.url || "/" },
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -19,7 +19,7 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/mypage";
+  const url = (event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
