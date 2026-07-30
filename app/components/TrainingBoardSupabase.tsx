@@ -18,6 +18,7 @@ import {
   sessionTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import MemberHome from "./MemberHome";
 
 // ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
 const dayTypeFillColorDark: Record<DayType, string> = {
@@ -785,357 +786,9 @@ export default function TrainingBoardSupabase({
     (viewDateSchedule.day_type === "camp" ||
       viewDateSchedule.day_type === "away");
 
-  return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
-        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
-          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
-          マット練習掲示板
-        </h1>
-        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-          <span className="hidden sm:inline">
-            {profile.display_name}（{roleLabel[profile.role]}）
-          </span>
-          {profile.role !== "manager" && (
-            <button
-              onClick={() => router.push("/mypage")}
-              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-            >
-              {profile.role === "coach" ? "管理ページ" : "マイページ"}
-            </button>
-          )}
-          {isCoachView && (
-            <button
-              onClick={() => router.push("/team")}
-              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-            >
-              チームページ
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* 拠点タブ */}
-      <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
-        {isCoachView ? (
-          locations.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => setActiveLocation(loc)}
-              className={`flex-1 py-3 text-sm font-medium transition ${
-                activeLocation === loc
-                  ? "border-b-2 border-red-600 text-red-400"
-                  : "text-neutral-500"
-              }`}
-            >
-              {locationLabel[loc]}
-            </button>
-          ))
-        ) : (
-          <>
-            <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
-              {locationLabel[memberHomeLocation]}
-            </span>
-            <button
-              onClick={() => router.push("/team")}
-              className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
-            >
-              チームページ
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
-        {errorMsg && (
-          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
-            {errorMsg}
-          </p>
-        )}
-
-        {/* メニュー一覧（横スクロール、スマホ向け） */}
-        <div className="flex flex-col gap-2">
-          {showNewForm && canCreateMenu(profile.role) && (
-            <form
-              onSubmit={handleCreateMenu}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-            >
-              {confirmingNew ? (
-                <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-950/40 p-3 text-sm">
-                  <p className="text-xs font-semibold text-blue-400">
-                    以下の内容で投稿します。よろしいですか？
-                  </p>
-                  {newMenuType === "off" ? (
-                    <p>
-                      {newDate}・オフ
-                      {newOffBothLocations && "（多摩・大塚とも）"}
-                    </p>
-                  ) : (
-                    <>
-                      <p>
-                        {locationLabel[activeLocation]}・{newDate}
-                        {newStartTime && ` ${newStartTime}〜`}
-                        {isAwayLikeForViewDate
-                          ? `・${dayTypeLabel[viewDateSchedule!.day_type]}${
-                              matSessionForViewDate?.location_note
-                                ? `（${matSessionForViewDate.location_note}）`
-                                : ""
-                            }`
-                          : newMenuType === "joint" && "・全体練習"}
-                      </p>
-                      <p className="whitespace-pre-wrap text-neutral-100">
-                        {newContent}
-                      </p>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                    required
-                  />
-
-                  {isAwayLikeForViewDate ? (
-                    <p className="rounded-lg bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-400">
-                      {dayTypeLabel[viewDateSchedule!.day_type]}
-                      {matSessionForViewDate?.location_note
-                        ? `（${matSessionForViewDate.location_note}）`
-                        : viewDateSchedule!.event_name
-                          ? `（${viewDateSchedule!.event_name}）`
-                          : ""}
-                      ・
-                      {matSessionForViewDate?.is_joint
-                        ? `このメニューは、全体での${dayTypeLabel[viewDateSchedule!.day_type]}なので両拠点に同じ内容が登録されます`
-                        : `このメニューは${locationLabel[activeLocation]}メンバーのみに登録されます`}
-                    </p>
-                  ) : (
-                    <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
-                      {(
-                        [
-                          { v: "normal", label: "通常" },
-                          { v: "joint", label: "全体練習" },
-                          { v: "off", label: "オフ" },
-                        ] as const
-                      ).map((opt) => (
-                        <button
-                          key={opt.v}
-                          type="button"
-                          onClick={() => setNewMenuType(opt.v)}
-                          className={`flex-1 rounded-md py-2 font-medium ${
-                            newMenuType === opt.v
-                              ? "bg-red-600 shadow text-white"
-                              : "text-neutral-400"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {newMenuType === "off" ? (
-                    <label className="flex items-center gap-2 text-sm text-neutral-200">
-                      <input
-                        type="checkbox"
-                        checked={newOffBothLocations}
-                        onChange={(e) =>
-                          setNewOffBothLocations(e.target.checked)
-                        }
-                        className="h-4 w-4"
-                      />
-                      両拠点同時にオフにする（多摩・大塚とも）
-                    </label>
-                  ) : (
-                    <>
-                      <label className="flex flex-col text-[11px] text-neutral-400">
-                        開始時刻
-                        <TimeSelect
-                          value={newStartTime}
-                          onChange={setNewStartTime}
-                        />
-                      </label>
-                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                          開催拠点
-                          <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
-                            {locations.map((loc) => (
-                              <button
-                                key={loc}
-                                type="button"
-                                onClick={() => setNewJointLocation(loc)}
-                                className={`flex-1 rounded-md py-2 font-medium ${
-                                  newJointLocation === loc
-                                    ? "bg-red-600 text-white shadow"
-                                    : "text-neutral-400"
-                                }`}
-                              >
-                                {locationLabel[loc]}
-                              </button>
-                            ))}
-                          </div>
-                        </label>
-                      )}
-                      <textarea
-                        placeholder="メニュー詳細（自由記述）"
-                        value={newContent}
-                        onChange={(e) => setNewContent(e.target.value)}
-                        rows={4}
-                        className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                        required
-                      />
-                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <p className="text-[11px] text-neutral-400">
-                          {newJointLocation === activeLocation
-                            ? "もう一方の拠点はこの練習に合流します"
-                            : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {confirmingNew ? (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingNew(false)}
-                    className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
-                  >
-                    戻って修正
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white active:bg-blue-700"
-                  >
-                    この内容で投稿する
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowNewForm(false)}
-                    className="flex-1 rounded-lg border border-neutral-700 py-3 text-sm text-neutral-300"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        newDate &&
-                        (newMenuType === "off" || newContent)
-                      )
-                        setConfirmingNew(true);
-                    }}
-                    className="flex-1 rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
-                  >
-                    確認する
-                  </button>
-                </div>
-              )}
-            </form>
-          )}
-
-          {loadingMenus ? (
-            <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : neighborCards.length === 0 ? (
-            <p className="text-xs text-neutral-500">
-              {locationLabel[activeLocation]}のメニューはまだありません。下のカレンダーから作成・確認できます。
-            </p>
-          ) : (
-            <div
-              className={`grid gap-2 ${
-                neighborCards.length === 1
-                  ? "grid-cols-1"
-                  : neighborCards.length === 2
-                  ? "grid-cols-2"
-                  : "grid-cols-3"
-              }`}
-            >
-              {neighborCards.map(({ item, role }) => {
-                const isCurrent = role === "current";
-                const key =
-                  item.kind === "menu" ? item.menu.id : `joint-${item.date}`;
-
-                if (item.kind === "joint") {
-                  return (
-                    <div
-                      key={key}
-                      className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                        isCurrent
-                          ? "border-purple-600 bg-purple-950/40 font-semibold text-purple-700 shadow-sm"
-                          : "border-neutral-800 bg-neutral-900 text-neutral-500"
-                      }`}
-                    >
-                      <span
-                        className={`truncate text-[10px] ${
-                          isCurrent ? "text-purple-400" : "text-neutral-600"
-                        }`}
-                      >
-                        {item.date.slice(5)}
-                      </span>
-                      <span className="truncate">
-                        全体練習（{locationLabel[item.location]}）
-                      </span>
-                    </div>
-                  );
-                }
-
-                const m = item.menu;
-                const executed = !m.is_off && isReportOpen(m);
-                const total = m.is_joint
-                  ? memberCounts.all
-                  : memberCounts[m.location];
-                const responded =
-                  submissionMap[m.id]?.respondedAuthors.size ?? 0;
-                const unsubmitted = executed && !m.is_off && responded < total;
-                return (
-                  <div
-                    key={key}
-                    className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
-                      isCurrent
-                        ? "border-blue-600 bg-blue-950/40 font-semibold text-blue-400 shadow-sm"
-                        : "border-neutral-800 bg-neutral-900 text-neutral-500"
-                    }`}
-                  >
-                    <span
-                      className={`truncate text-[10px] ${
-                        isCurrent ? "text-neutral-500" : "text-neutral-600"
-                      }`}
-                    >
-                      {m.date.slice(5)}
-                      {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
-                    </span>
-                    <span className="truncate">
-                      {m.title || formatFullDateTime(m.date, m.start_time)}
-                    </span>
-                    {executed && (
-                      <span
-                        className={`mt-1 inline-block w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          !isCurrent
-                            ? "bg-neutral-800 text-neutral-500"
-                            : unsubmitted
-                            ? "bg-red-100 text-red-400"
-                            : "bg-neutral-800 text-neutral-400"
-                        }`}
-                      >
-                        {unsubmitted ? "実施済み・未提出あり" : "実施済み"}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
+  const practiceSection = (
+    <>
+      {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
             <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
             <p className="mb-2">
@@ -1501,39 +1154,410 @@ export default function TrainingBoardSupabase({
             )}
           </div>
         )}
+    </>
+  );
 
-        {/* すべてのメニューを見るカレンダー */}
-        <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-          <h3 className="text-xs font-semibold text-neutral-400">
-            カレンダーからメニューを探す
-          </h3>
-          <MenuCalendar
-            menus={menus}
-            viewDate={viewDate}
-            onSelect={selectMenu}
-            submissionMap={submissionMap}
-            memberCounts={memberCounts}
-            jointElsewhere={jointElsewhere}
-            onSelectJoint={(date) =>
-              applySelectionForDate(date, menus, jointElsewhere)
-            }
-            onSelectEmpty={(date) =>
-              applySelectionForDate(date, menus, jointElsewhere)
-            }
-            teamId={profile.team_id}
-            location={activeLocation}
-          />
-        </section>
-
-        {profile.role === "manager" && (
-          <div className="border-t border-neutral-800 pt-4">
+  return (
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          中央大学レスリング部
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+          <span className="hidden sm:inline">
+            {profile.display_name}（{roleLabel[profile.role]}）
+          </span>
+          {profile.role === "coach" && (
             <button
-              onClick={signOut}
-              className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
+              onClick={() => router.push("/mypage")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
             >
-              ログアウト
+              管理ページ
             </button>
-          </div>
+          )}
+          {isCoachView && (
+            <button
+              onClick={() => router.push("/team")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              チームページ
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* 拠点タブ */}
+      <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
+        {isCoachView ? (
+          locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setActiveLocation(loc)}
+              className={`flex-1 py-3 text-sm font-medium transition ${
+                activeLocation === loc
+                  ? "border-b-2 border-red-600 text-red-400"
+                  : "text-neutral-500"
+              }`}
+            >
+              {locationLabel[loc]}
+            </button>
+          ))
+        ) : (
+          <>
+            <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
+              マイページ
+            </span>
+            <button
+              onClick={() => router.push("/team")}
+              className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
+            >
+              チームページ
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        {errorMsg && (
+          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+            {errorMsg}
+          </p>
+        )}
+
+        {/* メニュー一覧（横スクロール、スマホ向け） */}
+        <div className="flex flex-col gap-2">
+          {showNewForm && canCreateMenu(profile.role) && (
+            <form
+              onSubmit={handleCreateMenu}
+              className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+            >
+              {confirmingNew ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-950/40 p-3 text-sm">
+                  <p className="text-xs font-semibold text-blue-400">
+                    以下の内容で投稿します。よろしいですか？
+                  </p>
+                  {newMenuType === "off" ? (
+                    <p>
+                      {newDate}・オフ
+                      {newOffBothLocations && "（多摩・大塚とも）"}
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        {locationLabel[activeLocation]}・{newDate}
+                        {newStartTime && ` ${newStartTime}〜`}
+                        {isAwayLikeForViewDate
+                          ? `・${dayTypeLabel[viewDateSchedule!.day_type]}${
+                              matSessionForViewDate?.location_note
+                                ? `（${matSessionForViewDate.location_note}）`
+                                : ""
+                            }`
+                          : newMenuType === "joint" && "・全体練習"}
+                      </p>
+                      <p className="whitespace-pre-wrap text-neutral-100">
+                        {newContent}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                    required
+                  />
+
+                  {isAwayLikeForViewDate ? (
+                    <p className="rounded-lg bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-400">
+                      {dayTypeLabel[viewDateSchedule!.day_type]}
+                      {matSessionForViewDate?.location_note
+                        ? `（${matSessionForViewDate.location_note}）`
+                        : viewDateSchedule!.event_name
+                          ? `（${viewDateSchedule!.event_name}）`
+                          : ""}
+                      ・
+                      {matSessionForViewDate?.is_joint
+                        ? `このメニューは、全体での${dayTypeLabel[viewDateSchedule!.day_type]}なので両拠点に同じ内容が登録されます`
+                        : `このメニューは${locationLabel[activeLocation]}メンバーのみに登録されます`}
+                    </p>
+                  ) : (
+                    <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                      {(
+                        [
+                          { v: "normal", label: "通常" },
+                          { v: "joint", label: "全体練習" },
+                          { v: "off", label: "オフ" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => setNewMenuType(opt.v)}
+                          className={`flex-1 rounded-md py-2 font-medium ${
+                            newMenuType === opt.v
+                              ? "bg-red-600 shadow text-white"
+                              : "text-neutral-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {newMenuType === "off" ? (
+                    <label className="flex items-center gap-2 text-sm text-neutral-200">
+                      <input
+                        type="checkbox"
+                        checked={newOffBothLocations}
+                        onChange={(e) =>
+                          setNewOffBothLocations(e.target.checked)
+                        }
+                        className="h-4 w-4"
+                      />
+                      両拠点同時にオフにする（多摩・大塚とも）
+                    </label>
+                  ) : (
+                    <>
+                      <label className="flex flex-col text-[11px] text-neutral-400">
+                        開始時刻
+                        <TimeSelect
+                          value={newStartTime}
+                          onChange={setNewStartTime}
+                        />
+                      </label>
+                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          開催拠点
+                          <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                            {locations.map((loc) => (
+                              <button
+                                key={loc}
+                                type="button"
+                                onClick={() => setNewJointLocation(loc)}
+                                className={`flex-1 rounded-md py-2 font-medium ${
+                                  newJointLocation === loc
+                                    ? "bg-red-600 text-white shadow"
+                                    : "text-neutral-400"
+                                }`}
+                              >
+                                {locationLabel[loc]}
+                              </button>
+                            ))}
+                          </div>
+                        </label>
+                      )}
+                      <textarea
+                        placeholder="メニュー詳細（自由記述）"
+                        value={newContent}
+                        onChange={(e) => setNewContent(e.target.value)}
+                        rows={4}
+                        className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                        required
+                      />
+                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
+                        <p className="text-[11px] text-neutral-400">
+                          {newJointLocation === activeLocation
+                            ? "もう一方の拠点はこの練習に合流します"
+                            : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
+              {confirmingNew ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingNew(false)}
+                    className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
+                  >
+                    戻って修正
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white active:bg-blue-700"
+                  >
+                    この内容で投稿する
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewForm(false)}
+                    className="flex-1 rounded-lg border border-neutral-700 py-3 text-sm text-neutral-300"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        newDate &&
+                        (newMenuType === "off" || newContent)
+                      )
+                        setConfirmingNew(true);
+                    }}
+                    className="flex-1 rounded-lg bg-blue-600 py-3 text-sm font-medium text-white active:bg-blue-700"
+                  >
+                    確認する
+                  </button>
+                </div>
+              )}
+            </form>
+          )}
+
+          {isCoachView && (
+            loadingMenus ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : neighborCards.length === 0 ? (
+            <p className="text-xs text-neutral-500">
+              {locationLabel[activeLocation]}のメニューはまだありません。下のカレンダーから作成・確認できます。
+            </p>
+          ) : (
+            <div
+              className={`grid gap-2 ${
+                neighborCards.length === 1
+                  ? "grid-cols-1"
+                  : neighborCards.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}
+            >
+              {neighborCards.map(({ item, role }) => {
+                const isCurrent = role === "current";
+                const key =
+                  item.kind === "menu" ? item.menu.id : `joint-${item.date}`;
+
+                if (item.kind === "joint") {
+                  return (
+                    <div
+                      key={key}
+                      className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                        isCurrent
+                          ? "border-purple-600 bg-purple-950/40 font-semibold text-purple-700 shadow-sm"
+                          : "border-neutral-800 bg-neutral-900 text-neutral-500"
+                      }`}
+                    >
+                      <span
+                        className={`truncate text-[10px] ${
+                          isCurrent ? "text-purple-400" : "text-neutral-600"
+                        }`}
+                      >
+                        {item.date.slice(5)}
+                      </span>
+                      <span className="truncate">
+                        全体練習（{locationLabel[item.location]}）
+                      </span>
+                    </div>
+                  );
+                }
+
+                const m = item.menu;
+                const executed = !m.is_off && isReportOpen(m);
+                const total = m.is_joint
+                  ? memberCounts.all
+                  : memberCounts[m.location];
+                const responded =
+                  submissionMap[m.id]?.respondedAuthors.size ?? 0;
+                const unsubmitted = executed && !m.is_off && responded < total;
+                return (
+                  <div
+                    key={key}
+                    className={`relative flex min-w-0 flex-col rounded-lg border px-2 py-2 text-left text-xs ${
+                      isCurrent
+                        ? "border-blue-600 bg-blue-950/40 font-semibold text-blue-400 shadow-sm"
+                        : "border-neutral-800 bg-neutral-900 text-neutral-500"
+                    }`}
+                  >
+                    <span
+                      className={`truncate text-[10px] ${
+                        isCurrent ? "text-neutral-500" : "text-neutral-600"
+                      }`}
+                    >
+                      {m.date.slice(5)}
+                      {m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""}
+                    </span>
+                    <span className="truncate">
+                      {m.title || formatFullDateTime(m.date, m.start_time)}
+                    </span>
+                    {executed && (
+                      <span
+                        className={`mt-1 inline-block w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          !isCurrent
+                            ? "bg-neutral-800 text-neutral-500"
+                            : unsubmitted
+                            ? "bg-red-100 text-red-400"
+                            : "bg-neutral-800 text-neutral-400"
+                        }`}
+                      >
+                        {unsubmitted ? "実施済み・未提出あり" : "実施済み"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {isCoachView || profile.role === "manager" ? (
+          <>
+            {practiceSection}
+
+            {/* すべてのメニューを見るカレンダー */}
+            <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+              <h3 className="text-xs font-semibold text-neutral-400">
+                カレンダーからメニューを探す
+              </h3>
+              <MenuCalendar
+                menus={menus}
+                viewDate={viewDate}
+                onSelect={selectMenu}
+                submissionMap={submissionMap}
+                memberCounts={memberCounts}
+                jointElsewhere={jointElsewhere}
+                onSelectJoint={(date) =>
+                  applySelectionForDate(date, menus, jointElsewhere)
+                }
+                onSelectEmpty={(date) =>
+                  applySelectionForDate(date, menus, jointElsewhere)
+                }
+                teamId={profile.team_id}
+                location={activeLocation}
+              />
+            </section>
+
+            {profile.role === "manager" && (
+              <div className="border-t border-neutral-800 pt-4">
+                <button
+                  onClick={signOut}
+                  className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
+                >
+                  ログアウト
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <MemberHome
+            profile={profile}
+            signOut={signOut}
+            practiceMenuSlot={practiceSection}
+            onGoToMenu={(_loc, date) =>
+              applySelectionForDate(date, menus, jointElsewhere)
+            }
+            onCalendarDateSelect={(date) =>
+              applySelectionForDate(date, menus, jointElsewhere)
+            }
+          />
         )}
       </div>
     </div>

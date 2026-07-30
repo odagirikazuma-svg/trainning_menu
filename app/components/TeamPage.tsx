@@ -1107,12 +1107,12 @@ export default function TeamPage({
           チームページ
         </h1>
         <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-          {profile.role !== "manager" && (
+          {profile.role === "coach" && (
             <button
               onClick={() => router.push("/mypage")}
               className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
             >
-              {profile.role === "coach" ? "管理ページ" : "マイページ"}
+              管理ページ
             </button>
           )}
           <button
@@ -1130,7 +1130,7 @@ export default function TeamPage({
             onClick={() => router.push("/")}
             className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
           >
-            {locationLabel[restrictedHomeLocation]}
+            マイページ
           </button>
           <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
             チームページ
