@@ -195,6 +195,7 @@ export default function MemberHome({
   const [editMatchDate, setEditMatchDate] = useState("");
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
+  const [logDate, setLogDate] = useState<string>(todayStr);
   const [todayLogText, setTodayLogText] = useState("");
   const [todayLogType, setTodayLogType] = useState<TrainingType>("weight");
   const [todayLogTitle, setTodayLogTitle] = useState("");
@@ -276,7 +277,7 @@ export default function MemberHome({
     else setLoadingTodo(false);
     loadSelfTrainingTodo();
     loadNextMatch();
-    loadTodayLog();
+    loadLogForDate(todayStr);
     loadTodayAbsent();
     loadRecentLogs();
     loadRecordDates();
@@ -421,34 +422,11 @@ export default function MemberHome({
       return;
     }
 
-    const { data: absentData, error: absentError } = await supabase
-      .from("comments")
-      .select("alt_type, menu:menus!comments_menu_id_fkey(date)")
-      .eq("author_id", profile.id)
-      .eq("kind", "absent")
-      .not("alt_type", "is", null);
-
-    if (absentError) {
-      setErrorMsg(absentError.message);
-      return;
-    }
-
+    // 未実施報告の代替メニューは「マット」への代替であり、
+    // 別枠のラン/ウェイトなどのセッション消化とは別物なのでここではカウントしない
     const loggedDates = new Set(
       ((logData ?? []) as { date: string }[]).map((r) => r.date)
     );
-    const absentRows = (absentData ?? []) as unknown as {
-      alt_type: TrainingType;
-      menu: { date: string } | null;
-    }[];
-    for (const row of absentRows) {
-      if (
-        row.menu &&
-        row.menu.date >= rangeStart &&
-        row.menu.date <= todayStr
-      ) {
-        loggedDates.add(row.menu.date);
-      }
-    }
 
     setSelfTrainingPending(
       nonMatDates.filter((d) => !loggedDates.has(d)).sort()
@@ -911,13 +889,14 @@ export default function MemberHome({
     setTitleOptions(titles);
   }
 
-  async function loadTodayLog() {
+  async function loadLogForDate(date: string) {
     setLoadingLog(true);
+    setLogDate(date);
     const { data, error } = await supabase
       .from("weight_logs")
       .select("id, date, content, type, title")
       .eq("author_id", profile.id)
-      .eq("date", todayStr)
+      .eq("date", date)
       .maybeSingle();
 
     if (error) {
@@ -928,6 +907,11 @@ export default function MemberHome({
       setTodayLogText(row.content);
       setTodayLogType(row.type);
       setTodayLogTitle(row.title ?? "");
+    } else {
+      setTodayLog(null);
+      setTodayLogText("");
+      setTodayLogType("weight");
+      setTodayLogTitle("");
     }
     setLoadingLog(false);
   }
@@ -1058,7 +1042,7 @@ export default function MemberHome({
           id: todayLog?.id,
           team_id: profile.team_id,
           author_id: profile.id,
-          date: todayStr,
+          date: logDate,
           content: todayLogText,
           type: todayLogType,
           title: todayLogType === "weight" && trimmedTitle ? trimmedTitle : null,
@@ -1729,11 +1713,12 @@ export default function MemberHome({
               const isOverdue = date < todayStr;
               return (
                 <li key={`self-${date}`}>
-                  <div
+                  <button
+                    onClick={() => loadLogForDate(date)}
                     className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
                       isOverdue
                         ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
-                        : "border-amber-900/60 bg-amber-950/40"
+                        : "border-amber-900/60 bg-amber-950/40 active:bg-amber-100"
                     }`}
                   >
                     <span
@@ -1744,10 +1729,9 @@ export default function MemberHome({
                     <span
                       className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
                     >
-                      {formatMonthDay(date)}
-                      {date === todayStr && "・下の「本日のトレーニングメニュー」から記録できます"}
+                      {formatMonthDay(date)}・タップして記録する
                     </span>
-                  </div>
+                  </button>
                 </li>
               );
             })}
@@ -1835,14 +1819,27 @@ export default function MemberHome({
         )}
       </section>
 
-      {/* 本日のトレーニングメニュー */}
+      {/* トレーニングメニュー記入欄 */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          本日のトレーニングメニュー
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            {logDate === todayStr
+              ? "本日のトレーニングメニュー"
+              : `${formatMonthDay(logDate)}のトレーニングメニュー`}
+          </h2>
+          {logDate !== todayStr && (
+            <button
+              onClick={() => loadLogForDate(todayStr)}
+              className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[11px] text-neutral-300 active:bg-neutral-800"
+            >
+              今日に戻る
+            </button>
+          )}
+        </div>
 
-        {todayAbsentRecords.map((r) => (
+        {logDate === todayStr &&
+          todayAbsentRecords.map((r) => (
           <div
             key={r.id}
             className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
@@ -2282,11 +2279,13 @@ function UnifiedCalendar({
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
   const selfLoggedDates = new Set<string>();
+  for (const row of weightLogs) {
+    selfLoggedDates.add(row.date);
+  }
   for (const row of [...weightLogs, ...absentLogs]) {
     const list = dotsByDate.get(row.date) ?? [];
     list.push(row.type);
     dotsByDate.set(row.date, list);
-    selfLoggedDates.add(row.date);
     if (row.title && !titleByDate.has(row.date)) {
       titleByDate.set(row.date, row.title);
     }
