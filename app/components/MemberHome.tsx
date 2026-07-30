@@ -113,15 +113,18 @@ export default function MemberHome({
   practiceMenuSlot,
   onGoToMenu,
   onCalendarDateSelect,
+  refreshSignal,
 }: {
   profile: Profile;
   signOut: () => void;
   practiceMenuSlot: React.ReactNode;
   onGoToMenu: (location: Location, date: string) => void;
   onCalendarDateSelect?: (date: string) => void;
+  refreshSignal?: number;
 }) {
   const supabase = createClient();
   const logSectionRef = useRef<HTMLDivElement>(null);
+  const isFirstRefresh = useRef(true);
   const todayStr = toDateKey(new Date());
   // マネージャーは多摩所属として扱う(他ページの拠点制限ロジックと統一)
   const effectiveHomeLocation: Location | null =
@@ -277,6 +280,17 @@ export default function MemberHome({
     loadCalendarData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarCursor]);
+
+  useEffect(() => {
+    if (isFirstRefresh.current) {
+      isFirstRefresh.current = false;
+      return;
+    }
+    if (effectiveHomeLocation) loadTodo();
+    loadSelfTrainingTodo();
+    loadCalendarData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   async function loadTodo() {
     setLoadingTodo(true);

@@ -157,6 +157,7 @@ export default function TrainingBoardSupabase({
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportText, setReportText] = useState("");
@@ -624,6 +625,7 @@ export default function TrainingBoardSupabase({
     await loadComments(selectedId);
     if (kind === "report" || kind === "absent") {
       await loadSubmissionSummary(menus.map((m) => m.id));
+      setTaskRefreshSignal((n) => n + 1);
     }
   }
 
@@ -655,6 +657,7 @@ export default function TrainingBoardSupabase({
     }
     if (selectedId) await loadComments(selectedId);
     await loadSubmissionSummary(menus.map((m) => m.id));
+    setTaskRefreshSignal((n) => n + 1);
   }
 
   async function handleAddComment(e: React.FormEvent) {
@@ -1574,6 +1577,7 @@ export default function TrainingBoardSupabase({
             profile={profile}
             signOut={signOut}
             practiceMenuSlot={practiceSection}
+            refreshSignal={taskRefreshSignal}
             onGoToMenu={async (_loc, date) => {
               await applySelectionForDate(date, menus, jointElsewhere);
               setShowReportForm(true);
