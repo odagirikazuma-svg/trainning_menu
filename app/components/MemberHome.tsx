@@ -6,6 +6,7 @@ import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
   currentGrade,
   DayType,
+  dayTypeLabel,
   getTitleColor,
   Location,
   SessionType,
@@ -223,8 +224,13 @@ export default function MemberHome({
       {
         dayType: DayType;
         isOff: boolean;
+        eventName: string | null;
         hasMat: boolean;
-        nonMat: { type: SessionType; time: string }[];
+        sessions: {
+          type: SessionType;
+          time: string;
+          locationNote: string | null;
+        }[];
       }
     >
   >(new Map());
@@ -1037,7 +1043,7 @@ export default function MemberHome({
       const { data: scheduleData, error: scheduleError } = await supabase
         .from("schedule_days")
         .select(
-          "date, is_off, day_type, sessions:schedule_sessions(session_type, start_time)"
+          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, location_note)"
         )
         .eq("team_id", profile.team_id)
         .eq("location", effectiveHomeLocation)
@@ -1052,25 +1058,41 @@ export default function MemberHome({
           {
             dayType: DayType;
             isOff: boolean;
+            eventName: string | null;
             hasMat: boolean;
-            nonMat: { type: SessionType; time: string }[];
+            sessions: {
+              type: SessionType;
+              time: string;
+              locationNote: string | null;
+            }[];
           }
         >();
         for (const row of (scheduleData ?? []) as unknown as {
           date: string;
           is_off: boolean;
           day_type: DayType;
-          sessions: { session_type: SessionType; start_time: string }[];
+          event_name: string | null;
+          sessions: {
+            session_type: SessionType;
+            start_time: string;
+            location_note: string | null;
+          }[];
         }[]) {
-          const nonMat = row.sessions
-            .filter((s) => s.session_type !== "mat")
-            .map((s) => ({ type: s.session_type, time: s.start_time }));
+          const sessions = row.sessions
+            .slice()
+            .sort((a, b) => a.start_time.localeCompare(b.start_time))
+            .map((s) => ({
+              type: s.session_type,
+              time: s.start_time,
+              locationNote: s.location_note,
+            }));
           const hasMat = row.sessions.some((s) => s.session_type === "mat");
           map.set(row.date, {
             dayType: row.day_type,
             isOff: row.is_off,
+            eventName: row.event_name,
             hasMat,
-            nonMat,
+            sessions,
           });
         }
         setCalendarSchedule(map);
@@ -1698,50 +1720,6 @@ export default function MemberHome({
         )}
       </section>
 
-      {/* 直近のトレーニング記録 */}
-      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          直近のトレーニングメニュー
-        </h2>
-        {loadingRecentLogs ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : recentLogs.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-            まだ記録がありません。
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recentLogs.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-              >
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
-                  />
-                  {formatMonthDay(r.date)}・{trainingTypeLabel[r.type]}
-                  {r.title && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
-                      {r.title}
-                    </span>
-                  )}
-                  {r.isAlternative && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
-                      未実施報告の代替メニュー
-                    </span>
-                  )}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                  {r.content}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* 本日のトレーニングメニュー */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -1834,6 +1812,50 @@ export default function MemberHome({
                 保存済みです。内容を変えてから「更新する」を押すと上書きされます。
               </p>
             )}
+          </div>
+        )}
+      </section>
+
+      {/* 直近のトレーニング記録 */}
+      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+          直近のトレーニングメニュー
+        </h2>
+        {loadingRecentLogs ? (
+          <p className="text-xs text-neutral-500">読み込み中…</p>
+        ) : recentLogs.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            まだ記録がありません。
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {recentLogs.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+              >
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
+                  />
+                  {formatMonthDay(r.date)}・{trainingTypeLabel[r.type]}
+                  {r.title && (
+                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
+                      {r.title}
+                    </span>
+                  )}
+                  {r.isAlternative && (
+                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
+                      未実施報告の代替メニュー
+                    </span>
+                  )}
+                </div>
+                <p className="whitespace-pre-wrap text-sm text-neutral-100">
+                  {r.content}
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -2131,8 +2153,9 @@ function UnifiedCalendar({
     {
       dayType: DayType;
       isOff: boolean;
+      eventName: string | null;
       hasMat: boolean;
-      nonMat: { type: SessionType; time: string }[];
+      sessions: { type: SessionType; time: string; locationNote: string | null }[];
     }
   >;
   matPendingDates: Set<string>;
@@ -2214,7 +2237,9 @@ function UnifiedCalendar({
           const isCamp = schedule?.dayType === "camp" && !schedule.isOff;
           const isPast = !todayDate || key <= todayDate;
           const needsSelfLog =
-            schedule && !schedule.isOff && schedule.nonMat.length > 0;
+            !!schedule &&
+            !schedule.isOff &&
+            schedule.sessions.some((s) => s.type !== "mat");
           const isPending =
             isPast &&
             !schedule?.isOff &&
@@ -2277,9 +2302,16 @@ function UnifiedCalendar({
                   ))}
                 </span>
               )}
-              {(schedule?.nonMat ?? []).length > 0 && (
+              {schedule &&
+                !schedule.isOff &&
+                (schedule.dayType === "camp" || schedule.dayType === "away") && (
+                  <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-300">
+                    {schedule.eventName || dayTypeLabel[schedule.dayType]}
+                  </span>
+                )}
+              {(schedule?.sessions ?? []).length > 0 && (
                 <span className="flex flex-col items-center gap-0.5">
-                  {(schedule?.nonMat ?? []).map((s, idx) => (
+                  {(schedule?.sessions ?? []).map((s, idx) => (
                     <span
                       key={idx}
                       className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-400"
@@ -2288,6 +2320,7 @@ function UnifiedCalendar({
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
                       />
                       {s.time.slice(0, 5)}
+                      {s.locationNote ? `(${s.locationNote})` : ""}
                     </span>
                   ))}
                 </span>

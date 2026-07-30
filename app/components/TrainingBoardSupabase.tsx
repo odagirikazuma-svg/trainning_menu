@@ -156,6 +156,8 @@ export default function TrainingBoardSupabase({
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [showCommentForm, setShowCommentForm] = useState(false);
+  const [showReportForm, setShowReportForm] = useState(false);
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAltType, setAbsentAltType] = useState<
@@ -267,6 +269,8 @@ export default function TrainingBoardSupabase({
 
   useEffect(() => {
     if (selectedId) loadComments(selectedId);
+    setShowCommentForm(false);
+    setShowReportForm(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -696,6 +700,15 @@ export default function TrainingBoardSupabase({
   const absentReports = comments.filter(
     (c) => c.kind === "absent" && !c.parent_id
   );
+  // コーチ・マネージャー以外（マイページに統合された部員view）には、
+  // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
+  const isMemberView = !isCoachView && profile.role !== "manager";
+  const visibleReports = isMemberView
+    ? reports.filter((r) => r.author_id === profile.id)
+    : reports;
+  const visibleAbsentReports = isMemberView
+    ? absentReports.filter((c) => c.author_id === profile.id)
+    : absentReports;
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
@@ -923,21 +936,30 @@ export default function TrainingBoardSupabase({
                   <CommentItem key={c.id} c={c} />
                 ))}
               </ul>
-              <form onSubmit={handleAddComment} className="flex flex-col gap-2">
-                <textarea
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="意見・コメントを入力"
-                  rows={3}
-                  className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                />
+              {!showCommentForm ? (
                 <button
-                  type="submit"
-                  className="self-start rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white active:bg-red-700"
+                  onClick={() => setShowCommentForm(true)}
+                  className="self-start text-[11px] font-medium text-red-400 underline"
                 >
-                  コメントする
+                  意見・コメントする
                 </button>
-              </form>
+              ) : (
+                <form onSubmit={handleAddComment} className="flex flex-col gap-2">
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="意見・コメントを入力"
+                    rows={3}
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                  />
+                  <button
+                    type="submit"
+                    className="self-start rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white active:bg-red-700"
+                  >
+                    コメントする
+                  </button>
+                </form>
+              )}
             </section>
 
             {/* 実施報告 */}
@@ -951,12 +973,12 @@ export default function TrainingBoardSupabase({
                 </span>
               </div>
               <ul className="flex flex-col gap-3">
-                {reports.length === 0 && (
+                {visibleReports.length === 0 && (
                   <li className="text-xs text-neutral-500">
                     まだ実施報告はありません。
                   </li>
                 )}
-                {reports.map((r) => (
+                {visibleReports.map((r) => (
                   <ReportThread
                     key={r.id}
                     report={r}
@@ -997,6 +1019,13 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
+              ) : !showReportForm ? (
+                <button
+                  onClick={() => setShowReportForm(true)}
+                  className="self-start text-[11px] font-medium text-red-400 underline"
+                >
+                  このメニューの報告をする
+                </button>
               ) : reportOpen ? (
                 <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
@@ -1026,12 +1055,12 @@ export default function TrainingBoardSupabase({
                 未実施報告（授業・通院などで参加できなかった場合）
               </h3>
               <ul className="flex flex-col gap-2">
-                {absentReports.length === 0 && (
+                {visibleAbsentReports.length === 0 && (
                   <li className="text-xs text-neutral-500">
                     まだ未実施報告はありません。
                   </li>
                 )}
-                {absentReports.map((c) => (
+                {visibleAbsentReports.map((c) => (
                   <ReportThread
                     key={c.id}
                     report={c}
@@ -1075,7 +1104,7 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
                   実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
-              ) : (
+              ) : !showReportForm ? null : (
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
                 <label className="flex flex-col text-[11px] text-neutral-400">
                   未実施の理由
