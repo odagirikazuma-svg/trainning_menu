@@ -64,6 +64,7 @@ type MenuRow = {
   date: string;
   location: Location;
   is_off: boolean;
+  is_joint: boolean;
 };
 
 type WeightMaxEventRow = {
@@ -219,7 +220,7 @@ export default function CoachAdminPage({
 
     const { data: menuData, error: menuError } = await supabase
       .from("menus")
-      .select("id, date, location, is_off")
+      .select("id, date, location, is_off, is_joint")
       .eq("team_id", profile.team_id)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
@@ -233,7 +234,16 @@ export default function CoachAdminPage({
     const menuRows = (menuData ?? []) as MenuRow[];
     const map = new Map<string, MenuRow>();
     for (const m of menuRows) {
-      if (!m.is_off) map.set(`${m.date}:${m.location}`, m);
+      if (m.is_off) continue;
+      map.set(`${m.date}:${m.location}`, m);
+      // 全体練習の場合、もう一方の拠点の部員も同じメニューに対して
+      // 提出することになるため、その拠点のキーでも参照できるようにする
+      if (m.is_joint) {
+        const otherLocation: Location =
+          m.location === "tama" ? "otsuka" : "tama";
+        const key = `${m.date}:${otherLocation}`;
+        if (!map.has(key)) map.set(key, m);
+      }
     }
     setMenusByDateLocation(map);
 
