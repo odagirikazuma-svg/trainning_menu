@@ -440,6 +440,19 @@ export default function TrainingBoardSupabase({
         is_off: false,
       });
       error = res.error;
+
+      if (!error && newMenuType === "normal" && newOffBothLocations) {
+        const res2 = await supabase.from("menus").insert({
+          ...basePayload,
+          title: "",
+          content: newContent,
+          location: otherLocation,
+          start_time: newStartTime || null,
+          is_joint: false,
+          is_off: false,
+        });
+        error = res2.error;
+      }
     }
 
     if (error) {
@@ -858,6 +871,19 @@ export default function TrainingBoardSupabase({
                             ? "もう一方の拠点はこの練習に合流します"
                             : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
                         </p>
+                      )}
+                      {newMenuType === "normal" && (
+                        <label className="flex items-center gap-2 text-sm text-neutral-200">
+                          <input
+                            type="checkbox"
+                            checked={newOffBothLocations}
+                            onChange={(e) =>
+                              setNewOffBothLocations(e.target.checked)
+                            }
+                            className="h-4 w-4"
+                          />
+                          同じ内容を両拠点に登録する（合宿・出稽古などで便利です）
+                        </label>
                       )}
                     </>
                   )}

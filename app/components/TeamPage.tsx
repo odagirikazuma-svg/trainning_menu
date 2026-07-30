@@ -174,6 +174,8 @@ export default function TeamPage({
   );
   const [editIncludeSessions, setEditIncludeSessions] = useState(true);
   const [editEventName, setEditEventName] = useState("");
+  const [editOffBothLocations, setEditOffBothLocations] = useState(false);
+  const [editShareBothLocations, setEditShareBothLocations] = useState(true);
   const [editSessions, setEditSessions] = useState<
     {
       type: SessionType;
@@ -192,6 +194,8 @@ export default function TeamPage({
     "off" | "camp" | "match" | "away"
   >("off");
   const [bulkEventName, setBulkEventName] = useState("");
+  const [bulkOffBothLocations, setBulkOffBothLocations] = useState(false);
+  const [bulkShareBothLocations, setBulkShareBothLocations] = useState(true);
   const [bulkIncludeSessions, setBulkIncludeSessions] = useState(false);
   const [bulkSessions, setBulkSessions] = useState<
     {
@@ -441,6 +445,8 @@ export default function TeamPage({
       : (dayDetail?.day_type ?? "practice");
     setEditCategory(category);
     setEditEventName(dayDetail?.event_name ?? "");
+    setEditOffBothLocations(false);
+    setEditShareBothLocations(true);
     setEditIncludeSessions(
       category === "practice" || (dayDetail?.sessions.length ?? 0) > 0
     );
@@ -549,6 +555,8 @@ export default function TeamPage({
     setBulkEndDate(selectedScheduleDate ?? todayStr);
     setBulkCategory("off");
     setBulkEventName("");
+    setBulkOffBothLocations(false);
+    setBulkShareBothLocations(true);
     setBulkIncludeSessions(false);
     setBulkSessions([
       {
@@ -596,7 +604,9 @@ export default function TeamPage({
         bulkCategory,
         bulkSessions,
         bulkIncludeSessions,
-        bulkEventName
+        bulkEventName,
+        bulkOffBothLocations,
+        bulkShareBothLocations
       );
       if (errorMessage) failCount++;
     }
@@ -625,7 +635,9 @@ export default function TeamPage({
       locationNote: string;
     }[],
     includeSessionsFlag: boolean,
-    eventName: string = ""
+    eventName: string = "",
+    offBothLocations: boolean = false,
+    shareBothLocations: boolean = true
   ): Promise<string | null> {
     const isOff = category === "off";
     const dayType: DayType = isOff ? "practice" : (category as DayType);
@@ -690,25 +702,64 @@ export default function TeamPage({
         .insert(rows);
       if (insError) return insError.message;
 
-      for (const s of sessions) {
-        const isJoint = isAwayLike ? true : s.isJoint;
-        if (isJoint) {
-          await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
-            type: s.type,
-            time: s.time,
-            locationNote: isAwayLike ? s.locationNote.trim() || null : null,
-          });
+      if (
+        !(
+          (dayType === "camp" || dayType === "match" || dayType === "away") &&
+          !shareBothLocations
+        )
+      ) {
+        for (const s of sessions) {
+          const isJoint = isAwayLike ? true : s.isJoint;
+          if (isJoint) {
+            await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
+              type: s.type,
+              time: s.time,
+              locationNote: isAwayLike ? s.locationNote.trim() || null : null,
+            });
+          }
         }
       }
     }
 
-    if (!isOff && (dayType === "camp" || dayType === "match" || dayType === "away")) {
+    if (
+      !isOff &&
+      (dayType === "camp" || dayType === "match" || dayType === "away") &&
+      shareBothLocations
+    ) {
       await propagateDayType(
         dateStr,
         scheduleLocation,
         dayType,
         trimmedEventName
       );
+    }
+
+    if (isOff && offBothLocations) {
+      const otherLocation: Location =
+        scheduleLocation === "tama" ? "otsuka" : "tama";
+      const { data: otherDay } = await supabase
+        .from("schedule_days")
+        .upsert(
+          {
+            team_id: profile.team_id,
+            location: otherLocation,
+            date: dateStr,
+            is_off: true,
+            day_type: "practice",
+            event_name: null,
+            created_by: profile.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "team_id,location,date" }
+        )
+        .select("id")
+        .single();
+      if (otherDay) {
+        await supabase
+          .from("schedule_sessions")
+          .delete()
+          .eq("schedule_day_id", (otherDay as { id: string }).id);
+      }
     }
 
     return null;
@@ -723,7 +774,9 @@ export default function TeamPage({
       editCategory,
       editSessions,
       editIncludeSessions,
-      editEventName
+      editEventName,
+      editOffBothLocations,
+      editShareBothLocations
     );
 
     if (errorMessage) {
@@ -1119,6 +1172,19 @@ export default function TeamPage({
                 </div>
               </div>
 
+              {bulkCategory === "off" && (
+                <label className="flex items-center gap-2 text-xs text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={bulkOffBothLocations}
+                    onChange={(e) =>
+                      setBulkOffBothLocations(e.target.checked)
+                    }
+                  />
+                  両拠点ともオフにする
+                </label>
+              )}
+
               {(bulkCategory === "camp" ||
                 bulkCategory === "match" ||
                 bulkCategory === "away") && (
@@ -1135,6 +1201,21 @@ export default function TeamPage({
                   }
                   className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                 />
+              )}
+
+              {(bulkCategory === "camp" ||
+                bulkCategory === "match" ||
+                bulkCategory === "away") && (
+                <label className="flex items-center gap-2 text-xs text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={bulkShareBothLocations}
+                    onChange={(e) =>
+                      setBulkShareBothLocations(e.target.checked)
+                    }
+                  />
+                  両拠点に反映する（チームで一緒に行く場合）
+                </label>
               )}
 
               {(bulkCategory === "camp" ||
@@ -1315,6 +1396,19 @@ export default function TeamPage({
                         </div>
                       </div>
 
+                      {editCategory === "off" && (
+                        <label className="flex items-center gap-2 text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={editOffBothLocations}
+                            onChange={(e) =>
+                              setEditOffBothLocations(e.target.checked)
+                            }
+                          />
+                          両拠点ともオフにする
+                        </label>
+                      )}
+
                       {(editCategory === "camp" ||
                         editCategory === "match" ||
                         editCategory === "away") && (
@@ -1331,6 +1425,21 @@ export default function TeamPage({
                           }
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                         />
+                      )}
+
+                      {(editCategory === "camp" ||
+                        editCategory === "match" ||
+                        editCategory === "away") && (
+                        <label className="flex items-center gap-2 text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={editShareBothLocations}
+                            onChange={(e) =>
+                              setEditShareBothLocations(e.target.checked)
+                            }
+                          />
+                          両拠点に反映する（チームで一緒に行く場合）
+                        </label>
                       )}
 
                       {(editCategory === "camp" ||
