@@ -135,6 +135,7 @@ export default function MemberHome({
     profile.role === "manager" ? "tama" : profile.home_location;
 
   const [todoMenus, setTodoMenus] = useState<TodoMenuRow[]>([]);
+  const [selfTrainingPending, setSelfTrainingPending] = useState<string[]>([]);
   const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -273,6 +274,7 @@ export default function MemberHome({
   useEffect(() => {
     if (effectiveHomeLocation) loadTodo();
     else setLoadingTodo(false);
+    loadSelfTrainingTodo();
     loadNextMatch();
     loadTodayLog();
     loadTodayAbsent();
@@ -365,6 +367,92 @@ export default function MemberHome({
     );
     setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
     setLoadingTodo(false);
+  }
+
+  // マット以外のセッション(ラン・ウェイトなど)が組まれている日のうち、
+  // ラン/ウェイト/その他いずれかの自主トレ記録もまだ保存していない日を集計する
+  async function loadSelfTrainingTodo() {
+    if (!effectiveHomeLocation) {
+      setSelfTrainingPending([]);
+      return;
+    }
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const rangeStart = toDateKey(twoWeeksAgo);
+
+    const { data: scheduleData, error: scheduleError } = await supabase
+      .from("schedule_days")
+      .select(
+        "date, is_off, sessions:schedule_sessions(session_type)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", effectiveHomeLocation)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (scheduleError) {
+      setErrorMsg(scheduleError.message);
+      return;
+    }
+
+    const nonMatDates = ((scheduleData ?? []) as unknown as {
+      date: string;
+      is_off: boolean;
+      sessions: { session_type: SessionType }[];
+    }[])
+      .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
+      .map((row) => row.date);
+
+    if (nonMatDates.length === 0) {
+      setSelfTrainingPending([]);
+      return;
+    }
+
+    const { data: logData, error: logError } = await supabase
+      .from("weight_logs")
+      .select("date")
+      .eq("author_id", profile.id)
+      .gte("date", rangeStart)
+      .lte("date", todayStr);
+
+    if (logError) {
+      setErrorMsg(logError.message);
+      return;
+    }
+
+    const { data: absentData, error: absentError } = await supabase
+      .from("comments")
+      .select("alt_type, menu:menus!comments_menu_id_fkey(date)")
+      .eq("author_id", profile.id)
+      .eq("kind", "absent")
+      .not("alt_type", "is", null);
+
+    if (absentError) {
+      setErrorMsg(absentError.message);
+      return;
+    }
+
+    const loggedDates = new Set(
+      ((logData ?? []) as { date: string }[]).map((r) => r.date)
+    );
+    const absentRows = (absentData ?? []) as unknown as {
+      alt_type: TrainingType;
+      menu: { date: string } | null;
+    }[];
+    for (const row of absentRows) {
+      if (
+        row.menu &&
+        row.menu.date >= rangeStart &&
+        row.menu.date <= todayStr
+      ) {
+        loggedDates.add(row.menu.date);
+      }
+    }
+
+    setSelfTrainingPending(
+      nonMatDates.filter((d) => !loggedDates.has(d)).sort()
+    );
   }
 
   async function loadNextMatch() {
@@ -986,6 +1074,7 @@ export default function MemberHome({
     } else {
       setTodayLog(data as WeightLogRow);
       await loadRecordDates();
+      await loadSelfTrainingTodo();
       await loadTitleOptions();
       await loadCalendarData();
     }
@@ -1601,7 +1690,7 @@ export default function MemberHome({
           </p>
         ) : loadingTodo ? (
           <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : todoMenus.length === 0 ? (
+        ) : todoMenus.length === 0 && selfTrainingPending.length === 0 ? (
           !weightMaxTodo &&
           injuries.filter(injuryNeedsProgressUpdate).length === 0 && (
             <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
@@ -1633,6 +1722,32 @@ export default function MemberHome({
                       {m.title || formatShortDateTime(m.date, m.start_time)}
                     </span>
                   </button>
+                </li>
+              );
+            })}
+            {selfTrainingPending.map((date) => {
+              const isOverdue = date < todayStr;
+              return (
+                <li key={`self-${date}`}>
+                  <div
+                    className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
+                      isOverdue
+                        ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                        : "border-amber-900/60 bg-amber-950/40"
+                    }`}
+                  >
+                    <span
+                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                    >
+                      自主トレ（ラン・ウェイトなど） 未提出{isOverdue && "（期限切れ）"}
+                    </span>
+                    <span
+                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                    >
+                      {formatMonthDay(date)}
+                      {date === todayStr && "・下の「本日のトレーニングメニュー」から記録できます"}
+                    </span>
+                  </div>
                 </li>
               );
             })}
