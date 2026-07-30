@@ -122,10 +122,18 @@ export default function TrainingBoardSupabase({
   });
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
-  const [activeLocation, setActiveLocation] =
-    useState<Location>(initialLocation);
+  const isCoachView = profile.role === "coach";
+  // 部員（コーチ以外）が閲覧できる拠点。マネージャーは多摩所属として扱う。
+  const memberHomeLocation: Location =
+    profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
+  const [activeLocation, setActiveLocation] = useState<Location>(
+    isCoachView ? initialLocation : memberHomeLocation
+  );
   const [menus, setMenus] = useState<MenuRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [crossLocationMenu, setCrossLocationMenu] = useState<MenuRow | null>(
+    null
+  );
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
@@ -210,7 +218,7 @@ export default function TrainingBoardSupabase({
         ? (initialDate as string)
         : (pendingDate ?? toDateKey(new Date()));
       usedInitialJump.current = true;
-      applySelectionForDate(targetDate, rows, jointMap);
+      await applySelectionForDate(targetDate, rows, jointMap);
 
       if (isInitialJump) {
         const hasMenu = rows.some((m) => m.date === targetDate);
@@ -305,7 +313,24 @@ export default function TrainingBoardSupabase({
   }
 
   // 指定した日付の表示状態（メニュー／全体練習案内／未作成）を決めて反映する
-  function applySelectionForDate(
+  async function loadCrossLocationMenu(
+    menuId: string
+  ): Promise<MenuRow | null> {
+    const { data, error } = await supabase
+      .from("menus")
+      .select(
+        "id, date, title, content, location, start_time, is_joint, is_off, created_at, created_by, last_edited_by, last_edited_at, creator:profiles!menus_created_by_fkey(display_name), editor:profiles!menus_last_edited_by_fkey(display_name)"
+      )
+      .eq("id", menuId)
+      .maybeSingle();
+    if (error) {
+      setErrorMsg(error.message);
+      return null;
+    }
+    return (data as unknown as MenuRow) ?? null;
+  }
+
+  async function applySelectionForDate(
     date: string,
     rows: MenuRow[],
     jointMap: Map<string, { menuId: string; location: Location }>
@@ -318,12 +343,24 @@ export default function TrainingBoardSupabase({
     if (dayMenus.length > 0) {
       setSelectedId(dayMenus[0].id);
       setJointNoticeDate(null);
+      setCrossLocationMenu(null);
     } else if (jointMap.has(date)) {
-      setSelectedId(null);
-      setJointNoticeDate(date);
+      if (isCoachView) {
+        setSelectedId(null);
+        setJointNoticeDate(date);
+        setCrossLocationMenu(null);
+      } else {
+        // 部員は別拠点で行われる全体練習のメニューも、自分の拠点の掲示板からそのまま閲覧・報告できるようにする
+        setJointNoticeDate(null);
+        const info = jointMap.get(date)!;
+        const menu = await loadCrossLocationMenu(info.menuId);
+        setCrossLocationMenu(menu);
+        setSelectedId(menu ? menu.id : null);
+      }
     } else {
       setSelectedId(null);
       setJointNoticeDate(null);
+      setCrossLocationMenu(null);
     }
   }
 
@@ -513,7 +550,7 @@ export default function TrainingBoardSupabase({
       loadMenus(),
       loadJointElsewhere(),
     ]);
-    applySelectionForDate(newDate, rows, jointMap);
+    await applySelectionForDate(newDate, rows, jointMap);
   }
 
   async function handleDeleteMenu(menuId: string) {
@@ -527,7 +564,7 @@ export default function TrainingBoardSupabase({
       loadMenus(),
       loadJointElsewhere(),
     ]);
-    applySelectionForDate(dateBefore, rows, jointMap);
+    await applySelectionForDate(dateBefore, rows, jointMap);
   }
 
   function startEditingMenu(m: MenuRow) {
@@ -642,7 +679,11 @@ export default function TrainingBoardSupabase({
     setAbsentAlternative("");
   }
 
-  const selected = menus.find((m) => m.id === selectedId) ?? null;
+  const selected =
+    menus.find((m) => m.id === selectedId) ??
+    (crossLocationMenu && crossLocationMenu.id === selectedId
+      ? crossLocationMenu
+      : null);
   const chronoMenus = [...menus].sort((a, b) => {
     const aKey = `${a.date}T${a.start_time ?? "00:00"}`;
     const bKey = `${b.date}T${b.start_time ?? "00:00"}`;
@@ -780,19 +821,33 @@ export default function TrainingBoardSupabase({
 
       {/* 拠点タブ */}
       <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
-        {locations.map((loc) => (
-          <button
-            key={loc}
-            onClick={() => setActiveLocation(loc)}
-            className={`flex-1 py-3 text-sm font-medium transition ${
-              activeLocation === loc
-                ? "border-b-2 border-red-600 text-red-400"
-                : "text-neutral-500"
-            }`}
-          >
-            {locationLabel[loc]}
-          </button>
-        ))}
+        {isCoachView ? (
+          locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setActiveLocation(loc)}
+              className={`flex-1 py-3 text-sm font-medium transition ${
+                activeLocation === loc
+                  ? "border-b-2 border-red-600 text-red-400"
+                  : "text-neutral-500"
+              }`}
+            >
+              {locationLabel[loc]}
+            </button>
+          ))
+        ) : (
+          <>
+            <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
+              {locationLabel[memberHomeLocation]}
+            </span>
+            <button
+              onClick={() => router.push("/team")}
+              className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
+            >
+              チームページ
+            </button>
+          </>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 p-4 sm:p-5">
@@ -1189,7 +1244,8 @@ export default function TrainingBoardSupabase({
                     {selected.content}
                   </p>
                   {canCreateMenu(profile.role) &&
-                    !isReportOpen(selected) && (
+                    !isReportOpen(selected) &&
+                    selected.location === activeLocation && (
                       <div className="mt-2 flex justify-end">
                         <button
                           onClick={() => startEditingMenu(selected)}

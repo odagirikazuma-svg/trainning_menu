@@ -155,7 +155,11 @@ export default function TeamPage({
   >(new Map());
   const [loadingMonthSchedule, setLoadingMonthSchedule] = useState(true);
   const [scheduleLocation, setScheduleLocation] = useState<Location>(
-    profile.home_location ?? "tama"
+    profile.role === "coach"
+      ? (profile.home_location ?? "tama")
+      : profile.role === "manager"
+        ? "tama"
+        : (profile.home_location ?? "tama")
   );
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<
     string | null
@@ -223,6 +227,9 @@ export default function TeamPage({
     profile.role === "vice_leader" ||
     profile.role === "coach";
   const isCoach = profile.role === "coach";
+  // 部員（コーチ以外）が閲覧・操作できる拠点。マネージャーは多摩所属として扱う。
+  const restrictedHomeLocation: Location =
+    profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
   const todayStr = toDateKey(new Date());
 
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
@@ -1130,21 +1137,27 @@ export default function TeamPage({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             月間の練習スケジュール
           </h2>
-          <div className="flex gap-2">
-            {locations.map((loc) => (
-              <button
-                key={loc}
-                onClick={() => setScheduleLocation(loc)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-                  scheduleLocation === loc
-                    ? "border-red-600 bg-red-600 text-white"
-                    : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
-                }`}
-              >
-                {locationLabel[loc]}
-              </button>
-            ))}
-          </div>
+          {isCoach ? (
+            <div className="flex gap-2">
+              {locations.map((loc) => (
+                <button
+                  key={loc}
+                  onClick={() => setScheduleLocation(loc)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
+                    scheduleLocation === loc
+                      ? "border-red-600 bg-red-600 text-white"
+                      : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                  }`}
+                >
+                  {locationLabel[loc]}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-red-600 bg-red-600 px-3 py-2 text-center text-xs font-medium text-white">
+              {locationLabel[scheduleLocation]}
+            </div>
+          )}
           {isCoach && (
             <button
               onClick={handleOpenBulk}
