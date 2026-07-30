@@ -721,12 +721,6 @@ export default function TrainingBoardSupabase({
     setSelectedId(id);
   }
 
-  function selectJointDate(date: string) {
-    setViewDate(date);
-    setSelectedId(null);
-    setJointNoticeDate(date);
-  }
-
   // 上部カードは「今表示中のメニュー」を中央に、前後(古い/新しい)を左右に表示する
   // もう一方の拠点の全体練習日も、仮想アイテムとして同じ時系列に混ぜる
   type NeighborItem =
@@ -1520,7 +1514,9 @@ export default function TrainingBoardSupabase({
             submissionMap={submissionMap}
             memberCounts={memberCounts}
             jointElsewhere={jointElsewhere}
-            onSelectJoint={selectJointDate}
+            onSelectJoint={(date) =>
+              applySelectionForDate(date, menus, jointElsewhere)
+            }
             onSelectEmpty={(date) =>
               applySelectionForDate(date, menus, jointElsewhere)
             }
@@ -2040,13 +2036,16 @@ function MenuCalendar({
                           />
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}
-                          {s.location_note
-                            ? `(${s.location_note})`
-                            : s.is_joint &&
-                              (s.joint_location &&
-                              s.joint_location !== location
-                                ? `(${locationLabel[s.joint_location]})`
-                                : "(全体)")}
+                          {schedule.day_type === "camp" ||
+                          schedule.day_type === "away"
+                            ? "(全体)"
+                            : s.location_note
+                              ? `(${s.location_note})`
+                              : s.is_joint &&
+                                (s.joint_location &&
+                                s.joint_location !== location
+                                  ? `(${locationLabel[s.joint_location]})`
+                                  : "(全体)")}
                         </span>
                       ))}
                   </span>

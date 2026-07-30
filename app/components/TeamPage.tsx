@@ -2240,13 +2240,15 @@ function MonthlyCalendar({
                         <span className="break-words text-[9px] text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}〜
-                          {s.location_note
-                            ? `（${s.location_note}）`
-                            : s.is_joint &&
-                              (s.joint_location &&
-                              s.joint_location !== viewLocation
-                                ? `（${locationLabel[s.joint_location]}）`
-                                : "（全体）")}
+                          {day.day_type === "camp" || day.day_type === "away"
+                            ? "（全体）"
+                            : s.location_note
+                              ? `（${s.location_note}）`
+                              : s.is_joint &&
+                                (s.joint_location &&
+                                s.joint_location !== viewLocation
+                                  ? `（${locationLabel[s.joint_location]}）`
+                                  : "（全体）")}
                         </span>
                       </span>
                     ))}
