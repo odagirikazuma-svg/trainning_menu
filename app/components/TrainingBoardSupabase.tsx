@@ -253,7 +253,13 @@ export default function TrainingBoardSupabase({
       return;
     }
     setConfirmingNew(false);
-    setNewMenuType(isAwayLikeForViewDate ? "joint" : "normal");
+    setNewMenuType(
+      isAwayLikeForViewDate
+        ? matSessionForViewDate?.is_joint
+          ? "joint"
+          : "normal"
+        : "normal"
+    );
     setNewOffBothLocations(false);
     setNewJointLocation(
       matSessionForViewDate?.joint_location ?? activeLocation

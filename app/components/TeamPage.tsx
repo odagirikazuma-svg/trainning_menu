@@ -685,8 +685,8 @@ export default function TeamPage({
 
     if (!isOff && includeSessions && sessions.length > 0) {
       const rows = sessions.map((s, idx) => {
-        // 合宿・出稽古は基本的に全体練習として扱う
-        const isJoint = isAwayLike ? true : s.isJoint;
+        // 合宿・出稽古は「両拠点に反映する」がオンの時だけ全体練習として扱う
+        const isJoint = isAwayLike ? shareBothLocations : s.isJoint;
         return {
           schedule_day_id: dayId,
           session_no: idx + 1,
@@ -709,7 +709,7 @@ export default function TeamPage({
         )
       ) {
         for (const s of sessions) {
-          const isJoint = isAwayLike ? true : s.isJoint;
+          const isJoint = isAwayLike ? shareBothLocations : s.isJoint;
           if (isJoint) {
             await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
               type: s.type,
@@ -1664,6 +1664,13 @@ export default function TeamPage({
                           {s.location_note ? (
                             <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
                               練習場所：{s.location_note}
+                            </p>
+                          ) : dayDetail.day_type === "camp" ||
+                            dayDetail.day_type === "away" ? (
+                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                              {dayTypeLabel[dayDetail.day_type]}
+                              {dayDetail.event_name &&
+                                `：${dayDetail.event_name}`}
                             </p>
                           ) : (
                             s.is_joint && (
