@@ -129,11 +129,14 @@ export default function TrainingBoardSupabase({
   const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
+    day_type: DayType;
+    event_name: string | null;
     sessions: {
       session_type: SessionType;
       start_time: string;
       is_joint: boolean;
       joint_location: Location | null;
+      location_note: string | null;
     }[];
   } | null>(null);
 
@@ -229,7 +232,7 @@ export default function TrainingBoardSupabase({
       const { data } = await supabase
         .from("schedule_days")
         .select(
-          "is_off, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+          "is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location, location_note)"
         )
         .eq("team_id", profile.team_id)
         .eq("location", activeLocation)
@@ -250,9 +253,11 @@ export default function TrainingBoardSupabase({
       return;
     }
     setConfirmingNew(false);
-    setNewMenuType("normal");
+    setNewMenuType(isAwayLikeForViewDate ? "joint" : "normal");
     setNewOffBothLocations(false);
-    setNewJointLocation(activeLocation);
+    setNewJointLocation(
+      matSessionForViewDate?.joint_location ?? activeLocation
+    );
     setNewDate(viewDate);
     setNewStartTime(
       matSessionForViewDate ? matSessionForViewDate.start_time.slice(0, 5) : ""
@@ -700,6 +705,13 @@ export default function TrainingBoardSupabase({
       ? viewDateSchedule.sessions.find((s) => s.session_type === "mat")
       : undefined;
 
+  // 表示中の日付が「合宿」または「出稽古」として設定されているか
+  const isAwayLikeForViewDate =
+    !!viewDateSchedule &&
+    !viewDateSchedule.is_off &&
+    (viewDateSchedule.day_type === "camp" ||
+      viewDateSchedule.day_type === "away");
+
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
@@ -774,7 +786,13 @@ export default function TrainingBoardSupabase({
                       <p>
                         {locationLabel[activeLocation]}・{newDate}
                         {newStartTime && ` ${newStartTime}〜`}
-                        {newMenuType === "joint" && "・全体練習"}
+                        {isAwayLikeForViewDate
+                          ? `・${dayTypeLabel[viewDateSchedule!.day_type]}${
+                              matSessionForViewDate?.location_note
+                                ? `（${matSessionForViewDate.location_note}）`
+                                : ""
+                            }`
+                          : newMenuType === "joint" && "・全体練習"}
                       </p>
                       <p className="whitespace-pre-wrap text-neutral-100">
                         {newContent}
@@ -792,28 +810,40 @@ export default function TrainingBoardSupabase({
                     required
                   />
 
-                  <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
-                    {(
-                      [
-                        { v: "normal", label: "通常" },
-                        { v: "joint", label: "全体練習" },
-                        { v: "off", label: "オフ" },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.v}
-                        type="button"
-                        onClick={() => setNewMenuType(opt.v)}
-                        className={`flex-1 rounded-md py-2 font-medium ${
-                          newMenuType === opt.v
-                            ? "bg-red-600 shadow text-white"
-                            : "text-neutral-400"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
+                  {isAwayLikeForViewDate ? (
+                    <p className="rounded-lg bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-400">
+                      {dayTypeLabel[viewDateSchedule!.day_type]}
+                      {matSessionForViewDate?.location_note
+                        ? `（${matSessionForViewDate.location_note}）`
+                        : viewDateSchedule!.event_name
+                          ? `（${viewDateSchedule!.event_name}）`
+                          : ""}
+                      ・このメニューは全体練習として登録されます
+                    </p>
+                  ) : (
+                    <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                      {(
+                        [
+                          { v: "normal", label: "通常" },
+                          { v: "joint", label: "全体練習" },
+                          { v: "off", label: "オフ" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => setNewMenuType(opt.v)}
+                          className={`flex-1 rounded-md py-2 font-medium ${
+                            newMenuType === opt.v
+                              ? "bg-red-600 shadow text-white"
+                              : "text-neutral-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {newMenuType === "off" ? (
                     <label className="flex items-center gap-2 text-sm text-neutral-200">
@@ -836,7 +866,7 @@ export default function TrainingBoardSupabase({
                           onChange={setNewStartTime}
                         />
                       </label>
-                      {newMenuType === "joint" && (
+                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
                         <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                           開催拠点
                           <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
@@ -865,7 +895,7 @@ export default function TrainingBoardSupabase({
                         className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
                         required
                       />
-                      {newMenuType === "joint" && (
+                      {newMenuType === "joint" && !isAwayLikeForViewDate && (
                         <p className="text-[11px] text-neutral-400">
                           {newJointLocation === activeLocation
                             ? "もう一方の拠点はこの練習に合流します"
