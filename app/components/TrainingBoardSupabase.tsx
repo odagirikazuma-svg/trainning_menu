@@ -253,14 +253,10 @@ export default function TrainingBoardSupabase({
       return;
     }
     setConfirmingNew(false);
-    setNewMenuType(
-      isAwayLikeForViewDate
-        ? matSessionForViewDate?.is_joint
-          ? "joint"
-          : "normal"
-        : "normal"
+    setNewMenuType("normal");
+    setNewOffBothLocations(
+      isAwayLikeForViewDate ? !!matSessionForViewDate?.is_joint : false
     );
-    setNewOffBothLocations(false);
     setNewJointLocation(
       matSessionForViewDate?.joint_location ?? activeLocation
     );
@@ -824,7 +820,10 @@ export default function TrainingBoardSupabase({
                         : viewDateSchedule!.event_name
                           ? `（${viewDateSchedule!.event_name}）`
                           : ""}
-                      ・このメニューは全体練習として登録されます
+                      ・
+                      {matSessionForViewDate?.is_joint
+                        ? `このメニューは、全体での${dayTypeLabel[viewDateSchedule!.day_type]}なので両拠点に同じ内容が登録されます`
+                        : `このメニューは${locationLabel[activeLocation]}メンバーのみに登録されます`}
                     </p>
                   ) : (
                     <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
@@ -907,19 +906,6 @@ export default function TrainingBoardSupabase({
                             ? "もう一方の拠点はこの練習に合流します"
                             : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
                         </p>
-                      )}
-                      {newMenuType === "normal" && (
-                        <label className="flex items-center gap-2 text-sm text-neutral-200">
-                          <input
-                            type="checkbox"
-                            checked={newOffBothLocations}
-                            onChange={(e) =>
-                              setNewOffBothLocations(e.target.checked)
-                            }
-                            className="h-4 w-4"
-                          />
-                          同じ内容を両拠点に登録する（合宿・出稽古などで便利です）
-                        </label>
                       )}
                     </>
                   )}
