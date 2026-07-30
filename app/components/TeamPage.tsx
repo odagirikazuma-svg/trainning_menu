@@ -223,6 +223,7 @@ export default function TeamPage({
     {
       memberId: string;
       displayName: string;
+      location: Location;
       isPending: boolean;
       matStatus: "not_required" | "report" | "absent" | "missing";
       matText: string | null;
@@ -1070,51 +1071,84 @@ export default function TeamPage({
     const rangeStart = toDateKey(new Date(year, month, 1));
     const rangeEnd = toDateKey(new Date(year, month + 1, 0));
 
-    const requiredMembers = requiredMembersForLocation(scheduleLocation);
-    const realMemberIds = requiredMembers
-      .filter((m) => !m.isPending)
-      .map((m) => m.id);
-    const total = requiredMembers.length;
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const realIdsByLoc: Record<Location, string[]> = {
+      tama: requiredByLoc.tama.filter((m) => !m.isPending).map((m) => m.id),
+      otsuka: requiredByLoc.otsuka.filter((m) => !m.isPending).map((m) => m.id),
+    };
 
-    if (total === 0) {
+    if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
       setSubmissionCounts(new Map());
       setLoadingSubmissionCounts(false);
       return;
     }
-    const memberIds = realMemberIds;
 
-    const { data: ownMenus, error: ownMenusError } = await supabase
-      .from("menus")
-      .select("id, date")
+    // 両拠点のスケジュール（オフ・区分・セッション種別）を取得
+    const { data: scheduleData, error: scheduleErrorAll } = await supabase
+      .from("schedule_days")
+      .select(
+        "date, location, is_off, sessions:schedule_sessions(session_type)"
+      )
       .eq("team_id", profile.team_id)
-      .eq("location", scheduleLocation)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-    const { data: jointMenus, error: jointMenusError } = await supabase
-      .from("menus")
-      .select("id, date")
-      .eq("team_id", profile.team_id)
-      .eq("is_joint", true)
-      .eq("is_off", false)
       .gte("date", rangeStart)
       .lte("date", rangeEnd);
 
-    if (ownMenusError || jointMenusError) {
-      setErrorMsg((ownMenusError ?? jointMenusError)!.message);
+    if (scheduleErrorAll) {
+      setErrorMsg(scheduleErrorAll.message);
       setLoadingSubmissionCounts(false);
       return;
     }
 
+    const scheduleByLocDate = new Map<
+      string,
+      { isOff: boolean; hasMat: boolean; hasNonMat: boolean }
+    >();
+    for (const row of (scheduleData ?? []) as unknown as {
+      date: string;
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: SessionType }[];
+    }[]) {
+      scheduleByLocDate.set(`${row.location}:${row.date}`, {
+        isOff: row.is_off,
+        hasMat: row.sessions.some((s) => s.session_type === "mat"),
+        hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
+      });
+    }
+
+    // 両拠点＋全体のマットメニュー
+    const { data: menuData, error: menuError } = await supabase
+      .from("menus")
+      .select("id, date, location, is_joint")
+      .eq("team_id", profile.team_id)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (menuError) {
+      setErrorMsg(menuError.message);
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    // menu_id -> その日報が「どの拠点の必要提出」に関係するか
+    const menuLocsById = new Map<string, Location[]>();
     const menuDateById = new Map<string, string>();
-    for (const m of [
-      ...((ownMenus ?? []) as { id: string; date: string }[]),
-      ...((jointMenus ?? []) as { id: string; date: string }[]),
-    ]) {
+    for (const m of (menuData ?? []) as {
+      id: string;
+      date: string;
+      location: Location;
+      is_joint: boolean;
+    }[]) {
       menuDateById.set(m.id, m.date);
+      menuLocsById.set(m.id, m.is_joint ? ["tama", "otsuka"] : [m.location]);
     }
     const allMenuIds = Array.from(menuDateById.keys());
 
+    // key: `${authorId}:${loc}:${date}`
     const submittedMatKeys = new Set<string>();
     if (allMenuIds.length > 0) {
       const { data: commentData, error: commentError } = await supabase
@@ -1134,41 +1168,56 @@ export default function TeamPage({
       }[]) {
         if (!row.author_id) continue;
         const date = menuDateById.get(row.menu_id);
-        if (date) submittedMatKeys.add(`${row.author_id}:${date}`);
+        const locs = menuLocsById.get(row.menu_id) ?? [];
+        if (!date) continue;
+        for (const loc of locs) {
+          submittedMatKeys.add(`${row.author_id}:${loc}:${date}`);
+        }
       }
     }
 
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("author_id, date")
-      .in("author_id", memberIds)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-    if (logError) {
-      setErrorMsg(logError.message);
-      setLoadingSubmissionCounts(false);
-      return;
+    const allRealIds = [...realIdsByLoc.tama, ...realIdsByLoc.otsuka];
+    const selfLoggedKeys = new Set<string>();
+    if (allRealIds.length > 0) {
+      const { data: logData, error: logError } = await supabase
+        .from("weight_logs")
+        .select("author_id, date")
+        .in("author_id", allRealIds)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+      if (logError) {
+        setErrorMsg(logError.message);
+        setLoadingSubmissionCounts(false);
+        return;
+      }
+      for (const row of (logData ?? []) as {
+        author_id: string;
+        date: string;
+      }[]) {
+        selfLoggedKeys.add(`${row.author_id}:${row.date}`);
+      }
     }
-    const selfLoggedKeys = new Set(
-      ((logData ?? []) as { author_id: string; date: string }[]).map(
-        (r) => `${r.author_id}:${r.date}`
-      )
-    );
 
     const counts = new Map<string, { submitted: number; total: number }>();
-    for (const [dateKey, day] of monthScheduleDays) {
-      if (dateKey < rangeStart || dateKey > rangeEnd) continue;
-      if (day.is_off) continue;
-      const hasMat = day.sessions.some((s) => s.session_type === "mat");
-      const hasNonMat = day.sessions.some((s) => s.session_type !== "mat");
-      if (!hasMat && !hasNonMat) continue;
+    const cursor = new Date(year, month, 1);
+    while (cursor.getMonth() === month) {
+      const dateKey = toDateKey(cursor);
       let submitted = 0;
-      for (const id of memberIds) {
-        const matOk = !hasMat || submittedMatKeys.has(`${id}:${dateKey}`);
-        const selfOk = !hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
-        if (matOk && selfOk) submitted++;
+      let total = 0;
+      for (const loc of ["tama", "otsuka"] as Location[]) {
+        const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
+        if (!day || day.isOff) continue;
+        if (!day.hasMat && !day.hasNonMat) continue;
+        total += requiredByLoc[loc].length;
+        for (const id of realIdsByLoc[loc]) {
+          const matOk =
+            !day.hasMat || submittedMatKeys.has(`${id}:${loc}:${dateKey}`);
+          const selfOk = !day.hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
+          if (matOk && selfOk) submitted++;
+        }
       }
-      counts.set(dateKey, { submitted, total });
+      if (total > 0) counts.set(dateKey, { submitted, total });
+      cursor.setDate(cursor.getDate() + 1);
     }
     setSubmissionCounts(counts);
     setLoadingSubmissionCounts(false);
@@ -1177,73 +1226,89 @@ export default function TeamPage({
   // 選択した日の、部員ごとの提出状況の詳細一覧を読み込む
   async function loadDaySubmissionDetail(dateStr: string) {
     setLoadingDaySubmissionDetail(true);
-    const requiredMembers = requiredMembersForLocation(scheduleLocation);
-    const day = monthScheduleDays.get(dateStr);
-    const hasMat = !!day && !day.is_off && day.sessions.some((s) => s.session_type === "mat");
-    const hasNonMat =
-      !!day && !day.is_off && day.sessions.some((s) => s.session_type !== "mat");
 
-    if (requiredMembers.length === 0 || (!hasMat && !hasNonMat)) {
-      setDaySubmissionDetail([]);
-      setLoadingDaySubmissionDetail(false);
-      return;
+    const { data: scheduleData } = await supabase
+      .from("schedule_days")
+      .select(
+        "location, is_off, sessions:schedule_sessions(session_type)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr);
+
+    const scheduleByLoc = new Map<
+      Location,
+      { isOff: boolean; hasMat: boolean; hasNonMat: boolean }
+    >();
+    for (const row of (scheduleData ?? []) as unknown as {
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: SessionType }[];
+    }[]) {
+      scheduleByLoc.set(row.location, {
+        isOff: row.is_off,
+        hasMat: row.sessions.some((s) => s.session_type === "mat"),
+        hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
+      });
     }
 
-    let matCommentByAuthor = new Map<string, { kind: string; text: string }>();
-    if (hasMat) {
-      const { data: ownMenus } = await supabase
-        .from("menus")
-        .select("id")
-        .eq("team_id", profile.team_id)
-        .eq("location", scheduleLocation)
-        .eq("date", dateStr)
-        .eq("is_off", false);
-      const { data: jointMenus } = await supabase
-        .from("menus")
-        .select("id")
-        .eq("team_id", profile.team_id)
-        .eq("is_joint", true)
-        .eq("date", dateStr)
-        .eq("is_off", false);
-      const menuIds = [
-        ...((ownMenus ?? []) as { id: string }[]),
-        ...((jointMenus ?? []) as { id: string }[]),
-      ].map((m) => m.id);
-      if (menuIds.length > 0) {
-        const { data: commentData } = await supabase
-          .from("comments")
-          .select("author_id, kind, text")
-          .in("menu_id", menuIds)
-          .in("kind", ["report", "absent"])
-          .is("parent_id", null);
-        for (const row of (commentData ?? []) as {
-          author_id: string | null;
-          kind: string;
-          text: string;
-        }[]) {
-          if (row.author_id) {
-            matCommentByAuthor.set(row.author_id, {
-              kind: row.kind,
-              text: row.text,
-            });
-          }
+    const { data: menuData } = await supabase
+      .from("menus")
+      .select("id, location, is_joint")
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr)
+      .eq("is_off", false);
+    const menuRows = (menuData ?? []) as {
+      id: string;
+      location: Location;
+      is_joint: boolean;
+    }[];
+    const menuIds = menuRows.map((m) => m.id);
+    const menuLocsById = new Map<string, Location[]>();
+    for (const m of menuRows) {
+      menuLocsById.set(m.id, m.is_joint ? ["tama", "otsuka"] : [m.location]);
+    }
+
+    // key: `${authorId}:${loc}`
+    const matStatusByAuthorLoc = new Map<string, { kind: string; text: string }>();
+    if (menuIds.length > 0) {
+      const { data: commentData } = await supabase
+        .from("comments")
+        .select("author_id, kind, text, menu_id")
+        .in("menu_id", menuIds)
+        .in("kind", ["report", "absent"])
+        .is("parent_id", null);
+      for (const row of (commentData ?? []) as {
+        author_id: string | null;
+        kind: string;
+        text: string;
+        menu_id: string;
+      }[]) {
+        if (!row.author_id) continue;
+        const locs = menuLocsById.get(row.menu_id) ?? [];
+        for (const loc of locs) {
+          matStatusByAuthorLoc.set(`${row.author_id}:${loc}`, {
+            kind: row.kind,
+            text: row.text,
+          });
         }
       }
     }
 
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const allRealIds = [
+      ...requiredByLoc.tama.filter((m) => !m.isPending).map((m) => m.id),
+      ...requiredByLoc.otsuka.filter((m) => !m.isPending).map((m) => m.id),
+    ];
     let selfLogByAuthor = new Map<string, string>();
-    if (hasNonMat) {
-      const realMemberIds = requiredMembers
-        .filter((m) => !m.isPending)
-        .map((m) => m.id);
-      const { data: logData } =
-        realMemberIds.length > 0
-          ? await supabase
-              .from("weight_logs")
-              .select("author_id, content")
-              .eq("date", dateStr)
-              .in("author_id", realMemberIds)
-          : { data: [] };
+    if (allRealIds.length > 0) {
+      const { data: logData } = await supabase
+        .from("weight_logs")
+        .select("author_id, content")
+        .eq("date", dateStr)
+        .in("author_id", allRealIds);
       for (const row of (logData ?? []) as {
         author_id: string;
         content: string;
@@ -1252,13 +1317,30 @@ export default function TeamPage({
       }
     }
 
-    const detail = requiredMembers
-      .map((m) => {
-        const matComment = matCommentByAuthor.get(m.id);
+    const detail: {
+      memberId: string;
+      displayName: string;
+      location: Location;
+      isPending: boolean;
+      matStatus: "not_required" | "report" | "absent" | "missing";
+      matText: string | null;
+      selfStatus: "not_required" | "done" | "missing";
+      selfText: string | null;
+    }[] = [];
+
+    for (const loc of ["tama", "otsuka"] as Location[]) {
+      const day = scheduleByLoc.get(loc);
+      const hasMat = !!day && !day.isOff && day.hasMat;
+      const hasNonMat = !!day && !day.isOff && day.hasNonMat;
+      if (!day || day.isOff || (!hasMat && !hasNonMat)) continue;
+
+      for (const m of requiredByLoc[loc]) {
+        const matComment = matStatusByAuthorLoc.get(`${m.id}:${loc}`);
         const selfContent = selfLogByAuthor.get(m.id);
-        return {
+        detail.push({
           memberId: m.id,
           displayName: m.display_name,
+          location: loc,
           isPending: !!m.isPending,
           matStatus: !hasMat
             ? ("not_required" as const)
@@ -1274,13 +1356,19 @@ export default function TeamPage({
               ? ("done" as const)
               : ("missing" as const),
           selfText: selfContent ?? null,
-        };
-      })
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"));
+        });
+      }
+    }
+
+    detail.sort((a, b) => {
+      if (a.location !== b.location) return a.location.localeCompare(b.location);
+      return a.displayName.localeCompare(b.displayName, "ja");
+    });
 
     setDaySubmissionDetail(detail);
     setLoadingDaySubmissionDetail(false);
   }
+
 
   // イベントごとに「著者ID -> 記録」のMapを作る
   const weightMaxesByEvent = new Map<string, Map<string, WeightMaxRow>>();
@@ -2084,6 +2172,9 @@ export default function TeamPage({
                   >
                     <p className="flex items-center gap-1.5 font-medium text-neutral-100">
                       {d.displayName}
+                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                        {locationLabel[d.location]}
+                      </span>
                       {d.isPending && (
                         <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
                           未登録
