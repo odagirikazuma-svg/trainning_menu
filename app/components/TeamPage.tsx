@@ -107,33 +107,6 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
-function groupMembersByGrade(
-  members: MemberRow[]
-): { label: string; members: MemberRow[] }[] {
-  const groups = new Map<number | null, MemberRow[]>();
-  for (const m of members) {
-    const grade = m.entry_year != null ? currentGrade(m.entry_year) : null;
-    const list = groups.get(grade) ?? [];
-    list.push(m);
-    groups.set(grade, list);
-  }
-
-  const knownGrades = Array.from(groups.keys())
-    .filter((g): g is number => g !== null)
-    .sort((a, b) => b - a);
-
-  const result = knownGrades.map((grade) => ({
-    label: `${grade}年`,
-    members: groups.get(grade)!,
-  }));
-
-  if (groups.has(null)) {
-    result.push({ label: "学年未設定", members: groups.get(null)! });
-  }
-
-  return result;
-}
-
 export default function TeamPage({
   profile,
 }: {
@@ -1334,20 +1307,6 @@ export default function TeamPage({
       text: `${current}（${diff}）`,
       className: "font-semibold text-red-400",
     };
-  }
-
-  function getMissingSubmissions(
-    memberId: string,
-    homeLocation: Location | null
-  ): PastMenuRow[] {
-    if (!homeLocation) return [];
-    return pastMenus
-      .filter(
-        (m) =>
-          m.location === homeLocation &&
-          !submittedKeys.has(`${memberId}:${m.id}`)
-      )
-      .sort((a, b) => a.date.localeCompare(b.date));
   }
 
   return (

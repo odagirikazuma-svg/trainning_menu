@@ -73,14 +73,6 @@ type RecentRecord = {
   isAlternative: boolean;
 };
 
-type PopupRecordRow = {
-  date: string;
-  content: string;
-  type: TrainingType;
-  title: string | null;
-  isAlternative: boolean;
-};
-
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -207,9 +199,6 @@ export default function MemberHome({
     []
   );
 
-  const [recentLogs, setRecentLogs] = useState<RecentRecord[]>([]);
-  const [loadingRecentLogs, setLoadingRecentLogs] = useState(true);
-
   // カレンダー用
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
@@ -244,10 +233,6 @@ export default function MemberHome({
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
-  const [popupRecord, setPopupRecord] = useState<
-    PopupRecordRow[] | null | undefined
-  >(undefined);
-  const [loadingPopupRecord, setLoadingPopupRecord] = useState(false);
   const [recordDates, setRecordDates] = useState<string[]>([]);
 
   const [, forceTick] = useState(0);
@@ -280,7 +265,6 @@ export default function MemberHome({
     loadNextMatch();
     loadLogForDate(todayStr);
     loadTodayAbsent();
-    loadRecentLogs();
     loadRecordDates();
     loadTitleOptions();
     loadWeightMaxTodo();
@@ -949,90 +933,6 @@ export default function MemberHome({
     setTodayAbsentRecords(todayRecords);
   }
 
-  async function loadRecentLogs() {
-    setLoadingRecentLogs(true);
-
-    const lookbackStart = new Date();
-    lookbackStart.setDate(lookbackStart.getDate() - 60);
-    const rangeStart = toDateKey(lookbackStart);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const rangeEnd = toDateKey(yesterday);
-
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("id, date, content, type, title")
-      .eq("author_id", profile.id)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-
-    if (logError) {
-      setErrorMsg(logError.message);
-      setLoadingRecentLogs(false);
-      return;
-    }
-
-    const { data: absentData, error: absentError } = await supabase
-      .from("comments")
-      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
-      .eq("author_id", profile.id)
-      .eq("kind", "absent")
-      .not("alt_type", "is", null);
-
-    if (absentError) {
-      setErrorMsg(absentError.message);
-      setLoadingRecentLogs(false);
-      return;
-    }
-
-    const logRecords: RecentRecord[] = ((logData ?? []) as WeightLogRow[]).map(
-      (l) => ({
-        id: l.id,
-        date: l.date,
-        content: l.content,
-        type: l.type,
-        title: l.title,
-        isAlternative: false,
-      })
-    );
-
-    const absentRows = (absentData ?? []) as unknown as {
-      id: string;
-      text: string;
-      alt_type: TrainingType;
-      menu: { date: string } | null;
-    }[];
-    const absentRecords: RecentRecord[] = absentRows
-      .filter(
-        (r) => r.menu && r.menu.date >= rangeStart && r.menu.date <= rangeEnd
-      )
-      .map((r) => ({
-        id: r.id,
-        date: r.menu!.date,
-        content: r.text,
-        type: r.alt_type,
-        title: null,
-        isAlternative: true,
-      }));
-
-    const merged = [...logRecords, ...absentRecords].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
-
-    const seenDates = new Set<string>();
-    const limited: RecentRecord[] = [];
-    for (const r of merged) {
-      if (!seenDates.has(r.date)) {
-        if (seenDates.size >= 3) break;
-        seenDates.add(r.date);
-      }
-      limited.push(r);
-    }
-
-    setRecentLogs(limited);
-    setLoadingRecentLogs(false);
-  }
-
   async function handleSaveLog() {
     if (!todayLogType) return;
     setSavingLog(true);
@@ -1220,70 +1120,6 @@ export default function MemberHome({
         setMatPendingDates(new Set());
       }
     }
-  }
-
-  async function loadDateRecord(dateStr: string) {
-    setLoadingPopupRecord(true);
-
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("id, date, content, type, title")
-      .eq("author_id", profile.id)
-      .eq("date", dateStr)
-      .maybeSingle();
-
-    if (logError) {
-      setErrorMsg(logError.message);
-      setPopupRecord(null);
-      setLoadingPopupRecord(false);
-      return;
-    }
-
-    const { data: absentData, error: absentError } = await supabase
-      .from("comments")
-      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
-      .eq("author_id", profile.id)
-      .eq("kind", "absent")
-      .not("alt_type", "is", null);
-
-    if (absentError) {
-      setErrorMsg(absentError.message);
-      setPopupRecord(null);
-      setLoadingPopupRecord(false);
-      return;
-    }
-
-    const absentRows = (absentData ?? []) as unknown as {
-      id: string;
-      text: string;
-      alt_type: TrainingType;
-      menu: { date: string } | null;
-    }[];
-    const match = absentRows.find((r) => r.menu && r.menu.date === dateStr);
-
-    const records: PopupRecordRow[] = [];
-    if (logData) {
-      const row = logData as WeightLogRow;
-      records.push({
-        date: row.date,
-        content: row.content,
-        type: row.type,
-        title: row.title,
-        isAlternative: false,
-      });
-    }
-    if (match) {
-      records.push({
-        date: dateStr,
-        content: match.text,
-        type: match.alt_type,
-        title: null,
-        isAlternative: true,
-      });
-    }
-
-    setPopupRecord(records.length > 0 ? records : null);
-    setLoadingPopupRecord(false);
   }
 
   async function loadRecordDates() {
