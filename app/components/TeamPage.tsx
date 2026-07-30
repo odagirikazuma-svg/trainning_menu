@@ -163,7 +163,7 @@ export default function TeamPage({
   );
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<
     string | null
-  >(null);
+  >(() => toDateKey(new Date()));
   const [dayDetail, setDayDetail] = useState<
     ScheduleDayRow | null | undefined
   >(undefined);
@@ -241,11 +241,29 @@ export default function TeamPage({
   const [pastMenus, setPastMenus] = useState<PastMenuRow[]>([]);
   const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
   const [loadingCompliance, setLoadingCompliance] = useState(true);
+  const [submissionCounts, setSubmissionCounts] = useState<
+    Map<string, { submitted: number; total: number }>
+  >(new Map());
+  const [loadingSubmissionCounts, setLoadingSubmissionCounts] =
+    useState(true);
+  const [daySubmissionDetail, setDaySubmissionDetail] = useState<
+    {
+      memberId: string;
+      displayName: string;
+      matStatus: "not_required" | "report" | "absent" | "missing";
+      matText: string | null;
+      selfStatus: "not_required" | "done" | "missing";
+      selfText: string | null;
+    }[]
+  >([]);
+  const [loadingDaySubmissionDetail, setLoadingDaySubmissionDetail] =
+    useState(false);
 
   useEffect(() => {
     loadMembers();
     loadWeightMaxes();
     loadCompliance();
+    if (selectedScheduleDate) loadDayDetail(selectedScheduleDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -253,6 +271,16 @@ export default function TeamPage({
     loadMonthSchedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarCursor, scheduleLocation]);
+
+  useEffect(() => {
+    loadMonthSubmissionCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthScheduleDays, members, scheduleLocation, calendarCursor]);
+
+  useEffect(() => {
+    if (selectedScheduleDate) loadDaySubmissionDetail(selectedScheduleDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthScheduleDays, members, scheduleLocation]);
 
   async function loadMembers() {
     setLoadingMembers(true);
@@ -404,6 +432,7 @@ export default function TeamPage({
     setSelectedScheduleDate(dateStr);
     setEditingSchedule(false);
     loadDayDetail(dateStr);
+    loadDaySubmissionDetail(dateStr);
   }
 
   function handleCloseScheduleDetail() {
@@ -1050,6 +1079,228 @@ export default function TeamPage({
     setLoadingCompliance(false);
   }
 
+  function requiredMembersForLocation(loc: Location): MemberRow[] {
+    return members.filter(
+      (m) =>
+        m.role !== "coach" &&
+        m.role !== "manager" &&
+        (m.home_location === loc || (loc === "tama" && m.home_location == null))
+    );
+  }
+
+  // カレンダー全体（表示中の月・拠点）の日ごとの提出状況（◯人／◯人）を集計する
+  async function loadMonthSubmissionCounts() {
+    setLoadingSubmissionCounts(true);
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const rangeStart = toDateKey(new Date(year, month, 1));
+    const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+    const requiredMembers = requiredMembersForLocation(scheduleLocation);
+    const memberIds = requiredMembers.map((m) => m.id);
+    const total = memberIds.length;
+
+    if (total === 0) {
+      setSubmissionCounts(new Map());
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    const { data: ownMenus, error: ownMenusError } = await supabase
+      .from("menus")
+      .select("id, date")
+      .eq("team_id", profile.team_id)
+      .eq("location", scheduleLocation)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+    const { data: jointMenus, error: jointMenusError } = await supabase
+      .from("menus")
+      .select("id, date")
+      .eq("team_id", profile.team_id)
+      .eq("is_joint", true)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (ownMenusError || jointMenusError) {
+      setErrorMsg((ownMenusError ?? jointMenusError)!.message);
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    const menuDateById = new Map<string, string>();
+    for (const m of [
+      ...((ownMenus ?? []) as { id: string; date: string }[]),
+      ...((jointMenus ?? []) as { id: string; date: string }[]),
+    ]) {
+      menuDateById.set(m.id, m.date);
+    }
+    const allMenuIds = Array.from(menuDateById.keys());
+
+    const submittedMatKeys = new Set<string>();
+    if (allMenuIds.length > 0) {
+      const { data: commentData, error: commentError } = await supabase
+        .from("comments")
+        .select("menu_id, author_id, kind")
+        .in("menu_id", allMenuIds)
+        .in("kind", ["report", "absent"])
+        .is("parent_id", null);
+      if (commentError) {
+        setErrorMsg(commentError.message);
+        setLoadingSubmissionCounts(false);
+        return;
+      }
+      for (const row of (commentData ?? []) as {
+        menu_id: string;
+        author_id: string | null;
+      }[]) {
+        if (!row.author_id) continue;
+        const date = menuDateById.get(row.menu_id);
+        if (date) submittedMatKeys.add(`${row.author_id}:${date}`);
+      }
+    }
+
+    const { data: logData, error: logError } = await supabase
+      .from("weight_logs")
+      .select("author_id, date")
+      .in("author_id", memberIds)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+    if (logError) {
+      setErrorMsg(logError.message);
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+    const selfLoggedKeys = new Set(
+      ((logData ?? []) as { author_id: string; date: string }[]).map(
+        (r) => `${r.author_id}:${r.date}`
+      )
+    );
+
+    const counts = new Map<string, { submitted: number; total: number }>();
+    for (const [dateKey, day] of monthScheduleDays) {
+      if (dateKey < rangeStart || dateKey > rangeEnd) continue;
+      if (day.is_off) continue;
+      const hasMat = day.sessions.some((s) => s.session_type === "mat");
+      const hasNonMat = day.sessions.some((s) => s.session_type !== "mat");
+      if (!hasMat && !hasNonMat) continue;
+      let submitted = 0;
+      for (const id of memberIds) {
+        const matOk = !hasMat || submittedMatKeys.has(`${id}:${dateKey}`);
+        const selfOk = !hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
+        if (matOk && selfOk) submitted++;
+      }
+      counts.set(dateKey, { submitted, total });
+    }
+    setSubmissionCounts(counts);
+    setLoadingSubmissionCounts(false);
+  }
+
+  // 選択した日の、部員ごとの提出状況の詳細一覧を読み込む
+  async function loadDaySubmissionDetail(dateStr: string) {
+    setLoadingDaySubmissionDetail(true);
+    const requiredMembers = requiredMembersForLocation(scheduleLocation);
+    const day = monthScheduleDays.get(dateStr);
+    const hasMat = !!day && !day.is_off && day.sessions.some((s) => s.session_type === "mat");
+    const hasNonMat =
+      !!day && !day.is_off && day.sessions.some((s) => s.session_type !== "mat");
+
+    if (requiredMembers.length === 0 || (!hasMat && !hasNonMat)) {
+      setDaySubmissionDetail([]);
+      setLoadingDaySubmissionDetail(false);
+      return;
+    }
+
+    let matCommentByAuthor = new Map<string, { kind: string; text: string }>();
+    if (hasMat) {
+      const { data: ownMenus } = await supabase
+        .from("menus")
+        .select("id")
+        .eq("team_id", profile.team_id)
+        .eq("location", scheduleLocation)
+        .eq("date", dateStr)
+        .eq("is_off", false);
+      const { data: jointMenus } = await supabase
+        .from("menus")
+        .select("id")
+        .eq("team_id", profile.team_id)
+        .eq("is_joint", true)
+        .eq("date", dateStr)
+        .eq("is_off", false);
+      const menuIds = [
+        ...((ownMenus ?? []) as { id: string }[]),
+        ...((jointMenus ?? []) as { id: string }[]),
+      ].map((m) => m.id);
+      if (menuIds.length > 0) {
+        const { data: commentData } = await supabase
+          .from("comments")
+          .select("author_id, kind, text")
+          .in("menu_id", menuIds)
+          .in("kind", ["report", "absent"])
+          .is("parent_id", null);
+        for (const row of (commentData ?? []) as {
+          author_id: string | null;
+          kind: string;
+          text: string;
+        }[]) {
+          if (row.author_id) {
+            matCommentByAuthor.set(row.author_id, {
+              kind: row.kind,
+              text: row.text,
+            });
+          }
+        }
+      }
+    }
+
+    let selfLogByAuthor = new Map<string, string>();
+    if (hasNonMat) {
+      const { data: logData } = await supabase
+        .from("weight_logs")
+        .select("author_id, content")
+        .eq("date", dateStr)
+        .in(
+          "author_id",
+          requiredMembers.map((m) => m.id)
+        );
+      for (const row of (logData ?? []) as {
+        author_id: string;
+        content: string;
+      }[]) {
+        selfLogByAuthor.set(row.author_id, row.content);
+      }
+    }
+
+    const detail = requiredMembers
+      .map((m) => {
+        const matComment = matCommentByAuthor.get(m.id);
+        const selfContent = selfLogByAuthor.get(m.id);
+        return {
+          memberId: m.id,
+          displayName: m.display_name,
+          matStatus: !hasMat
+            ? ("not_required" as const)
+            : matComment
+              ? matComment.kind === "absent"
+                ? ("absent" as const)
+                : ("report" as const)
+              : ("missing" as const),
+          matText: matComment?.text ?? null,
+          selfStatus: !hasNonMat
+            ? ("not_required" as const)
+            : selfContent
+              ? ("done" as const)
+              : ("missing" as const),
+          selfText: selfContent ?? null,
+        };
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"));
+
+    setDaySubmissionDetail(detail);
+    setLoadingDaySubmissionDetail(false);
+  }
+
   // イベントごとに「著者ID -> 記録」のMapを作る
   const weightMaxesByEvent = new Map<string, Map<string, WeightMaxRow>>();
   for (const w of weightMaxes) {
@@ -1151,7 +1402,7 @@ export default function TeamPage({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             月間の練習スケジュール
           </h2>
-          {isCoach ? (
+          {isCoach && (
             <div className="flex gap-2">
               {locations.map((loc) => (
                 <button
@@ -1166,10 +1417,6 @@ export default function TeamPage({
                   {locationLabel[loc]}
                 </button>
               ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-red-600 bg-red-600 px-3 py-2 text-center text-xs font-medium text-white">
-              {locationLabel[scheduleLocation]}
             </div>
           )}
           {isCoach && (
@@ -1394,6 +1641,7 @@ export default function TeamPage({
               onSelectDate={handleSelectScheduleDate}
               highlightDate={selectedScheduleDate}
               viewLocation={scheduleLocation}
+              submissionCounts={submissionCounts}
             />
             {selectedScheduleDate && (
               <div
@@ -1830,129 +2078,87 @@ export default function TeamPage({
           </div>
         </section>
 
-        {/* 部員一覧 */}
+        {/* 日別の提出状況 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            部員一覧
+            {selectedScheduleDate
+              ? `${formatMonthDay(selectedScheduleDate)}の提出状況`
+              : "部員一覧"}
           </h2>
           <p className="text-[11px] text-neutral-500">
-            タップするとその部員のマイページを閲覧できます。「未提出あり」は直近1週間で実施報告・未実施報告のどちらも提出されていない練習日があることを示し、その日付も表示されます。
+            上のカレンダーで日付をタップすると、その日に必要な報告（マットの実施報告・未実施報告、マット以外のセッションの自主トレ記録）を、部員ごとに確認できます。
           </p>
-          {loadingMembers ? (
+          {loadingMembers || loadingDaySubmissionDetail ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : members.length === 0 ? (
+          ) : !selectedScheduleDate ? (
             <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-              部員が登録されていません。
+              カレンダーから日付を選んでください。
+            </p>
+          ) : daySubmissionDetail.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
-            <div className="flex flex-col gap-4">
-              {groupMembersByGrade(
-                members.filter((m) => m.role !== "coach" && m.role !== "manager")
-              ).map((group) => {
-                const columns: { label: string; loc: Location | null }[] = [
-                  { label: locationLabel.tama, loc: "tama" },
-                  { label: locationLabel.otsuka, loc: "otsuka" },
-                ];
+            <div className="flex flex-col gap-2">
+              {daySubmissionDetail.map((d) => {
+                const allDone =
+                  (d.matStatus === "not_required" || d.matStatus !== "missing") &&
+                  (d.selfStatus === "not_required" || d.selfStatus === "done");
                 return (
-                  <div key={group.label} className="flex flex-col gap-1.5">
-                    <h3 className="text-[11px] font-semibold text-neutral-500">
-                      {group.label}（{group.members.length}人）
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {columns.map((col) => {
-                        const colMembers = group.members.filter(
-                          (m) =>
-                            m.home_location === col.loc ||
-                            (col.loc === "tama" && m.home_location == null)
-                        );
-                        return (
-                          <div
-                            key={col.label}
-                            className="flex flex-col gap-1"
-                          >
-                            <p className="text-[10px] text-neutral-500">
-                              {col.label}（{colMembers.length}人）
-                            </p>
-                            <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-neutral-800">
-                              {colMembers.length === 0 ? (
-                                <p className="p-2 text-[10px] text-neutral-600">
-                                  なし
-                                </p>
-                              ) : (
-                                <ul className="divide-y divide-neutral-800">
-                                  {colMembers.map((m) => {
-                                    const missingList =
-                                      m.isPending || loadingCompliance
-                                        ? null
-                                        : getMissingSubmissions(
-                                            m.id,
-                                            m.home_location
-                                          );
-                                    const missing =
-                                      missingList !== null &&
-                                      missingList.length > 0;
-                                    const content = (
-                                      <>
-                                        <span className="truncate font-medium text-neutral-100">
-                                          {m.display_name}
-                                        </span>
-                                        <span className="flex flex-col gap-0.5">
-                                          {m.isPending ? (
-                                            <span className="self-start rounded bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                                              招待中（未登録）
-                                            </span>
-                                          ) : missingList === null ? (
-                                            <span className="text-[10px] text-neutral-600">
-                                              確認中…
-                                            </span>
-                                          ) : missing ? (
-                                            <>
-                                              <span className="self-start rounded bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
-                                                未提出あり
-                                              </span>
-                                              <span className="text-[10px] leading-tight text-red-500">
-                                                {missingList
-                                                  .map((mm) =>
-                                                    formatMonthDay(mm.date)
-                                                  )
-                                                  .join("、")}
-                                              </span>
-                                            </>
-                                          ) : (
-                                            <span className="self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                                              提出OK
-                                            </span>
-                                          )}
-                                        </span>
-                                      </>
-                                    );
-                                    return (
-                                      <li key={m.id}>
-                                        {m.isPending ? (
-                                          <div className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px]">
-                                            {content}
-                                          </div>
-                                        ) : (
-                                          <button
-                                            onClick={() =>
-                                              router.push(`/team/${m.id}`)
-                                            }
-                                            className="flex w-full flex-col gap-1 px-2 py-2 text-left text-[11px] active:bg-neutral-800"
-                                          >
-                                            {content}
-                                          </button>
-                                        )}
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div
+                    key={d.memberId}
+                    className={`flex flex-col gap-1.5 rounded-lg border p-3 text-sm ${
+                      allDone
+                        ? "border-emerald-900/60 bg-emerald-950/20"
+                        : "border-neutral-800 bg-neutral-900"
+                    }`}
+                  >
+                    <p className="font-medium text-neutral-100">
+                      {d.displayName}
+                    </p>
+                    {d.matStatus !== "not_required" && (
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            d.matStatus === "missing"
+                              ? "bg-red-950/40 text-red-400"
+                              : "bg-emerald-950/40 text-emerald-400"
+                          }`}
+                        >
+                          マット：
+                          {d.matStatus === "missing"
+                            ? "未提出"
+                            : d.matStatus === "absent"
+                              ? "未実施報告"
+                              : "実施報告"}
+                        </span>
+                        {d.matText && (
+                          <p className="whitespace-pre-wrap pl-1 text-[11px] text-neutral-400">
+                            {d.matText}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {d.selfStatus !== "not_required" && (
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            d.selfStatus === "missing"
+                              ? "bg-red-950/40 text-red-400"
+                              : "bg-emerald-950/40 text-emerald-400"
+                          }`}
+                        >
+                          マット以外のセッション：
+                          {d.selfStatus === "missing" ? "未提出" : "提出済み"}
+                        </span>
+                        {d.selfText && (
+                          <p className="whitespace-pre-wrap pl-1 text-[11px] text-neutral-400">
+                            {d.selfText}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2119,6 +2325,7 @@ function MonthlyCalendar({
   onSelectDate,
   highlightDate,
   viewLocation,
+  submissionCounts,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2127,6 +2334,7 @@ function MonthlyCalendar({
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
   viewLocation: Location;
+  submissionCounts: Map<string, { submitted: number; total: number }>;
 }) {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -2184,26 +2392,31 @@ function MonthlyCalendar({
               const day = scheduleDays.get(key);
               const isHighlighted = key === highlightDate;
               const weekday = date.getDay();
+              const count = submissionCounts.get(key);
+              const isFullySubmitted =
+                !!count && count.total > 0 && count.submitted === count.total;
               return (
                 <button
                   key={i}
                   onClick={() => onSelectDate(key)}
                   className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
-                      ? "border-neutral-700 bg-neutral-800"
-                      : day?.day_type === "camp"
-                        ? "border-pink-900/60 bg-pink-950/40"
-                        : day?.day_type === "match"
-                          ? "border-red-900/60 bg-red-950/40"
-                          : isHighlighted
-                            ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
-                            : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
-                  }`}
+                      ? "border-neutral-700 bg-neutral-900"
+                      : isFullySubmitted
+                        ? "border-emerald-700 bg-emerald-900/60"
+                        : day?.day_type === "camp"
+                          ? "border-pink-900/60 bg-pink-950/40"
+                          : day?.day_type === "match"
+                            ? "border-red-900/60 bg-red-950/40"
+                            : isHighlighted
+                              ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
+                              : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
+                  } ${isHighlighted && !day?.is_off ? "ring-1 ring-amber-400" : ""}`}
                 >
                   <span
                     className={`text-[11px] font-semibold ${
                       day?.is_off
-                        ? "text-neutral-500"
+                        ? "text-neutral-600"
                         : !isHighlighted && weekday === 0
                           ? "border-b-2 border-red-500 text-red-400"
                           : !isHighlighted && weekday === 6
@@ -2214,7 +2427,9 @@ function MonthlyCalendar({
                     {date.getDate()}
                   </span>
                   {day?.is_off && (
-                    <span className="text-[9px] text-neutral-500">オフ</span>
+                    <span className="text-[9px] text-neutral-500">
+                      全体オフ
+                    </span>
                   )}
                   {day &&
                     !day.is_off &&
@@ -2227,48 +2442,34 @@ function MonthlyCalendar({
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
                     )}
-                  {day &&
-                    !day.is_off &&
-                    day.sessions.map((s) => (
-                      <span
-                        key={s.id}
-                        className="flex w-full items-start gap-0.5 leading-tight"
-                      >
-                        <span
-                          className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
-                        />
-                        <span className="break-words text-[9px] text-neutral-300">
-                          {sessionTypeLabel[s.session_type]}
-                          {s.start_time.slice(0, 5)}〜
-                          {day.day_type === "camp" || day.day_type === "away"
-                            ? s.is_joint
-                              ? "（全体）"
-                              : `（${locationLabel[viewLocation]}）`
-                            : s.location_note
-                              ? `（${s.location_note}）`
-                              : s.is_joint &&
-                                (s.joint_location &&
-                                s.joint_location !== viewLocation
-                                  ? `（${locationLabel[s.joint_location]}）`
-                                  : "（全体）")}
-                        </span>
-                      </span>
-                    ))}
+                  {day && !day.is_off && count && (
+                    <span
+                      className={`text-[10px] font-semibold ${
+                        isFullySubmitted ? "text-emerald-300" : "text-neutral-300"
+                      }`}
+                    >
+                      {count.submitted}/{count.total}人
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
           <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
-            {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
-              <span key={t} className="flex items-center gap-1">
-                <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[t]}`}
-                />
-                {sessionTypeLabel[t]}
-              </span>
-            ))}
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-800" />
+              <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
+              全員提出済み
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+              合宿
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+              試合
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
               オフ
             </span>
           </p>
