@@ -810,12 +810,14 @@ export default function TrainingBoardSupabase({
               {profile.role === "coach" ? "管理ページ" : "マイページ"}
             </button>
           )}
-          <button
-            onClick={() => router.push("/team")}
-            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
-          >
-            チームページ
-          </button>
+          {isCoachView && (
+            <button
+              onClick={() => router.push("/team")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              チームページ
+            </button>
+          )}
         </div>
       </header>
 

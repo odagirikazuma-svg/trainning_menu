@@ -1124,6 +1124,20 @@ export default function TeamPage({
         </div>
       </header>
 
+      {!isCoach && (
+        <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
+          <button
+            onClick={() => router.push("/")}
+            className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
+          >
+            {locationLabel[restrictedHomeLocation]}
+          </button>
+          <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
+            チームページ
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
@@ -1760,20 +1774,16 @@ export default function TeamPage({
                                 <p className="text-xs text-neutral-500">
                                   このセッションの練習メニューはまだ掲示板に投稿されていません
                                 </p>
-                                {canEditMatMenu &&
-                                  !isPastSession(
-                                    dayDetail.date,
-                                    s.start_time
-                                  ) && (
-                                    <button
-                                      onClick={() =>
-                                        handleGoToMatMenu(s.start_time)
-                                      }
-                                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
-                                    >
-                                      このセッションの練習メニューを作成する
-                                    </button>
-                                  )}
+                                {canEditMatMenu && (
+                                  <button
+                                    onClick={() =>
+                                      handleGoToMatMenu(s.start_time)
+                                    }
+                                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
+                                  >
+                                    このセッションの練習メニューを作成する
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div>
