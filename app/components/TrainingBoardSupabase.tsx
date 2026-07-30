@@ -123,6 +123,7 @@ export default function TrainingBoardSupabase({
   });
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
+  const practiceSectionRef = useRef<HTMLDivElement>(null);
   const isCoachView = profile.role === "coach";
   // 部員（コーチ以外）が閲覧できる拠点。マネージャーは多摩所属として扱う。
   const memberHomeLocation: Location =
@@ -800,7 +801,7 @@ export default function TrainingBoardSupabase({
       viewDateSchedule.day_type === "away");
 
   const practiceSection = (
-    <>
+    <div ref={practiceSectionRef}>
       {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
             <MenuNavBar onPrev={goPrevDay} onNext={goNextDay} />
@@ -1019,14 +1020,7 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
-              ) : !showReportForm ? (
-                <button
-                  onClick={() => setShowReportForm(true)}
-                  className="self-start text-[11px] font-medium text-red-400 underline"
-                >
-                  このメニューの報告をする
-                </button>
-              ) : reportOpen ? (
+              ) : !showReportForm ? null : reportOpen ? (
                 <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
                     value={reportText}
@@ -1183,7 +1177,7 @@ export default function TrainingBoardSupabase({
             )}
           </div>
         )}
-    </>
+    </div>
   );
 
   return (
@@ -1580,9 +1574,14 @@ export default function TrainingBoardSupabase({
             profile={profile}
             signOut={signOut}
             practiceMenuSlot={practiceSection}
-            onGoToMenu={(_loc, date) =>
-              applySelectionForDate(date, menus, jointElsewhere)
-            }
+            onGoToMenu={async (_loc, date) => {
+              await applySelectionForDate(date, menus, jointElsewhere);
+              setShowReportForm(true);
+              practiceSectionRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
             onCalendarDateSelect={(date) =>
               applySelectionForDate(date, menus, jointElsewhere)
             }

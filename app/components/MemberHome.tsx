@@ -1324,29 +1324,8 @@ export default function MemberHome({
 
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
-    loadDateRecord(dateStr);
     onCalendarDateSelect?.(dateStr);
-  }
-
-  function handleCloseCalendarPopup() {
-    setSelectedCalendarDate(null);
-    setPopupRecord(undefined);
-  }
-
-  function handleShiftCalendarDate(direction: 1 | -1) {
-    if (!selectedCalendarDate) return;
-    const target =
-      direction === 1
-        ? recordDates.find((d) => d > selectedCalendarDate)
-        : [...recordDates].reverse().find((d) => d < selectedCalendarDate);
-    if (!target) return;
-
-    setSelectedCalendarDate(target);
-    loadDateRecord(target);
-    const [y, m] = target.split("-").map(Number);
-    if (y !== calendarCursor.getFullYear() || m - 1 !== calendarCursor.getMonth()) {
-      setCalendarCursor(new Date(y, m - 1, 1));
-    }
+    loadLogForDate(dateStr);
   }
 
   function goToMenu(m: TodoMenuRow) {
@@ -1739,9 +1718,6 @@ export default function MemberHome({
         )}
       </section>
 
-      {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
-      {practiceMenuSlot}
-
       {/* カレンダー */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -1760,64 +1736,10 @@ export default function MemberHome({
           todayDate={todayStr}
           nextMatchDate={nextMatch?.date ?? null}
         />
-
-        {selectedCalendarDate && (
-          <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => handleShiftCalendarDate(-1)}
-                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
-              >
-                ◀
-              </button>
-              <span className="text-xs font-semibold text-neutral-300">
-                {formatMonthDay(selectedCalendarDate)}
-              </span>
-              <button
-                onClick={() => handleShiftCalendarDate(1)}
-                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
-              >
-                ▶
-              </button>
-            </div>
-            {loadingPopupRecord ? (
-              <p className="text-xs text-neutral-500">読み込み中…</p>
-            ) : popupRecord === null || popupRecord === undefined ? (
-              <p className="text-xs text-neutral-500">この日の記録はありません。</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {popupRecord.map((r, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-lg border border-neutral-800 bg-neutral-950 p-2"
-                  >
-                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
-                      />
-                      {trainingTypeLabel[r.type]}
-                      {r.isAlternative && (
-                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
-                          未実施報告の代替メニュー
-                        </span>
-                      )}
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                      {r.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={handleCloseCalendarPopup}
-              className="self-start text-[11px] text-neutral-500 underline"
-            >
-              閉じる
-            </button>
-          </div>
-        )}
       </section>
+      {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
+      {practiceMenuSlot}
+
 
       {/* トレーニングメニュー記入欄 */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
