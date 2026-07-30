@@ -2241,7 +2241,9 @@ function MonthlyCalendar({
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}〜
                           {day.day_type === "camp" || day.day_type === "away"
-                            ? "（全体）"
+                            ? s.is_joint
+                              ? "（全体）"
+                              : `（${locationLabel[viewLocation]}）`
                             : s.location_note
                               ? `（${s.location_note}）`
                               : s.is_joint &&

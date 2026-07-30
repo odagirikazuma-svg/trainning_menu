@@ -2038,7 +2038,9 @@ function MenuCalendar({
                           {s.start_time.slice(0, 5)}
                           {schedule.day_type === "camp" ||
                           schedule.day_type === "away"
-                            ? "(全体)"
+                            ? s.is_joint
+                              ? "(全体)"
+                              : `(${locationLabel[location]})`
                             : s.location_note
                               ? `(${s.location_note})`
                               : s.is_joint &&
