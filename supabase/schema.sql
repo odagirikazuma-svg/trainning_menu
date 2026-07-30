@@ -678,3 +678,12 @@ create policy "push_subscriptions_insert_self" on push_subscriptions
 
 create policy "push_subscriptions_delete_self" on push_subscriptions
   for delete using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: 時間割の区分に「出稽古」を追加し、合宿・出稽古の練習場所を
+-- 自由記述できるようにする
+-- ============================================
+alter table schedule_days drop constraint if exists schedule_days_day_type_check;
+alter table schedule_days add constraint schedule_days_day_type_check check (day_type in ('practice', 'camp', 'match', 'away'));
+
+alter table schedule_sessions add column if not exists location_note text;

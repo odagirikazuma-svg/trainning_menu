@@ -17,11 +17,12 @@ import {
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
-// ダークテーマ用の合宿/試合バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
+// ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
 const dayTypeFillColorDark: Record<DayType, string> = {
   practice: "",
   camp: "bg-pink-950/40 text-pink-400",
   match: "bg-red-950/40 text-red-400",
+  away: "bg-purple-950/40 text-purple-400",
 };
 
 type MemberRow = {
@@ -43,6 +44,7 @@ type ScheduleSessionRow = {
   start_time: string;
   is_joint: boolean;
   joint_location: Location | null;
+  location_note: string | null;
 };
 
 type ScheduleDayRow = {
@@ -178,6 +180,7 @@ export default function TeamPage({
       time: string;
       isJoint: boolean;
       jointLocation: Location;
+      locationNote: string;
     }[]
   >([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -185,9 +188,9 @@ export default function TeamPage({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkStartDate, setBulkStartDate] = useState("");
   const [bulkEndDate, setBulkEndDate] = useState("");
-  const [bulkCategory, setBulkCategory] = useState<"off" | "camp" | "match">(
-    "off"
-  );
+  const [bulkCategory, setBulkCategory] = useState<
+    "off" | "camp" | "match" | "away"
+  >("off");
   const [bulkEventName, setBulkEventName] = useState("");
   const [bulkIncludeSessions, setBulkIncludeSessions] = useState(false);
   const [bulkSessions, setBulkSessions] = useState<
@@ -196,9 +199,16 @@ export default function TeamPage({
       time: string;
       isJoint: boolean;
       jointLocation: Location;
+      locationNote: string;
     }[]
   >([
-    { type: "mat", time: "10:00", isJoint: false, jointLocation: "tama" },
+    {
+      type: "mat",
+      time: "10:00",
+      isJoint: false,
+      jointLocation: "tama",
+      locationNote: "",
+    },
   ]);
   const [savingBulk, setSavingBulk] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
@@ -298,7 +308,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location, location_note)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -348,7 +358,7 @@ export default function TeamPage({
     const { data, error } = await supabase
       .from("schedule_days")
       .select(
-        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, date, location, is_off, day_type, event_name, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location, location_note)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", scheduleLocation)
@@ -441,11 +451,18 @@ export default function TeamPage({
           time: s.start_time.slice(0, 5),
           isJoint: s.is_joint,
           jointLocation: s.joint_location ?? scheduleLocation,
+          locationNote: s.location_note ?? "",
         }))
       );
     } else {
       setEditSessions([
-        { type: "mat", time: "10:00", isJoint: false, jointLocation: scheduleLocation },
+        {
+          type: "mat",
+          time: "10:00",
+          isJoint: false,
+          jointLocation: scheduleLocation,
+          locationNote: "",
+        },
       ]);
     }
     setEditingSchedule(true);
@@ -458,6 +475,7 @@ export default function TeamPage({
       time: string;
       isJoint: boolean;
       jointLocation: Location;
+      locationNote: string;
     }>
   ) {
     setEditSessions((prev) =>
@@ -476,6 +494,7 @@ export default function TeamPage({
               time: "17:00",
               isJoint: false,
               jointLocation: scheduleLocation,
+              locationNote: "",
             },
           ]
     );
@@ -494,6 +513,7 @@ export default function TeamPage({
       time: string;
       isJoint: boolean;
       jointLocation: Location;
+      locationNote: string;
     }>
   ) {
     setBulkSessions((prev) =>
@@ -512,6 +532,7 @@ export default function TeamPage({
               time: "17:00",
               isJoint: false,
               jointLocation: scheduleLocation,
+              locationNote: "",
             },
           ]
     );
@@ -535,6 +556,7 @@ export default function TeamPage({
         time: "10:00",
         isJoint: false,
         jointLocation: scheduleLocation,
+        locationNote: "",
       },
     ]);
     setBulkResult(null);
@@ -600,6 +622,7 @@ export default function TeamPage({
       time: string;
       isJoint: boolean;
       jointLocation: Location;
+      locationNote: string;
     }[],
     includeSessionsFlag: boolean,
     eventName: string = ""
@@ -611,8 +634,11 @@ export default function TeamPage({
       : dayType === "practice"
         ? true
         : includeSessionsFlag;
+    const isAwayLike = dayType === "camp" || dayType === "away";
     const trimmedEventName =
-      dayType === "camp" || dayType === "match" ? eventName.trim() || null : null;
+      dayType === "camp" || dayType === "match" || dayType === "away"
+        ? eventName.trim() || null
+        : null;
 
     const { data: dayRow, error: dayError } = await supabase
       .from("schedule_days")
@@ -646,30 +672,37 @@ export default function TeamPage({
     if (delError) return delError.message;
 
     if (!isOff && includeSessions && sessions.length > 0) {
-      const rows = sessions.map((s, idx) => ({
-        schedule_day_id: dayId,
-        session_no: idx + 1,
-        session_type: s.type,
-        start_time: s.time,
-        is_joint: s.isJoint,
-        joint_location: s.isJoint ? s.jointLocation : null,
-      }));
+      const rows = sessions.map((s, idx) => {
+        // 合宿・出稽古は基本的に全体練習として扱う
+        const isJoint = isAwayLike ? true : s.isJoint;
+        return {
+          schedule_day_id: dayId,
+          session_no: idx + 1,
+          session_type: s.type,
+          start_time: s.time,
+          is_joint: isJoint,
+          joint_location: isJoint ? s.jointLocation : null,
+          location_note: isAwayLike ? s.locationNote.trim() || null : null,
+        };
+      });
       const { error: insError } = await supabase
         .from("schedule_sessions")
         .insert(rows);
       if (insError) return insError.message;
 
       for (const s of sessions) {
-        if (s.isJoint) {
+        const isJoint = isAwayLike ? true : s.isJoint;
+        if (isJoint) {
           await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
             type: s.type,
             time: s.time,
+            locationNote: isAwayLike ? s.locationNote.trim() || null : null,
           });
         }
       }
     }
 
-    if (!isOff && (dayType === "camp" || dayType === "match")) {
+    if (!isOff && (dayType === "camp" || dayType === "match" || dayType === "away")) {
       await propagateDayType(
         dateStr,
         scheduleLocation,
@@ -736,7 +769,7 @@ export default function TeamPage({
     dateStr: string,
     editingLocation: Location,
     hostLocation: Location,
-    session: { type: SessionType; time: string }
+    session: { type: SessionType; time: string; locationNote?: string | null }
   ) {
     const otherLocation: Location =
       editingLocation === "tama" ? "otsuka" : "tama";
@@ -744,7 +777,7 @@ export default function TeamPage({
     const { data: existingDay } = await supabase
       .from("schedule_days")
       .select(
-        "id, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location)"
+        "id, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location, location_note)"
       )
       .eq("team_id", profile.team_id)
       .eq("location", otherLocation)
@@ -782,10 +815,16 @@ export default function TeamPage({
     );
 
     if (mirrored) {
-      if (mirrored.start_time.slice(0, 5) !== session.time) {
+      if (
+        mirrored.start_time.slice(0, 5) !== session.time ||
+        mirrored.location_note !== (session.locationNote ?? null)
+      ) {
         await supabase
           .from("schedule_sessions")
-          .update({ start_time: session.time })
+          .update({
+            start_time: session.time,
+            location_note: session.locationNote ?? null,
+          })
           .eq("id", mirrored.id);
       }
       return;
@@ -802,6 +841,7 @@ export default function TeamPage({
       start_time: session.time,
       is_joint: true,
       joint_location: hostLocation,
+      location_note: session.locationNote ?? null,
     });
   }
 
@@ -1054,12 +1094,13 @@ export default function TeamPage({
 
               <div className="flex flex-col gap-1">
                 <span className="text-[11px] text-neutral-400">区分</span>
-                <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
+                <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
                   {(
                     [
                       { v: "off", label: "オフ" },
                       { v: "camp", label: "合宿" },
                       { v: "match", label: "試合" },
+                      { v: "away", label: "出稽古" },
                     ] as const
                   ).map((opt) => (
                     <button
@@ -1078,7 +1119,9 @@ export default function TeamPage({
                 </div>
               </div>
 
-              {(bulkCategory === "camp" || bulkCategory === "match") && (
+              {(bulkCategory === "camp" ||
+                bulkCategory === "match" ||
+                bulkCategory === "away") && (
                 <input
                   type="text"
                   value={bulkEventName}
@@ -1086,13 +1129,17 @@ export default function TeamPage({
                   placeholder={
                     bulkCategory === "camp"
                       ? "合宿名（例：夏合宿・山梨合宿）"
-                      : "試合名（例：インカレ・県大会）"
+                      : bulkCategory === "away"
+                        ? "出稽古先（例：◯◯大学、◯◯高校）"
+                        : "試合名（例：インカレ・県大会）"
                   }
                   className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                 />
               )}
 
-              {(bulkCategory === "camp" || bulkCategory === "match") && (
+              {(bulkCategory === "camp" ||
+                bulkCategory === "match" ||
+                bulkCategory === "away") && (
                 <label className="flex items-center gap-2 text-xs text-neutral-300">
                   <input
                     type="checkbox"
@@ -1142,6 +1189,22 @@ export default function TeamPage({
                           onChange={(v) => updateBulkSession(idx, { time: v })}
                         />
                       </div>
+                      {(bulkCategory === "camp" || bulkCategory === "away") && (
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          練習場所（任意）
+                          <input
+                            type="text"
+                            value={s.locationNote}
+                            onChange={(e) =>
+                              updateBulkSession(idx, {
+                                locationNote: e.target.value,
+                              })
+                            }
+                            placeholder="例：山梨県立武道館、◯◯大学 など"
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                          />
+                        </label>
+                      )}
                     </div>
                   ))}
                   {bulkSessions.length < 2 && (
@@ -1226,13 +1289,14 @@ export default function TeamPage({
                         <span className="text-[11px] text-neutral-400">
                           区分
                         </span>
-                        <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
+                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
                           {(
                             [
                               { v: "off", label: "オフ" },
                               { v: "practice", label: "練習" },
                               { v: "camp", label: "合宿" },
                               { v: "match", label: "試合" },
+                              { v: "away", label: "出稽古" },
                             ] as const
                           ).map((opt) => (
                             <button
@@ -1251,7 +1315,9 @@ export default function TeamPage({
                         </div>
                       </div>
 
-                      {(editCategory === "camp" || editCategory === "match") && (
+                      {(editCategory === "camp" ||
+                        editCategory === "match" ||
+                        editCategory === "away") && (
                         <input
                           type="text"
                           value={editEventName}
@@ -1259,13 +1325,17 @@ export default function TeamPage({
                           placeholder={
                             editCategory === "camp"
                               ? "合宿名（例：夏合宿・山梨合宿）"
-                              : "試合名（例：インカレ・県大会）"
+                              : editCategory === "away"
+                                ? "出稽古先（例：◯◯大学、◯◯高校）"
+                                : "試合名（例：インカレ・県大会）"
                           }
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
                         />
                       )}
 
-                      {(editCategory === "camp" || editCategory === "match") && (
+                      {(editCategory === "camp" ||
+                        editCategory === "match" ||
+                        editCategory === "away") && (
                         <label className="flex items-center gap-2 text-xs text-neutral-300">
                           <input
                             type="checkbox"
@@ -1321,34 +1391,55 @@ export default function TeamPage({
                                   }
                                 />
                               </div>
-                              <label className="flex items-center gap-2 text-[11px] text-neutral-400">
-                                <input
-                                  type="checkbox"
-                                  checked={s.isJoint}
-                                  onChange={(e) =>
-                                    updateEditSession(idx, {
-                                      isJoint: e.target.checked,
-                                    })
-                                  }
-                                />
-                                全体練習（合同）にする
-                              </label>
-                              {s.isJoint && (
-                                <select
-                                  value={s.jointLocation}
-                                  onChange={(e) =>
-                                    updateEditSession(idx, {
-                                      jointLocation: e.target.value as Location,
-                                    })
-                                  }
-                                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                                >
-                                  {locations.map((loc) => (
-                                    <option key={loc} value={loc}>
-                                      {locationLabel[loc]}で実施
-                                    </option>
-                                  ))}
-                                </select>
+                              {editCategory === "camp" ||
+                              editCategory === "away" ? (
+                                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                                  練習場所（任意）
+                                  <input
+                                    type="text"
+                                    value={s.locationNote}
+                                    onChange={(e) =>
+                                      updateEditSession(idx, {
+                                        locationNote: e.target.value,
+                                      })
+                                    }
+                                    placeholder="例：山梨県立武道館、◯◯大学 など"
+                                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                                  />
+                                </label>
+                              ) : (
+                                <>
+                                  <label className="flex items-center gap-2 text-[11px] text-neutral-400">
+                                    <input
+                                      type="checkbox"
+                                      checked={s.isJoint}
+                                      onChange={(e) =>
+                                        updateEditSession(idx, {
+                                          isJoint: e.target.checked,
+                                        })
+                                      }
+                                    />
+                                    全体練習（合同）にする
+                                  </label>
+                                  {s.isJoint && (
+                                    <select
+                                      value={s.jointLocation}
+                                      onChange={(e) =>
+                                        updateEditSession(idx, {
+                                          jointLocation: e.target
+                                            .value as Location,
+                                        })
+                                      }
+                                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                                    >
+                                      {locations.map((loc) => (
+                                        <option key={loc} value={loc}>
+                                          {locationLabel[loc]}で実施
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </>
                               )}
                             </div>
                           ))}
@@ -1424,7 +1515,8 @@ export default function TeamPage({
                         {formatMonthDay(dayDetail.date)}
                       </p>
                       {(dayDetail.day_type === "camp" ||
-                        dayDetail.day_type === "match") && (
+                        dayDetail.day_type === "match" ||
+                        dayDetail.day_type === "away") && (
                         <span
                           className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
                         >
@@ -1460,12 +1552,18 @@ export default function TeamPage({
                             {sessionTypeLabel[s.session_type]}・
                             {s.start_time.slice(0, 5)}〜
                           </div>
-                          {s.is_joint && (
+                          {s.location_note ? (
                             <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
-                              全体練習（
-                              {locationLabel[s.joint_location ?? scheduleLocation]}
-                              で実施）
+                              練習場所：{s.location_note}
                             </p>
+                          ) : (
+                            s.is_joint && (
+                              <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                                全体練習（
+                                {locationLabel[s.joint_location ?? scheduleLocation]}
+                                で実施）
+                              </p>
+                            )
                           )}
                           {s.session_type === "mat" ? (
                             matMenuDetail === undefined ? (
@@ -1925,7 +2023,9 @@ function MonthlyCalendar({
                   )}
                   {day &&
                     !day.is_off &&
-                    (day.day_type === "camp" || day.day_type === "match") && (
+                    (day.day_type === "camp" ||
+                      day.day_type === "match" ||
+                      day.day_type === "away") && (
                       <span
                         className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
                       >
@@ -1945,11 +2045,13 @@ function MonthlyCalendar({
                         <span className="break-words text-[9px] text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}〜
-                          {s.is_joint &&
-                            (s.joint_location &&
-                            s.joint_location !== viewLocation
-                              ? `（${locationLabel[s.joint_location]}）`
-                              : "（全体）")}
+                          {s.location_note
+                            ? `（${s.location_note}）`
+                            : s.is_joint &&
+                              (s.joint_location &&
+                              s.joint_location !== viewLocation
+                                ? `（${locationLabel[s.joint_location]}）`
+                                : "（全体）")}
                         </span>
                       </span>
                     ))}

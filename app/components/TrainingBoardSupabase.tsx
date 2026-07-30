@@ -8,7 +8,6 @@ import {
   CommentKind,
   commentKindLabel,
   DayType,
-  dayTypeFillColor,
   dayTypeLabel,
   Location,
   locationLabel,
@@ -19,6 +18,14 @@ import {
   sessionTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+
+// ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
+const dayTypeFillColorDark: Record<DayType, string> = {
+  practice: "",
+  camp: "bg-pink-950/40 text-pink-400",
+  match: "bg-red-950/40 text-red-400",
+  away: "bg-purple-950/40 text-purple-400",
+};
 
 type MenuRow = {
   id: string;
@@ -146,6 +153,9 @@ export default function TrainingBoardSupabase({
     "normal"
   );
   const [newOffBothLocations, setNewOffBothLocations] = useState(false);
+  const [newJointLocation, setNewJointLocation] = useState<Location>(
+    activeLocation
+  );
   const [editingMenu, setEditingMenu] = useState(false);
   const [editDate, setEditDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
@@ -242,6 +252,7 @@ export default function TrainingBoardSupabase({
     setConfirmingNew(false);
     setNewMenuType("normal");
     setNewOffBothLocations(false);
+    setNewJointLocation(activeLocation);
     setNewDate(viewDate);
     setNewStartTime(
       matSessionForViewDate ? matSessionForViewDate.start_time.slice(0, 5) : ""
@@ -423,7 +434,7 @@ export default function TrainingBoardSupabase({
         ...basePayload,
         title: "",
         content: newContent,
-        location: activeLocation,
+        location: newMenuType === "joint" ? newJointLocation : activeLocation,
         start_time: newStartTime || null,
         is_joint: newMenuType === "joint",
         is_off: false,
@@ -812,6 +823,27 @@ export default function TrainingBoardSupabase({
                           onChange={setNewStartTime}
                         />
                       </label>
+                      {newMenuType === "joint" && (
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          開催拠点
+                          <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                            {locations.map((loc) => (
+                              <button
+                                key={loc}
+                                type="button"
+                                onClick={() => setNewJointLocation(loc)}
+                                className={`flex-1 rounded-md py-2 font-medium ${
+                                  newJointLocation === loc
+                                    ? "bg-red-600 text-white shadow"
+                                    : "text-neutral-400"
+                                }`}
+                              >
+                                {locationLabel[loc]}
+                              </button>
+                            ))}
+                          </div>
+                        </label>
+                      )}
                       <textarea
                         placeholder="メニュー詳細（自由記述）"
                         value={newContent}
@@ -822,7 +854,9 @@ export default function TrainingBoardSupabase({
                       />
                       {newMenuType === "joint" && (
                         <p className="text-[11px] text-neutral-400">
-                          もう一方の拠点はこの練習に合流します
+                          {newJointLocation === activeLocation
+                            ? "もう一方の拠点はこの練習に合流します"
+                            : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
                         </p>
                       )}
                     </>
@@ -1651,6 +1685,7 @@ function MenuCalendar({
           start_time: string;
           is_joint: boolean;
           joint_location: Location | null;
+          location_note: string | null;
         }[];
       }
     >
@@ -1666,7 +1701,7 @@ function MenuCalendar({
       const { data } = await supabase
         .from("schedule_days")
         .select(
-          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location, location_note)"
         )
         .eq("team_id", teamId)
         .eq("location", location)
@@ -1684,6 +1719,7 @@ function MenuCalendar({
             start_time: string;
             is_joint: boolean;
             joint_location: Location | null;
+            location_note: string | null;
           }[];
         }
       >();
@@ -1697,6 +1733,7 @@ function MenuCalendar({
           start_time: string;
           is_joint: boolean;
           joint_location: Location | null;
+          location_note: string | null;
         }[];
       }[]) {
         map.set(row.date, {
@@ -1836,9 +1873,10 @@ function MenuCalendar({
               {schedule &&
                 !schedule.is_off &&
                 (schedule.day_type === "camp" ||
-                  schedule.day_type === "match") && (
+                  schedule.day_type === "match" ||
+                  schedule.day_type === "away") && (
                   <span
-                    className={`max-w-full truncate rounded px-1 text-[8px] font-semibold ${dayTypeFillColor[schedule.day_type]}`}
+                    className={`max-w-full truncate rounded px-1 text-[8px] font-semibold ${dayTypeFillColorDark[schedule.day_type]}`}
                   >
                     {schedule.event_name || dayTypeLabel[schedule.day_type]}
                   </span>
@@ -1859,11 +1897,13 @@ function MenuCalendar({
                           />
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time.slice(0, 5)}
-                          {s.is_joint &&
-                            (s.joint_location &&
-                            s.joint_location !== location
-                              ? `(${locationLabel[s.joint_location]})`
-                              : "(全体)")}
+                          {s.location_note
+                            ? `(${s.location_note})`
+                            : s.is_joint &&
+                              (s.joint_location &&
+                              s.joint_location !== location
+                                ? `(${locationLabel[s.joint_location]})`
+                                : "(全体)")}
                         </span>
                       ))}
                   </span>
