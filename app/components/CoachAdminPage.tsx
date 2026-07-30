@@ -343,6 +343,12 @@ export default function CoachAdminPage({
 
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(
+    null
+  );
+  const [savingLocationId, setSavingLocationId] = useState<string | null>(
+    null
+  );
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
@@ -374,6 +380,29 @@ export default function CoachAdminPage({
       setEditingRoleId(null);
     }
     setSavingRoleId(null);
+  }
+
+  async function handleUpdateHomeLocation(
+    memberId: string,
+    newLocation: Location
+  ) {
+    setSavingLocationId(memberId);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ home_location: newLocation })
+      .eq("id", memberId);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId ? { ...m, home_location: newLocation } : m
+        )
+      );
+      setEditingLocationId(null);
+    }
+    setSavingLocationId(null);
   }
 
   async function loadWeightMaxEvent() {
@@ -854,10 +883,10 @@ export default function CoachAdminPage({
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            部員の役職を編集
+            部員の役職・所属拠点を編集
           </h2>
           <p className="text-[11px] text-neutral-500">
-            主将・副主将・リーダー・副リーダー・役職なし、から選べます。
+            役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。
           </p>
           {loadingMembers ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
@@ -876,42 +905,78 @@ export default function CoachAdminPage({
                     <span className="font-medium text-neutral-100">
                       {m.display_name}
                     </span>
-                    {editingRoleId === m.id ? (
-                      <select
-                        autoFocus
-                        value={m.role}
-                        disabled={savingRoleId === m.id}
-                        onChange={(e) =>
-                          handleUpdateRole(
-                            m.id,
-                            e.target.value as MemberRoleForEdit
-                          )
-                        }
-                        onBlur={() => setEditingRoleId(null)}
-                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
-                      >
-                        {(
-                          Object.keys(
-                            memberRoleEditLabel
-                          ) as MemberRoleForEdit[]
-                        ).map((r) => (
-                          <option
-                            key={r}
-                            value={r}
-                            className="bg-neutral-900 text-neutral-100"
-                          >
-                            {memberRoleEditLabel[r]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button
-                        onClick={() => setEditingRoleId(m.id)}
-                        className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
-                      >
-                        {memberRoleEditLabel[m.role]}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {editingLocationId === m.id ? (
+                        <select
+                          autoFocus
+                          value={m.home_location ?? "tama"}
+                          disabled={savingLocationId === m.id}
+                          onChange={(e) =>
+                            handleUpdateHomeLocation(
+                              m.id,
+                              e.target.value as Location
+                            )
+                          }
+                          onBlur={() => setEditingLocationId(null)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
+                        >
+                          {locations.map((loc) => (
+                            <option
+                              key={loc}
+                              value={loc}
+                              className="bg-neutral-900 text-neutral-100"
+                            >
+                              {locationLabel[loc]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          onClick={() => setEditingLocationId(m.id)}
+                          className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
+                        >
+                          {m.home_location
+                            ? locationLabel[m.home_location]
+                            : "拠点未設定"}
+                        </button>
+                      )}
+                      {editingRoleId === m.id ? (
+                        <select
+                          autoFocus
+                          value={m.role}
+                          disabled={savingRoleId === m.id}
+                          onChange={(e) =>
+                            handleUpdateRole(
+                              m.id,
+                              e.target.value as MemberRoleForEdit
+                            )
+                          }
+                          onBlur={() => setEditingRoleId(null)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
+                        >
+                          {(
+                            Object.keys(
+                              memberRoleEditLabel
+                            ) as MemberRoleForEdit[]
+                          ).map((r) => (
+                            <option
+                              key={r}
+                              value={r}
+                              className="bg-neutral-900 text-neutral-100"
+                            >
+                              {memberRoleEditLabel[r]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          onClick={() => setEditingRoleId(m.id)}
+                          className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
+                        >
+                          {memberRoleEditLabel[m.role]}
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
