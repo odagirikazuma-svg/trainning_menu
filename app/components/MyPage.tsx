@@ -577,6 +577,32 @@ export default function MyPage({
     setPushLoading(false);
   }
 
+  async function handleDisablePush() {
+    setPushLoading(true);
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+      const subscription = await registration?.pushManager.getSubscription();
+
+      if (subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+        const { error } = await supabase
+          .from("push_subscriptions")
+          .delete()
+          .eq("endpoint", endpoint);
+        if (error) {
+          setErrorMsg(error.message);
+        }
+      }
+      setPushSubscribed(false);
+    } catch (e) {
+      setErrorMsg(
+        e instanceof Error ? e.message : "通知の解除中にエラーが発生しました。"
+      );
+    }
+    setPushLoading(false);
+  }
+
   async function loadInjuries() {
     setLoadingInjuries(true);
     const { data, error } = await supabase
@@ -2121,6 +2147,40 @@ export default function MyPage({
             </ul>
           )}
         </section>
+
+        {/* 通知設定 */}
+        {pushSupported && (
+          <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+              通知設定
+            </h2>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs">
+              <span className="text-neutral-300">
+                {pushSubscribed
+                  ? "未完了のタスクがある日、夜に通知が届きます。"
+                  : "通知はオフになっています。"}
+              </span>
+              {pushSubscribed ? (
+                <button
+                  onClick={handleDisablePush}
+                  disabled={pushLoading}
+                  className="shrink-0 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+                >
+                  {pushLoading ? "処理中…" : "通知をオフにする"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleEnablePush}
+                  disabled={pushLoading}
+                  className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+                >
+                  {pushLoading ? "設定中…" : "通知を有効にする"}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ログアウト（一番下に配置） */}
         <div className="border-t border-neutral-800 pt-4">
