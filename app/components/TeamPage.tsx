@@ -223,6 +223,7 @@ export default function TeamPage({
     {
       memberId: string;
       displayName: string;
+      isPending: boolean;
       matStatus: "not_required" | "report" | "absent" | "missing";
       matText: string | null;
       selfStatus: "not_required" | "done" | "missing";
@@ -1070,14 +1071,17 @@ export default function TeamPage({
     const rangeEnd = toDateKey(new Date(year, month + 1, 0));
 
     const requiredMembers = requiredMembersForLocation(scheduleLocation);
-    const memberIds = requiredMembers.map((m) => m.id);
-    const total = memberIds.length;
+    const realMemberIds = requiredMembers
+      .filter((m) => !m.isPending)
+      .map((m) => m.id);
+    const total = requiredMembers.length;
 
     if (total === 0) {
       setSubmissionCounts(new Map());
       setLoadingSubmissionCounts(false);
       return;
     }
+    const memberIds = realMemberIds;
 
     const { data: ownMenus, error: ownMenusError } = await supabase
       .from("menus")
@@ -1229,14 +1233,17 @@ export default function TeamPage({
 
     let selfLogByAuthor = new Map<string, string>();
     if (hasNonMat) {
-      const { data: logData } = await supabase
-        .from("weight_logs")
-        .select("author_id, content")
-        .eq("date", dateStr)
-        .in(
-          "author_id",
-          requiredMembers.map((m) => m.id)
-        );
+      const realMemberIds = requiredMembers
+        .filter((m) => !m.isPending)
+        .map((m) => m.id);
+      const { data: logData } =
+        realMemberIds.length > 0
+          ? await supabase
+              .from("weight_logs")
+              .select("author_id, content")
+              .eq("date", dateStr)
+              .in("author_id", realMemberIds)
+          : { data: [] };
       for (const row of (logData ?? []) as {
         author_id: string;
         content: string;
@@ -1252,6 +1259,7 @@ export default function TeamPage({
         return {
           memberId: m.id,
           displayName: m.display_name,
+          isPending: !!m.isPending,
           matStatus: !hasMat
             ? ("not_required" as const)
             : matComment
@@ -2062,6 +2070,7 @@ export default function TeamPage({
             <div className="flex flex-col gap-2">
               {daySubmissionDetail.map((d) => {
                 const allDone =
+                  !d.isPending &&
                   (d.matStatus === "not_required" || d.matStatus !== "missing") &&
                   (d.selfStatus === "not_required" || d.selfStatus === "done");
                 return (
@@ -2073,9 +2082,20 @@ export default function TeamPage({
                         : "border-neutral-800 bg-neutral-900"
                     }`}
                   >
-                    <p className="font-medium text-neutral-100">
+                    <p className="flex items-center gap-1.5 font-medium text-neutral-100">
                       {d.displayName}
+                      {d.isPending && (
+                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
+                          未登録
+                        </span>
+                      )}
                     </p>
+                    {d.isPending ? (
+                      <p className="text-[11px] text-neutral-500">
+                        まだ本人がサインアップしていないため、報告状況は確認できません。
+                      </p>
+                    ) : (
+                      <>
                     {d.matStatus !== "not_required" && (
                       <div className="flex flex-col gap-0.5">
                         <span
@@ -2117,6 +2137,8 @@ export default function TeamPage({
                           </p>
                         )}
                       </div>
+                    )}
+                      </>
                     )}
                   </div>
                 );
