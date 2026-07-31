@@ -59,14 +59,6 @@ const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
   conditional: "条件付きで可",
 };
 
-type MenuRow = {
-  id: string;
-  date: string;
-  location: Location;
-  is_off: boolean;
-  is_joint: boolean;
-};
-
 type WeightMaxEventRow = {
   id: string;
   deadline: string;
@@ -112,35 +104,6 @@ export default function CoachAdminPage({
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 直近1週間（今日は提出期間中の可能性があるため、昨日から7日分をさかのぼる）
-  const [recentDates] = useState<string[]>(() => {
-    const dates: string[] = [];
-    for (let i = 1; i <= 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      dates.push(toDateKey(d));
-    }
-    return dates.sort();
-  });
-
-  // 未提出者がいる限り古い日付も表示し続けるため、データ自体は60日分さかのぼって取得する
-  const [extendedRangeStart] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 60);
-    return toDateKey(d);
-  });
-
-  const [menusByDateLocation, setMenusByDateLocation] = useState<
-    Map<string, MenuRow>
-  >(new Map());
-  const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
-  const [loadingReports, setLoadingReports] = useState(true);
-
-  const [otherSessionByDateLocation, setOtherSessionByDateLocation] =
-    useState<Set<string>>(new Set());
-  const [selfLogKeys, setSelfLogKeys] = useState<Set<string>>(new Set());
-  const [loadingSelfLogs, setLoadingSelfLogs] = useState(true);
-
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [rosterName, setRosterName] = useState("");
@@ -171,8 +134,6 @@ export default function CoachAdminPage({
 
   useEffect(() => {
     loadMembers();
-    loadReports();
-    loadSelfLogs();
     loadRoster();
     loadWeightMaxEvent();
     loadInjuries();
@@ -213,133 +174,6 @@ export default function CoachAdminPage({
     setLoadingMembers(false);
   }
 
-  async function loadReports() {
-    setLoadingReports(true);
-    const rangeStart = extendedRangeStart;
-    const rangeEnd = recentDates[recentDates.length - 1];
-
-    const { data: menuData, error: menuError } = await supabase
-      .from("menus")
-      .select("id, date, location, is_off, is_joint")
-      .eq("team_id", profile.team_id)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-
-    if (menuError) {
-      setErrorMsg(menuError.message);
-      setLoadingReports(false);
-      return;
-    }
-
-    const menuRows = (menuData ?? []) as MenuRow[];
-    const map = new Map<string, MenuRow>();
-    for (const m of menuRows) {
-      if (m.is_off) continue;
-      map.set(`${m.date}:${m.location}`, m);
-      // 全体練習の場合、もう一方の拠点の部員も同じメニューに対して
-      // 提出することになるため、その拠点のキーでも参照できるようにする
-      if (m.is_joint) {
-        const otherLocation: Location =
-          m.location === "tama" ? "otsuka" : "tama";
-        const key = `${m.date}:${otherLocation}`;
-        if (!map.has(key)) map.set(key, m);
-      }
-    }
-    setMenusByDateLocation(map);
-
-    const menuIds = menuRows.filter((m) => !m.is_off).map((m) => m.id);
-    if (menuIds.length === 0) {
-      setSubmittedKeys(new Set());
-      setLoadingReports(false);
-      return;
-    }
-
-    const { data: commentData, error: commentError } = await supabase
-      .from("comments")
-      .select("menu_id, author_id, kind")
-      .in("menu_id", menuIds)
-      .in("kind", ["report", "absent"])
-      .is("parent_id", null);
-
-    if (commentError) {
-      setErrorMsg(commentError.message);
-      setLoadingReports(false);
-      return;
-    }
-
-    const keys = new Set<string>();
-    for (const row of (commentData ?? []) as {
-      menu_id: string;
-      author_id: string | null;
-    }[]) {
-      if (row.author_id) keys.add(`${row.author_id}:${row.menu_id}`);
-    }
-    setSubmittedKeys(keys);
-    setLoadingReports(false);
-  }
-
-  // 「マット以外（ラン・ウェイト・その他）」のセッションがある日に、
-  // その部員が自己申告のトレーニング記録（weight_logs）を保存しているかを調べる
-  async function loadSelfLogs() {
-    setLoadingSelfLogs(true);
-    const rangeStart = extendedRangeStart;
-    const rangeEnd = recentDates[recentDates.length - 1];
-
-    const { data: sessionData, error: sessionError } = await supabase
-      .from("schedule_days")
-      .select(
-        "date, location, is_off, sessions:schedule_sessions(session_type)"
-      )
-      .eq("team_id", profile.team_id)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-
-    if (sessionError) {
-      setErrorMsg(sessionError.message);
-      setLoadingSelfLogs(false);
-      return;
-    }
-
-    const otherSet = new Set<string>();
-    for (const row of (sessionData ?? []) as unknown as {
-      date: string;
-      location: Location;
-      is_off: boolean;
-      sessions: { session_type: string }[];
-    }[]) {
-      if (row.is_off) continue;
-      const hasOther = row.sessions.some(
-        (s) => s.session_type === "running" || s.session_type === "weight"
-      );
-      if (hasOther) otherSet.add(`${row.date}:${row.location}`);
-    }
-    setOtherSessionByDateLocation(otherSet);
-
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("author_id, date")
-      .eq("team_id", profile.team_id)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-
-    if (logError) {
-      setErrorMsg(logError.message);
-      setLoadingSelfLogs(false);
-      return;
-    }
-
-    const logKeys = new Set<string>();
-    for (const row of (logData ?? []) as {
-      author_id: string;
-      date: string;
-    }[]) {
-      logKeys.add(`${row.author_id}:${row.date}`);
-    }
-    setSelfLogKeys(logKeys);
-    setLoadingSelfLogs(false);
-  }
-
-  const loading = loadingMembers || loadingReports;
 
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
@@ -352,10 +186,6 @@ export default function CoachAdminPage({
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
-  const [expandedDateLoc, setExpandedDateLoc] = useState<{
-    date: string;
-    location: Location;
-  } | null>(null);
   const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
     null
   );

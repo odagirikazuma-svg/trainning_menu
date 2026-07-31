@@ -81,12 +81,6 @@ type WeightMaxEventInfo = {
   measurementDate: string;
 };
 
-type PastMenuRow = {
-  id: string;
-  date: string;
-  location: Location;
-};
-
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -239,9 +233,6 @@ export default function TeamPage({
     []
   );
 
-  const [pastMenus, setPastMenus] = useState<PastMenuRow[]>([]);
-  const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
-  const [loadingCompliance, setLoadingCompliance] = useState(true);
   const [submissionCounts, setSubmissionCounts] = useState<
     Map<string, { submitted: number; total: number }>
   >(new Map());
@@ -269,7 +260,6 @@ export default function TeamPage({
   useEffect(() => {
     loadMembers();
     loadWeightMaxes();
-    loadCompliance();
     if (selectedScheduleDate) loadDayDetail(selectedScheduleDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1028,63 +1018,6 @@ export default function TeamPage({
 
   // 直近1週間の「オフではない練習」のうち、実施報告・未実施報告が
   // まだ提出されていないものがあるかどうかを部員ごとに調べる
-  async function loadCompliance() {
-    setLoadingCompliance(true);
-    const lookbackStart = new Date();
-    lookbackStart.setDate(lookbackStart.getDate() - 7);
-    const rangeStart = toDateKey(lookbackStart);
-    const todayStr = toDateKey(new Date());
-
-    const { data: menuData, error: menuError } = await supabase
-      .from("menus")
-      .select("id, date, location")
-      .eq("team_id", profile.team_id)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", todayStr);
-
-    if (menuError) {
-      setErrorMsg(menuError.message);
-      setLoadingCompliance(false);
-      return;
-    }
-
-    const menuRows = (menuData ?? []) as PastMenuRow[];
-    setPastMenus(menuRows);
-
-    if (menuRows.length === 0) {
-      setSubmittedKeys(new Set());
-      setLoadingCompliance(false);
-      return;
-    }
-
-    const { data: commentData, error: commentError } = await supabase
-      .from("comments")
-      .select("menu_id, author_id, kind")
-      .in(
-        "menu_id",
-        menuRows.map((m) => m.id)
-      )
-      .in("kind", ["report", "absent"])
-      .is("parent_id", null);
-
-    if (commentError) {
-      setErrorMsg(commentError.message);
-      setLoadingCompliance(false);
-      return;
-    }
-
-    const keys = new Set<string>();
-    for (const row of (commentData ?? []) as {
-      menu_id: string;
-      author_id: string | null;
-    }[]) {
-      if (row.author_id) keys.add(`${row.author_id}:${row.menu_id}`);
-    }
-    setSubmittedKeys(keys);
-    setLoadingCompliance(false);
-  }
-
   function requiredMembersForLocation(loc: Location): MemberRow[] {
     return members.filter(
       (m) =>
@@ -1765,7 +1698,6 @@ export default function TeamPage({
               loading={loadingMonthSchedule}
               onSelectDate={handleSelectScheduleDate}
               highlightDate={selectedScheduleDate}
-              viewLocation={scheduleLocation}
               submissionCounts={submissionCounts}
             />
             {selectedScheduleDate && showDayPopup && (
@@ -2055,12 +1987,24 @@ export default function TeamPage({
                       {(dayDetail.day_type === "camp" ||
                         dayDetail.day_type === "match" ||
                         dayDetail.day_type === "away") && (
-                        <span
-                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
-                        >
-                          {dayTypeLabel[dayDetail.day_type]}
-                          {dayDetail.event_name && `：${dayDetail.event_name}`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
+                          >
+                            {dayTypeLabel[dayDetail.day_type]}
+                            {dayDetail.event_name &&
+                              `：${dayDetail.event_name}`}
+                          </span>
+                          {(dayDetail.day_type === "camp" ||
+                            dayDetail.day_type === "away") && (
+                            <button
+                              onClick={handleDeleteAwayLikeSchedule}
+                              className="rounded px-2 py-1 text-[11px] font-medium text-red-400 underline"
+                            >
+                              この予定を削除する
+                            </button>
+                          )}
+                        </div>
                       )}
                       {dayDetail.sessions.length === 0 && (
                         <div className="flex flex-col items-start gap-2 py-2">
@@ -2470,7 +2414,6 @@ function MonthlyCalendar({
   loading,
   onSelectDate,
   highlightDate,
-  viewLocation,
   submissionCounts,
 }: {
   cursor: Date;
@@ -2479,7 +2422,6 @@ function MonthlyCalendar({
   loading: boolean;
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
-  viewLocation: Location;
   submissionCounts: Map<string, { submitted: number; total: number }>;
 }) {
   const year = cursor.getFullYear();

@@ -719,7 +719,6 @@ export default function TrainingBoardSupabase({
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
-  const isCoach = profile.role === "coach";
   const isViewOnly = profile.role === "coach" || profile.role === "manager";
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;

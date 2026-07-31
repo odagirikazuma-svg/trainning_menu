@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
-  currentGrade,
   DayType,
   dayTypeLabel,
   getTitleColor,
@@ -238,7 +237,6 @@ export default function MemberHome({
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
-  const [recordDates, setRecordDates] = useState<string[]>([]);
 
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -275,7 +273,6 @@ export default function MemberHome({
     loadNextMatch();
     loadLogForDate(todayStr);
     loadTodayAbsent();
-    loadRecordDates();
     loadTitleOptions();
     loadWeightMaxTodo();
     loadInjuries();
@@ -980,7 +977,6 @@ export default function MemberHome({
       setErrorMsg(error.message);
     } else {
       setTodayLog(data as WeightLogRow);
-      await loadRecordDates();
       await loadSelfTrainingTodo();
       await loadTitleOptions();
       await loadCalendarData();
@@ -1143,43 +1139,6 @@ export default function MemberHome({
     }
   }
 
-  async function loadRecordDates() {
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("date")
-      .eq("author_id", profile.id);
-
-    if (logError) {
-      setErrorMsg(logError.message);
-      return;
-    }
-
-    const { data: absentData, error: absentError } = await supabase
-      .from("comments")
-      .select("alt_type, menu:menus!comments_menu_id_fkey(date)")
-      .eq("author_id", profile.id)
-      .eq("kind", "absent")
-      .not("alt_type", "is", null);
-
-    if (absentError) {
-      setErrorMsg(absentError.message);
-      return;
-    }
-
-    const dateSet = new Set<string>();
-    for (const row of (logData ?? []) as { date: string }[]) {
-      dateSet.add(row.date);
-    }
-    const absentRows = (absentData ?? []) as unknown as {
-      alt_type: TrainingType;
-      menu: { date: string } | null;
-    }[];
-    for (const row of absentRows) {
-      if (row.menu) dateSet.add(row.menu.date);
-    }
-
-    setRecordDates(Array.from(dateSet).sort());
-  }
 
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
@@ -1192,8 +1151,6 @@ export default function MemberHome({
   }
 
   const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
-  const gradeLabel =
-    profile.entry_year != null ? `${currentGrade(profile.entry_year)}年` : null;
 
   return (
     <>
