@@ -36,7 +36,11 @@ const rosterRoleDisplayLabel: Record<string, string> = {
 // 直近4年分を入学年の候補にする
 const entryYearOptions: number[] = (() => {
   const now = new Date();
-  const academicYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const newAcademicYearStarted =
+    now.getMonth() > 2 || (now.getMonth() === 2 && now.getDate() >= 15);
+  const academicYear = newAcademicYearStarted
+    ? now.getFullYear()
+    : now.getFullYear() - 1;
   return Array.from({ length: 4 }, (_, i) => academicYear - i);
 })();
 
@@ -60,6 +64,8 @@ export default function AuthGate({
     useState<SignupRoleChoice>("member");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [rosterPreview, setRosterPreview] = useState<
     | {
@@ -253,6 +259,27 @@ export default function AuthGate({
     setProfile(created as Profile);
   }
 
+  async function handleSendResetEmail() {
+    if (!email) {
+      setErrorMsg("パスワード再設定には、メールアドレスの入力が必要です。");
+      return;
+    }
+    setSendingReset(true);
+    setErrorMsg(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo:
+        typeof window !== "undefined"
+          ? `${window.location.origin}/reset-password`
+          : undefined,
+    });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setResetSent(true);
+    }
+    setSendingReset(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -340,24 +367,26 @@ export default function AuthGate({
             この招待リンクは無効か、すでに使用されています。通常の新規登録を行ってください。
           </p>
         )}
-        <div className="flex gap-2 text-xs">
-          <button
-            className={`rounded px-3 py-1 ${
-              mode === "login" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
-            }`}
-            onClick={() => setMode("login")}
-          >
-            ログイン
-          </button>
-          <button
-            className={`rounded px-3 py-1 ${
-              mode === "signup" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
-            }`}
-            onClick={() => setMode("signup")}
-          >
-            新規登録
-          </button>
-        </div>
+        {inviteToken && (
+          <div className="flex gap-2 text-xs">
+            <button
+              className={`rounded px-3 py-1 ${
+                mode === "login" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
+              }`}
+              onClick={() => setMode("login")}
+            >
+              ログイン
+            </button>
+            <button
+              className={`rounded px-3 py-1 ${
+                mode === "signup" ? "bg-red-600 text-white" : "bg-neutral-800 text-neutral-600"
+              }`}
+              onClick={() => setMode("signup")}
+            >
+              新規登録
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           {mode === "signup" && inviteToken && rosterPreview ? (
             <div className="flex flex-col gap-1 rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-xs text-neutral-200">
@@ -531,6 +560,25 @@ export default function AuthGate({
             {mode === "signup" ? "登録する" : "ログイン"}
           </button>
         </form>
+        {mode === "login" && (
+          <div className="text-xs">
+            {resetSent ? (
+              <p className="rounded bg-emerald-950/40 p-2 text-emerald-400">
+                パスワード再設定用のメールを送信しました。メール内のリンクから新しいパスワードを設定してください。
+              </p>
+            ) : (
+              <button
+                onClick={handleSendResetEmail}
+                disabled={sendingReset}
+                className="text-neutral-400 underline disabled:opacity-50"
+              >
+                {sendingReset
+                  ? "送信中…"
+                  : "パスワードをお忘れですか？"}
+              </button>
+            )}
+          </div>
+        )}
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}

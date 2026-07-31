@@ -75,8 +75,12 @@ export const dayTypeFillColor: Record<DayType, string> = {
 // 入学年から現在の学年を計算する（4月1日で繰り上がる）
 export function currentGrade(entryYear: number): number {
   const now = new Date();
-  const academicYear =
-    now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // 新入生が入ってくる3月中旬（15日）を年度の区切りとする
+  const newAcademicYearStarted =
+    now.getMonth() > 2 || (now.getMonth() === 2 && now.getDate() >= 15);
+  const academicYear = newAcademicYearStarted
+    ? now.getFullYear()
+    : now.getFullYear() - 1;
   return academicYear - entryYear + 1;
 }
 

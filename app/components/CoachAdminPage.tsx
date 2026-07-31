@@ -154,8 +154,11 @@ export default function CoachAdminPage({
 
   const rosterEntryYearOptions: number[] = (() => {
     const now = new Date();
-    const academicYear =
-      now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const newAcademicYearStarted =
+      now.getMonth() > 2 || (now.getMonth() === 2 && now.getDate() >= 15);
+    const academicYear = newAcademicYearStarted
+      ? now.getFullYear()
+      : now.getFullYear() - 1;
     return Array.from({ length: 4 }, (_, i) => academicYear - i);
   })();
 
