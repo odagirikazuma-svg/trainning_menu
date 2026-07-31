@@ -25,6 +25,14 @@ export const trainingTypeLabel: Record<TrainingType, string> = {
   other: "その他",
 };
 
+// コーチが定期的に作成する「イベント」（ウェイトMAX集計以外）の種類
+export type TeamEventType = "match_reflection" | "body_composition";
+
+export const teamEventTypeLabel: Record<TeamEventType, string> = {
+  match_reflection: "試合の振り返り",
+  body_composition: "体組成の提出",
+};
+
 // カレンダー表示用の色（ウェイト=青、ラン=赤、その他=グレー）
 export const trainingTypeDotColor: Record<TrainingType, string> = {
   running: "bg-red-500",

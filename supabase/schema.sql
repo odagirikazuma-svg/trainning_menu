@@ -687,3 +687,59 @@ alter table schedule_days drop constraint if exists schedule_days_day_type_check
 alter table schedule_days add constraint schedule_days_day_type_check check (day_type in ('practice', 'camp', 'match', 'away'));
 
 alter table schedule_sessions add column if not exists location_note text;
+
+-- ============================================
+-- 追加: ウェイトMAX集計以外の「イベント」（試合の振り返り、体組成の提出 など）
+-- コーチが定期的に作成し、部員がタスク一覧から提出する汎用の仕組み
+-- ============================================
+create table if not exists team_events (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  type text not null check (type in ('match_reflection', 'body_composition')),
+  title text not null default '',
+  deadline date not null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+alter table team_events enable row level security;
+
+create policy "team_events_select_same_team" on team_events
+  for select using (team_id = get_my_team_id());
+
+create policy "team_events_insert_coach" on team_events
+  for insert with check (
+    team_id = get_my_team_id()
+    and exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+create policy "team_events_update_coach" on team_events
+  for update using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+create table if not exists team_event_submissions (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references team_events(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  content text not null default '',
+  weight_kg numeric,
+  body_fat_pct numeric,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (event_id, author_id)
+);
+alter table team_event_submissions enable row level security;
+
+create policy "team_event_submissions_select_same_team" on team_event_submissions
+  for select using (team_id = get_my_team_id());
+
+create policy "team_event_submissions_insert_self" on team_event_submissions
+  for insert with check (
+    author_id = auth.uid() and team_id = get_my_team_id()
+  );
+
+create policy "team_event_submissions_update_self" on team_event_submissions
+  for update using (author_id = auth.uid());
+

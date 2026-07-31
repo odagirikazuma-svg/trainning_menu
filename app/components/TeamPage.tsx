@@ -14,6 +14,8 @@ import {
   SessionType,
   sessionTypeDotColor,
   sessionTypeLabel,
+  teamEventTypeLabel,
+  TeamEventType,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
@@ -233,6 +235,26 @@ export default function TeamPage({
     []
   );
 
+  const [teamEvents, setTeamEvents] = useState<
+    {
+      id: string;
+      type: TeamEventType;
+      title: string;
+      deadline: string;
+      created_at: string;
+    }[]
+  >([]);
+  const [teamEventSubmissions, setTeamEventSubmissions] = useState<
+    {
+      event_id: string;
+      author_id: string;
+      content: string;
+      weight_kg: number | null;
+      body_fat_pct: number | null;
+    }[]
+  >([]);
+  const [loadingTeamEvents, setLoadingTeamEvents] = useState(true);
+
   const [submissionCounts, setSubmissionCounts] = useState<
     Map<string, { submitted: number; total: number }>
   >(new Map());
@@ -260,6 +282,7 @@ export default function TeamPage({
   useEffect(() => {
     loadMembers();
     loadWeightMaxes();
+    loadTeamEvents();
     if (selectedScheduleDate) loadDayDetail(selectedScheduleDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1014,6 +1037,59 @@ export default function TeamPage({
       setWeightMaxEvents(events);
     }
     setLoadingMaxes(false);
+  }
+
+  async function loadTeamEvents() {
+    setLoadingTeamEvents(true);
+    const { data: eventData, error: eventError } = await supabase
+      .from("team_events")
+      .select("id, type, title, deadline, created_at")
+      .eq("team_id", profile.team_id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (eventError) {
+      setErrorMsg(eventError.message);
+      setLoadingTeamEvents(false);
+      return;
+    }
+    const events = (eventData ?? []) as {
+      id: string;
+      type: TeamEventType;
+      title: string;
+      deadline: string;
+      created_at: string;
+    }[];
+    setTeamEvents(events);
+
+    if (events.length === 0) {
+      setTeamEventSubmissions([]);
+      setLoadingTeamEvents(false);
+      return;
+    }
+
+    const { data: subData, error: subError } = await supabase
+      .from("team_event_submissions")
+      .select("event_id, author_id, content, weight_kg, body_fat_pct")
+      .in(
+        "event_id",
+        events.map((e) => e.id)
+      );
+
+    if (subError) {
+      setErrorMsg(subError.message);
+    } else {
+      setTeamEventSubmissions(
+        (subData ?? []) as {
+          event_id: string;
+          author_id: string;
+          content: string;
+          weight_kg: number | null;
+          body_fat_pct: number | null;
+        }[]
+      );
+    }
+    setLoadingTeamEvents(false);
   }
 
   // 直近1週間の「オフではない練習」のうち、実施報告・未実施報告が
@@ -2354,6 +2430,86 @@ export default function TeamPage({
                             })}
                         </tbody>
                       </table>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* イベント提出一覧（試合の振り返り・体組成の提出） */}
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            イベント提出一覧
+          </h2>
+          <p className="text-[11px] text-neutral-500">
+            管理者が作成した「試合の振り返り」「体組成の提出」イベントの提出内容がここに反映されます。
+          </p>
+          {loadingMembers || loadingTeamEvents ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : teamEvents.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              まだイベントは作成されていません。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {teamEvents.map((event, idx) => {
+                const subs = teamEventSubmissions.filter(
+                  (s) => s.event_id === event.id
+                );
+                const subByAuthor = new Map(subs.map((s) => [s.author_id, s]));
+                return (
+                  <details
+                    key={event.id}
+                    open={idx === 0}
+                    className="rounded-lg border border-neutral-800"
+                  >
+                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
+                      {teamEventTypeLabel[event.type]}
+                      {event.title && `：${event.title}`}
+                      （締切 {formatMonthDay(event.deadline)}）
+                    </summary>
+                    <div className="flex flex-col gap-2 border-t border-neutral-800 p-3">
+                      {members
+                        .filter(
+                          (m) =>
+                            m.role !== "coach" &&
+                            m.role !== "manager" &&
+                            !m.isPending
+                        )
+                        .map((m) => {
+                          const sub = subByAuthor.get(m.id);
+                          return (
+                            <div
+                              key={m.id}
+                              className="flex flex-col gap-1 rounded border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-neutral-100">
+                                  {m.display_name}
+                                </span>
+                                {!sub && (
+                                  <span className="text-[10px] text-red-400">
+                                    未提出
+                                  </span>
+                                )}
+                              </div>
+                              {sub &&
+                                (event.type === "match_reflection" ? (
+                                  <p className="whitespace-pre-wrap text-neutral-300">
+                                    {sub.content}
+                                  </p>
+                                ) : (
+                                  <p className="text-neutral-300">
+                                    体重: {sub.weight_kg ?? "-"}kg・体脂肪率:{" "}
+                                    {sub.body_fat_pct ?? "-"}%
+                                  </p>
+                                ))}
+                            </div>
+                          );
+                        })}
                     </div>
                   </details>
                 );

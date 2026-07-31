@@ -10,6 +10,8 @@ import {
   Location,
   SessionType,
   sessionTypeDotColor,
+  teamEventTypeLabel,
+  TeamEventType,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
@@ -151,6 +153,22 @@ export default function MemberHome({
   const [weightMaxDeadlift, setWeightMaxDeadlift] = useState("");
   const [savingWeightMaxTodo, setSavingWeightMaxTodo] = useState(false);
 
+  const [teamEventTodos, setTeamEventTodos] = useState<
+    {
+      eventId: string;
+      type: "match_reflection" | "body_composition";
+      title: string;
+      deadline: string;
+    }[]
+  >([]);
+  const [openTeamEventTodoId, setOpenTeamEventTodoId] = useState<
+    string | null
+  >(null);
+  const [teamEventContent, setTeamEventContent] = useState("");
+  const [teamEventWeightKg, setTeamEventWeightKg] = useState("");
+  const [teamEventBodyFatPct, setTeamEventBodyFatPct] = useState("");
+  const [savingTeamEventTodo, setSavingTeamEventTodo] = useState(false);
+
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
   const [showInjuryForm, setShowInjuryForm] = useState(false);
@@ -275,6 +293,7 @@ export default function MemberHome({
     loadTodayAbsent();
     loadTitleOptions();
     loadWeightMaxTodo();
+    loadTeamEventTodos();
     loadInjuries();
     checkPushSubscription();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -565,6 +584,104 @@ export default function MemberHome({
             createdAt: event.created_at,
           }
     );
+  }
+
+  async function loadTeamEventTodos() {
+    if (profile.role === "coach") return;
+
+    const { data: eventData, error: eventError } = await supabase
+      .from("team_events")
+      .select("id, type, title, deadline")
+      .eq("team_id", profile.team_id)
+      .is("closed_at", null);
+
+    if (eventError) {
+      setErrorMsg(eventError.message);
+      return;
+    }
+    const events = (eventData ?? []) as {
+      id: string;
+      type: "match_reflection" | "body_composition";
+      title: string;
+      deadline: string;
+    }[];
+    if (events.length === 0) {
+      setTeamEventTodos([]);
+      return;
+    }
+
+    const { data: subData, error: subError } = await supabase
+      .from("team_event_submissions")
+      .select("event_id")
+      .eq("author_id", profile.id)
+      .in(
+        "event_id",
+        events.map((e) => e.id)
+      );
+
+    if (subError) {
+      setErrorMsg(subError.message);
+      return;
+    }
+    const submittedIds = new Set(
+      ((subData ?? []) as { event_id: string }[]).map((r) => r.event_id)
+    );
+
+    setTeamEventTodos(
+      events
+        .filter((e) => !submittedIds.has(e.id))
+        .map((e) => ({
+          eventId: e.id,
+          type: e.type,
+          title: e.title,
+          deadline: e.deadline,
+        }))
+    );
+  }
+
+  async function handleSaveTeamEventTodo(todo: {
+    eventId: string;
+    type: "match_reflection" | "body_composition";
+  }) {
+    setSavingTeamEventTodo(true);
+    const payload: {
+      team_id: string;
+      event_id: string;
+      author_id: string;
+      updated_at: string;
+      content?: string;
+      weight_kg?: number | null;
+      body_fat_pct?: number | null;
+    } = {
+      team_id: profile.team_id,
+      event_id: todo.eventId,
+      author_id: profile.id,
+      updated_at: new Date().toISOString(),
+    };
+    if (todo.type === "match_reflection") {
+      payload.content = teamEventContent;
+    } else {
+      payload.content = "";
+      payload.weight_kg = teamEventWeightKg ? Number(teamEventWeightKg) : null;
+      payload.body_fat_pct = teamEventBodyFatPct
+        ? Number(teamEventBodyFatPct)
+        : null;
+    }
+
+    const { error } = await supabase
+      .from("team_event_submissions")
+      .upsert(payload, { onConflict: "event_id,author_id" });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setOpenTeamEventTodoId(null);
+      setTeamEventContent("");
+      setTeamEventWeightKg("");
+      setTeamEventBodyFatPct("");
+      await loadTeamEventTodos();
+    }
+    setSavingTeamEventTodo(false);
   }
 
   async function handleSaveWeightMaxTodo() {
@@ -1346,6 +1463,90 @@ export default function MemberHome({
               </div>
             );
           })()}
+
+        {teamEventTodos.map((todo) => {
+          const isOverdue = todayStr > todo.deadline;
+          const isOpen = openTeamEventTodoId === todo.eventId;
+          return (
+            <div
+              key={todo.eventId}
+              className={`flex flex-col rounded-lg border p-3 text-sm ${
+                isOverdue
+                  ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                  : "border-amber-900/60 bg-amber-950/40 text-left"
+              }`}
+            >
+              <button
+                onClick={() =>
+                  setOpenTeamEventTodoId(isOpen ? null : todo.eventId)
+                }
+                className="flex w-full flex-col text-left"
+              >
+                <span
+                  className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                >
+                  {isOverdue
+                    ? `期限切れ！(${todo.deadline}まで)`
+                    : `${todo.deadline}までに提出`}
+                </span>
+                <span
+                  className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                >
+                  {teamEventTypeLabel[todo.type]}
+                  {todo.title && `：${todo.title}`}
+                  を提出する
+                </span>
+              </button>
+              {isOpen && (
+                <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
+                  {todo.type === "match_reflection" ? (
+                    <textarea
+                      value={teamEventContent}
+                      onChange={(e) => setTeamEventContent(e.target.value)}
+                      placeholder="試合の振り返りを書いてください"
+                      rows={4}
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                    />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        体重(kg)
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={teamEventWeightKg}
+                          onChange={(e) =>
+                            setTeamEventWeightKg(e.target.value)
+                          }
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        体脂肪率(%)
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={teamEventBodyFatPct}
+                          onChange={(e) =>
+                            setTeamEventBodyFatPct(e.target.value)
+                          }
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => handleSaveTeamEventTodo(todo)}
+                    disabled={savingTeamEventTodo}
+                    className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                  >
+                    提出する
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {injuries.filter(injuryNeedsProgressUpdate).map((inj) => {
           const isOpen = progressInjuryId === inj.id;

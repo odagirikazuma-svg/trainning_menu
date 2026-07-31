@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, Location, locationLabel, locations } from "../lib/types";
+import { currentGrade, Location, locationLabel, locations, teamEventTypeLabel, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "manager" | "member";
@@ -61,6 +61,15 @@ const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
 
 type WeightMaxEventRow = {
   id: string;
+  deadline: string;
+  created_at: string;
+  closed_at: string | null;
+};
+
+type TeamEventRow = {
+  id: string;
+  type: TeamEventType;
+  title: string;
   deadline: string;
   created_at: string;
   closed_at: string | null;
@@ -125,6 +134,18 @@ export default function CoachAdminPage({
   const [newDeadline, setNewDeadline] = useState("");
   const [savingWeightMaxEvent, setSavingWeightMaxEvent] = useState(false);
 
+  const [selectedEventType, setSelectedEventType] = useState<
+    "weight_max" | TeamEventType
+  >("weight_max");
+  const [teamEvents, setTeamEvents] = useState<
+    Record<TeamEventType, TeamEventRow | null | undefined>
+  >({ match_reflection: undefined, body_composition: undefined });
+  const [teamEventSubmittedCounts, setTeamEventSubmittedCounts] = useState<
+    Record<TeamEventType, number>
+  >({ match_reflection: 0, body_composition: 0 });
+  const [newEventTitle, setNewEventTitle] = useState("");
+  const [savingTeamEvent, setSavingTeamEvent] = useState(false);
+
   const rosterEntryYearOptions: number[] = (() => {
     const now = new Date();
     const academicYear =
@@ -136,6 +157,7 @@ export default function CoachAdminPage({
     loadMembers();
     loadRoster();
     loadWeightMaxEvent();
+    loadTeamEvents();
     loadInjuries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -175,14 +197,11 @@ export default function CoachAdminPage({
   }
 
 
-  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [showRoleLocationEdit, setShowRoleLocationEdit] = useState(false);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
-  const [editingLocationId, setEditingLocationId] = useState<string | null>(
-    null
-  );
-  const [savingLocationId, setSavingLocationId] = useState<string | null>(
-    null
-  );
+  const [draftEdits, setDraftEdits] = useState<
+    Record<string, { role: MemberRoleForEdit; home_location: Location }>
+  >({});
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
@@ -191,35 +210,13 @@ export default function CoachAdminPage({
   );
   const [showPastInjuries, setShowPastInjuries] = useState(false);
 
-  async function handleUpdateRole(
-    memberId: string,
-    newRole: MemberRoleForEdit
-  ) {
+  async function handleSaveMemberEdit(memberId: string) {
+    const draft = draftEdits[memberId];
+    if (!draft) return;
     setSavingRoleId(memberId);
     const { error } = await supabase
       .from("profiles")
-      .update({ role: newRole })
-      .eq("id", memberId);
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setMembers((prev) =>
-        prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
-      );
-      setEditingRoleId(null);
-    }
-    setSavingRoleId(null);
-  }
-
-  async function handleUpdateHomeLocation(
-    memberId: string,
-    newLocation: Location
-  ) {
-    setSavingLocationId(memberId);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ home_location: newLocation })
+      .update({ role: draft.role, home_location: draft.home_location })
       .eq("id", memberId);
 
     if (error) {
@@ -227,12 +224,18 @@ export default function CoachAdminPage({
     } else {
       setMembers((prev) =>
         prev.map((m) =>
-          m.id === memberId ? { ...m, home_location: newLocation } : m
+          m.id === memberId
+            ? { ...m, role: draft.role, home_location: draft.home_location }
+            : m
         )
       );
-      setEditingLocationId(null);
+      setDraftEdits((prev) => {
+        const next = { ...prev };
+        delete next[memberId];
+        return next;
+      });
     }
-    setSavingLocationId(null);
+    setSavingRoleId(null);
   }
 
   async function loadWeightMaxEvent() {
@@ -302,6 +305,88 @@ export default function CoachAdminPage({
       setErrorMsg(error.message);
     } else {
       await loadWeightMaxEvent();
+    }
+  }
+
+  async function loadTeamEvents() {
+    for (const type of ["match_reflection", "body_composition"] as TeamEventType[]) {
+      const { data, error } = await supabase
+        .from("team_events")
+        .select("id, type, title, deadline, created_at, closed_at")
+        .eq("team_id", profile.team_id)
+        .eq("type", type)
+        .is("closed_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        setErrorMsg(error.message);
+        continue;
+      }
+      const event = (data as TeamEventRow | null) ?? null;
+      setTeamEvents((prev) => ({ ...prev, [type]: event }));
+
+      if (event) {
+        const { data: subData, error: subError } = await supabase
+          .from("team_event_submissions")
+          .select("author_id")
+          .eq("event_id", event.id);
+        if (subError) {
+          setErrorMsg(subError.message);
+        } else {
+          setTeamEventSubmittedCounts((prev) => ({
+            ...prev,
+            [type]: (subData ?? []).length,
+          }));
+        }
+      }
+    }
+  }
+
+  async function handleCreateTeamEvent(
+    type: TeamEventType,
+    e: React.FormEvent
+  ) {
+    e.preventDefault();
+    if (!newDeadline) return;
+    setSavingTeamEvent(true);
+
+    const { error } = await supabase.from("team_events").insert({
+      team_id: profile.team_id,
+      type,
+      title: newEventTitle.trim(),
+      deadline: newDeadline,
+      created_by: profile.id,
+    });
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setNewDeadline("");
+      setNewEventTitle("");
+      await loadTeamEvents();
+    }
+    setSavingTeamEvent(false);
+  }
+
+  async function handleEndTeamEvent(type: TeamEventType) {
+    const event = teamEvents[type];
+    if (!event) return;
+    if (
+      !window.confirm(
+        "このイベントを終了しますか？（これまでの提出内容はチームページの履歴に残ります）"
+      )
+    )
+      return;
+    const { error } = await supabase
+      .from("team_events")
+      .update({ closed_at: new Date().toISOString() })
+      .eq("id", event.id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      await loadTeamEvents();
     }
   }
 
@@ -401,6 +486,19 @@ export default function CoachAdminPage({
     }
   }
 
+  // 新規メンバー登録欄の並び順：コーチを先頭に、その後は学年（上級生から）→拠点の順
+  const sortedRoster = [...roster].sort((a, b) => {
+    if (a.role === "coach" && b.role !== "coach") return -1;
+    if (b.role === "coach" && a.role !== "coach") return 1;
+    const gradeA = a.entry_year != null ? currentGrade(a.entry_year) : -1;
+    const gradeB = b.entry_year != null ? currentGrade(b.entry_year) : -1;
+    if (gradeA !== gradeB) return gradeB - gradeA;
+    const locA = a.home_location ?? "";
+    const locB = b.home_location ?? "";
+    if (locA !== locB) return locA.localeCompare(locB);
+    return a.display_name.localeCompare(b.display_name, "ja");
+  });
+
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
@@ -430,6 +528,149 @@ export default function CoachAdminPage({
             {errorMsg}
           </p>
         )}
+
+        {/* イベントを作成する */}
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            イベントを作成する
+          </h2>
+          <p className="text-[11px] text-neutral-500">
+            締切日を設定すると、部員のマイページの「タスク一覧」に提出タスクが表示されます(期日を過ぎると赤く強調され、提出すると一覧から消えます)。提出内容はチームページで確認できます。
+          </p>
+
+          <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+            {(
+              [
+                ["weight_max", "ウェイトMAX集計"],
+                ["match_reflection", "試合の振り返り"],
+                ["body_composition", "体組成の提出"],
+              ] as [typeof selectedEventType, string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedEventType(key)}
+                className={`flex-1 rounded-md py-2 font-medium ${
+                  selectedEventType === key
+                    ? "bg-red-600 text-white shadow"
+                    : "text-neutral-400"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {selectedEventType === "weight_max" ? (
+            weightMaxEvent === undefined ? (
+              <p className="text-xs text-neutral-500">読み込み中…</p>
+            ) : weightMaxEvent ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+                <p className="text-sm text-neutral-200">
+                  締切:{" "}
+                  <span className="font-semibold">
+                    {weightMaxEvent.deadline}
+                  </span>
+                </p>
+                <p className="text-xs text-neutral-400">
+                  提出済み {weightMaxSubmittedCount}人 /{" "}
+                  {members.filter((m) => m.role !== "manager").length}人
+                </p>
+                <button
+                  onClick={handleEndWeightMaxEvent}
+                  className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                >
+                  この集計を終了する
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={handleCreateWeightMaxEvent}
+                className="flex items-end gap-2"
+              >
+                <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
+                  締切日
+                  <input
+                    type="date"
+                    required
+                    value={newDeadline}
+                    onChange={(e) => setNewDeadline(e.target.value)}
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={savingWeightMaxEvent}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+                >
+                  集計を開始する
+                </button>
+              </form>
+            )
+          ) : teamEvents[selectedEventType] === undefined ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : teamEvents[selectedEventType] ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+              {teamEvents[selectedEventType]!.title && (
+                <p className="text-sm font-semibold text-neutral-100">
+                  {teamEvents[selectedEventType]!.title}
+                </p>
+              )}
+              <p className="text-sm text-neutral-200">
+                締切:{" "}
+                <span className="font-semibold">
+                  {teamEvents[selectedEventType]!.deadline}
+                </span>
+              </p>
+              <p className="text-xs text-neutral-400">
+                提出済み {teamEventSubmittedCounts[selectedEventType]}人 /{" "}
+                {members.filter((m) => m.role !== "manager").length}人
+              </p>
+              <button
+                onClick={() => handleEndTeamEvent(selectedEventType)}
+                className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+              >
+                このイベントを終了する
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => handleCreateTeamEvent(selectedEventType, e)}
+              className="flex flex-col gap-2"
+            >
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                タイトル(任意。例：関東大会 一回戦)
+                <input
+                  type="text"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                />
+              </label>
+              <div className="flex items-end gap-2">
+                <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
+                  締切日
+                  <input
+                    type="date"
+                    required
+                    value={newDeadline}
+                    onChange={(e) => setNewDeadline(e.target.value)}
+                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={savingTeamEvent}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+                >
+                  イベントを作成する
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+
 
         {/* 怪我人一覧 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
@@ -537,20 +778,33 @@ export default function CoachAdminPage({
 
         {/* 部員の役職を編集 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            部員の役職・所属拠点を編集
-          </h2>
-          <p className="text-[11px] text-neutral-500">
-            役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+              部員の役職・所属拠点を編集
+            </h2>
+            <button
+              onClick={() => {
+                setShowRoleLocationEdit((v) => !v);
+                setDraftEdits({});
+              }}
+              className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[11px] text-neutral-300 active:bg-neutral-800"
+            >
+              {showRoleLocationEdit ? "閉じる" : "編集する"}
+            </button>
+          </div>
+          {showRoleLocationEdit && (
+            <p className="text-[11px] text-neutral-500">
+              役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。
+            </p>
+          )}
           {loadingMembers ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : members.length === 0 ? (
             <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
               部員が登録されていません。
             </p>
-          ) : (
+          ) : !showRoleLocationEdit ? (
             <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-800">
               <ul className="divide-y divide-neutral-800">
                 {members.map((m) => (
@@ -561,19 +815,50 @@ export default function CoachAdminPage({
                     <span className="font-medium text-neutral-100">
                       {m.display_name}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      {editingLocationId === m.id ? (
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <span className="rounded bg-neutral-800 px-2 py-1">
+                        {m.home_location
+                          ? locationLabel[m.home_location]
+                          : "拠点未設定"}
+                      </span>
+                      <span className="rounded bg-neutral-800 px-2 py-1">
+                        {memberRoleEditLabel[m.role]}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-800">
+              <ul className="divide-y divide-neutral-800">
+                {members.map((m) => {
+                  const draft = draftEdits[m.id];
+                  const currentRole = draft?.role ?? m.role;
+                  const currentLocation =
+                    draft?.home_location ?? m.home_location ?? "tama";
+                  const isDirty = !!draft;
+                  return (
+                    <li
+                      key={m.id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
+                    >
+                      <span className="font-medium text-neutral-100">
+                        {m.display_name}
+                      </span>
+                      <div className="flex items-center gap-1.5">
                         <select
-                          autoFocus
-                          value={m.home_location ?? "tama"}
-                          disabled={savingLocationId === m.id}
+                          value={currentLocation}
+                          disabled={savingRoleId === m.id}
                           onChange={(e) =>
-                            handleUpdateHomeLocation(
-                              m.id,
-                              e.target.value as Location
-                            )
+                            setDraftEdits((prev) => ({
+                              ...prev,
+                              [m.id]: {
+                                role: prev[m.id]?.role ?? m.role,
+                                home_location: e.target.value as Location,
+                              },
+                            }))
                           }
-                          onBlur={() => setEditingLocationId(null)}
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
                         >
                           {locations.map((loc) => (
@@ -586,28 +871,21 @@ export default function CoachAdminPage({
                             </option>
                           ))}
                         </select>
-                      ) : (
-                        <button
-                          onClick={() => setEditingLocationId(m.id)}
-                          className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
-                        >
-                          {m.home_location
-                            ? locationLabel[m.home_location]
-                            : "拠点未設定"}
-                        </button>
-                      )}
-                      {editingRoleId === m.id ? (
                         <select
-                          autoFocus
-                          value={m.role}
+                          value={currentRole}
                           disabled={savingRoleId === m.id}
                           onChange={(e) =>
-                            handleUpdateRole(
-                              m.id,
-                              e.target.value as MemberRoleForEdit
-                            )
+                            setDraftEdits((prev) => ({
+                              ...prev,
+                              [m.id]: {
+                                role: e.target.value as MemberRoleForEdit,
+                                home_location:
+                                  prev[m.id]?.home_location ??
+                                  m.home_location ??
+                                  "tama",
+                              },
+                            }))
                           }
-                          onBlur={() => setEditingRoleId(null)}
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
                         >
                           {(
@@ -624,76 +902,19 @@ export default function CoachAdminPage({
                             </option>
                           ))}
                         </select>
-                      ) : (
                         <button
-                          onClick={() => setEditingRoleId(m.id)}
-                          className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 active:bg-neutral-800"
+                          onClick={() => handleSaveMemberEdit(m.id)}
+                          disabled={!isDirty || savingRoleId === m.id}
+                          className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white active:bg-red-700 disabled:opacity-40"
                         >
-                          {memberRoleEditLabel[m.role]}
+                          保存する
                         </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
-          )}
-        </section>
-
-        {/* ウェイトMAXを集計する */}
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            ウェイトMAXを集計する
-          </h2>
-          <p className="text-[11px] text-neutral-500">
-            締切日を設定すると、部員のマイページの「やることリスト」にBIG3(ベンチプレス・スクワット・デッドリフト)のMAX重量を提出するタスクが表示されます。提出内容はチームページの「ウェイトMAX一覧」で確認できます。
-          </p>
-
-          {weightMaxEvent === undefined ? (
-            <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : weightMaxEvent ? (
-            <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
-              <p className="text-sm text-neutral-200">
-                締切:{" "}
-                <span className="font-semibold">
-                  {weightMaxEvent.deadline}
-                </span>
-              </p>
-              <p className="text-xs text-neutral-400">
-                提出済み {weightMaxSubmittedCount}人 /{" "}
-                {members.filter((m) => m.role !== "manager").length}人
-              </p>
-              <button
-                onClick={handleEndWeightMaxEvent}
-                className="self-start rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
-              >
-                この集計を終了する
-              </button>
-            </div>
-          ) : (
-            <form
-              onSubmit={handleCreateWeightMaxEvent}
-              className="flex items-end gap-2"
-            >
-              <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
-                締切日
-                <input
-                  type="date"
-                  required
-                  value={newDeadline}
-                  onChange={(e) => setNewDeadline(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={savingWeightMaxEvent}
-                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-              >
-                集計を開始する
-              </button>
-            </form>
           )}
         </section>
 
@@ -715,7 +936,7 @@ export default function CoachAdminPage({
             </p>
           ) : (
             <ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
-              {roster.map((r) => (
+              {sortedRoster.map((r) => (
                 <li
                   key={r.id}
                   className="flex flex-col gap-1.5 px-3 py-2.5 text-xs"
