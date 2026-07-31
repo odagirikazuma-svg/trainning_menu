@@ -107,6 +107,33 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
+function groupDetailByGrade<T extends { entryYear: number | null }>(
+  rows: T[]
+): { label: string; rows: T[] }[] {
+  const groups = new Map<number | null, T[]>();
+  for (const r of rows) {
+    const grade = r.entryYear != null ? currentGrade(r.entryYear) : null;
+    const list = groups.get(grade) ?? [];
+    list.push(r);
+    groups.set(grade, list);
+  }
+
+  const knownGrades = Array.from(groups.keys())
+    .filter((g): g is number => g !== null)
+    .sort((a, b) => b - a);
+
+  const result = knownGrades.map((grade) => ({
+    label: `${grade}年`,
+    rows: groups.get(grade)!,
+  }));
+
+  if (groups.has(null)) {
+    result.push({ label: "学年未設定", rows: groups.get(null)! });
+  }
+
+  return result;
+}
+
 export default function TeamPage({
   profile,
 }: {
@@ -227,6 +254,7 @@ export default function TeamPage({
       memberId: string;
       displayName: string;
       location: Location;
+      entryYear: number | null;
       isPending: boolean;
       matStatus: "not_required" | "report" | "absent" | "missing";
       matText: string | null;
@@ -1337,6 +1365,7 @@ export default function TeamPage({
       memberId: string;
       displayName: string;
       location: Location;
+      entryYear: number | null;
       isPending: boolean;
       matStatus: "not_required" | "report" | "absent" | "missing";
       matText: string | null;
@@ -1357,6 +1386,7 @@ export default function TeamPage({
           memberId: m.id,
           displayName: m.display_name,
           location: loc,
+          entryYear: m.entry_year,
           isPending: !!m.isPending,
           matStatus: !hasMat
             ? ("not_required" as const)
@@ -2061,85 +2091,71 @@ export default function TeamPage({
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {daySubmissionDetail.map((d) => {
-                const allDone =
-                  !d.isPending &&
-                  (d.matStatus === "not_required" || d.matStatus !== "missing") &&
-                  (d.selfStatus === "not_required" || d.selfStatus === "done");
-                return (
-                  <div
-                    key={d.memberId}
-                    className={`flex flex-col gap-1.5 rounded-lg border p-3 text-sm ${
-                      allDone
-                        ? "border-emerald-900/60 bg-emerald-950/20"
-                        : "border-neutral-800 bg-neutral-900"
-                    }`}
-                  >
-                    <p className="flex items-center gap-1.5 font-medium text-neutral-100">
-                      {d.displayName}
-                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
-                        {locationLabel[d.location]}
-                      </span>
-                      {d.isPending && (
-                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
-                          未登録
-                        </span>
-                      )}
-                    </p>
-                    {d.isPending ? (
-                      <p className="text-[11px] text-neutral-500">
-                        まだ本人がサインアップしていないため、報告状況は確認できません。
-                      </p>
-                    ) : (
-                      <>
-                    {d.matStatus !== "not_required" && (
-                      <div className="flex flex-col gap-0.5">
-                        <span
-                          className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                            d.matStatus === "missing"
-                              ? "bg-red-950/40 text-red-400"
-                              : "bg-emerald-950/40 text-emerald-400"
-                          }`}
-                        >
-                          マット：
-                          {d.matStatus === "missing"
-                            ? "未提出"
-                            : d.matStatus === "absent"
-                              ? "未実施報告"
-                              : "実施報告"}
-                        </span>
-                        {d.matText && (
-                          <p className="whitespace-pre-wrap pl-1 text-[11px] text-neutral-400">
-                            {d.matText}
-                          </p>
-                        )}
+            <div className="grid grid-cols-2 gap-3">
+              {(["tama", "otsuka"] as Location[]).map((loc) => (
+                <div key={loc} className="flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-neutral-400">
+                    {locationLabel[loc]}
+                  </p>
+                  {daySubmissionDetail.filter((d) => d.location === loc)
+                    .length === 0 ? (
+                    <p className="text-[11px] text-neutral-600">該当なし</p>
+                  ) : (
+                    groupDetailByGrade(
+                      daySubmissionDetail.filter((d) => d.location === loc)
+                    ).map((group) => (
+                      <div key={group.label} className="flex flex-col gap-1">
+                        <p className="text-[10px] text-neutral-500">
+                          {group.label}
+                        </p>
+                        {group.rows.map((d) => {
+                          const allDone =
+                            !d.isPending &&
+                            (d.matStatus === "not_required" ||
+                              d.matStatus !== "missing") &&
+                            (d.selfStatus === "not_required" ||
+                              d.selfStatus === "done");
+                          return (
+                            <button
+                              key={d.memberId}
+                              disabled={d.isPending}
+                              onClick={() =>
+                                router.push(
+                                  `/team/${d.memberId}?date=${selectedScheduleDate}`
+                                )
+                              }
+                              className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                                d.isPending
+                                  ? "border-neutral-800 bg-neutral-900 text-neutral-600"
+                                  : allDone
+                                    ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
+                                    : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
+                              }`}
+                            >
+                              <span className="truncate">{d.displayName}</span>
+                              {d.isPending ? (
+                                <span className="shrink-0 text-[10px] text-neutral-600">
+                                  未登録
+                                </span>
+                              ) : (
+                                <span
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    allDone
+                                      ? "bg-emerald-950/40 text-emerald-400"
+                                      : "bg-red-950/40 text-red-400"
+                                  }`}
+                                >
+                                  {allDone ? "済" : "未"}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
-                    {d.selfStatus !== "not_required" && (
-                      <div className="flex flex-col gap-0.5">
-                        <span
-                          className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                            d.selfStatus === "missing"
-                              ? "bg-red-950/40 text-red-400"
-                              : "bg-emerald-950/40 text-emerald-400"
-                          }`}
-                        >
-                          マット以外のセッション：
-                          {d.selfStatus === "missing" ? "未提出" : "提出済み"}
-                        </span>
-                        {d.selfText && (
-                          <p className="whitespace-pre-wrap pl-1 text-[11px] text-neutral-400">
-                            {d.selfText}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                    ))
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>
