@@ -217,6 +217,9 @@ export default function TeamPage({
   const [submissionCounts, setSubmissionCounts] = useState<
     Map<string, { submitted: number; total: number }>
   >(new Map());
+  const [submissionCountsByLoc, setSubmissionCountsByLoc] = useState<
+    Map<string, Record<Location, { submitted: number; total: number } | null>>
+  >(new Map());
   const [loadingSubmissionCounts, setLoadingSubmissionCounts] =
     useState(true);
   const [daySubmissionDetail, setDaySubmissionDetail] = useState<
@@ -1082,6 +1085,7 @@ export default function TeamPage({
 
     if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
       setSubmissionCounts(new Map());
+      setSubmissionCountsByLoc(new Map());
       setLoadingSubmissionCounts(false);
       return;
     }
@@ -1199,27 +1203,39 @@ export default function TeamPage({
     }
 
     const counts = new Map<string, { submitted: number; total: number }>();
+    const countsByLoc = new Map<
+      string,
+      Record<Location, { submitted: number; total: number } | null>
+    >();
     const cursor = new Date(year, month, 1);
     while (cursor.getMonth() === month) {
       const dateKey = toDateKey(cursor);
       let submitted = 0;
       let total = 0;
+      const byLoc: Record<Location, { submitted: number; total: number } | null> =
+        { tama: null, otsuka: null };
       for (const loc of ["tama", "otsuka"] as Location[]) {
         const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
         if (!day || day.isOff) continue;
         if (!day.hasMat && !day.hasNonMat) continue;
-        total += requiredByLoc[loc].length;
+        const locTotal = requiredByLoc[loc].length;
+        let locSubmitted = 0;
         for (const id of realIdsByLoc[loc]) {
           const matOk =
             !day.hasMat || submittedMatKeys.has(`${id}:${loc}:${dateKey}`);
           const selfOk = !day.hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
-          if (matOk && selfOk) submitted++;
+          if (matOk && selfOk) locSubmitted++;
         }
+        byLoc[loc] = { submitted: locSubmitted, total: locTotal };
+        total += locTotal;
+        submitted += locSubmitted;
       }
       if (total > 0) counts.set(dateKey, { submitted, total });
+      countsByLoc.set(dateKey, byLoc);
       cursor.setDate(cursor.getDate() + 1);
     }
     setSubmissionCounts(counts);
+    setSubmissionCountsByLoc(countsByLoc);
     setLoadingSubmissionCounts(false);
   }
 
@@ -1976,147 +1992,37 @@ export default function TeamPage({
                     <p className="py-6 text-center text-xs text-neutral-500">
                       読み込み中…
                     </p>
-                  ) : dayDetail.is_off ? (
-                    <div className="flex flex-col items-center gap-3 py-6 text-center">
-                      <p className="text-sm font-bold text-neutral-300">
-                        {formatMonthDay(dayDetail.date)}はオフです
-                      </p>
-                      {isCoach && (
-                        <button
-                          onClick={handleStartEditSchedule}
-                          className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
-                        >
-                          時間割を編集する
-                        </button>
-                      )}
-                    </div>
                   ) : (
                     <div className="flex flex-col gap-3 pr-5">
                       <p className="text-xs text-neutral-500">
-                        {locationLabel[scheduleLocation]}・
-                        {formatMonthDay(dayDetail.date)}
+                        {formatMonthDay(dayDetail.date)}の提出状況
                       </p>
-                      {(dayDetail.day_type === "camp" ||
-                        dayDetail.day_type === "match" ||
-                        dayDetail.day_type === "away") && (
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
+                      {(["tama", "otsuka"] as Location[]).map((loc) => {
+                        const c = submissionCountsByLoc.get(selectedScheduleDate!)?.[loc];
+                        return (
+                          <div
+                            key={loc}
+                            className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
                           >
-                            {dayTypeLabel[dayDetail.day_type]}
-                            {dayDetail.event_name &&
-                              `：${dayDetail.event_name}`}
-                          </span>
-                          {isCoach &&
-                            (dayDetail.day_type === "camp" ||
-                              dayDetail.day_type === "away") && (
-                              <button
-                                onClick={handleDeleteAwayLikeSchedule}
-                                className="rounded px-2 py-1 text-[11px] font-medium text-red-400 underline"
+                            <span className="font-medium text-neutral-200">
+                              {locationLabel[loc]}
+                            </span>
+                            {c ? (
+                              <span
+                                className={`font-semibold ${
+                                  c.total > 0 && c.submitted === c.total
+                                    ? "text-emerald-400"
+                                    : "text-neutral-300"
+                                }`}
                               >
-                                この予定を削除する
-                              </button>
-                            )}
-                        </div>
-                      )}
-                      {dayDetail.sessions.length === 0 && (
-                        <div className="flex flex-col items-start gap-2 py-2">
-                          <p className="text-xs text-neutral-500">
-                            この日は練習セクションの設定はありません。
-                          </p>
-                          {isCoach && (
-                            <button
-                              onClick={handleStartEditSchedule}
-                              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
-                            >
-                              時間割を編集する
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {dayDetail.sessions.map((s) => (
-                        <div
-                          key={s.id}
-                          className="rounded-lg border border-neutral-800 p-3"
-                        >
-                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
-                            <span
-                              className={`inline-block h-2 w-2 rounded-full ${sessionTypeDotColor[s.session_type]}`}
-                            />
-                            第{s.session_no}セッション・
-                            {sessionTypeLabel[s.session_type]}・
-                            {s.start_time.slice(0, 5)}〜
-                          </div>
-                          {s.location_note ? (
-                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
-                              練習場所：{s.location_note}
-                            </p>
-                          ) : dayDetail.day_type === "camp" ||
-                            dayDetail.day_type === "away" ? (
-                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
-                              {dayTypeLabel[dayDetail.day_type]}
-                              {dayDetail.event_name &&
-                                `：${dayDetail.event_name}`}
-                            </p>
-                          ) : (
-                            s.is_joint && (
-                              <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
-                                全体練習（
-                                {locationLabel[s.joint_location ?? scheduleLocation]}
-                                で実施）
-                              </p>
-                            )
-                          )}
-                          {s.session_type === "mat" ? (
-                            matMenuDetail === undefined ? (
-                              <p className="text-xs text-neutral-500">
-                                読み込み中…
-                              </p>
-                            ) : matMenuDetail === null ? (
-                              <div className="flex flex-col items-start gap-2">
-                                <p className="text-xs text-neutral-500">
-                                  このセッションの練習メニューはまだ掲示板に投稿されていません
-                                </p>
-                                {canEditMatMenu && (
-                                  <button
-                                    onClick={() =>
-                                      handleGoToMatMenu(s.start_time)
-                                    }
-                                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
-                                  >
-                                    このセッションの練習メニューを作成する
-                                  </button>
-                                )}
-                              </div>
+                                {c.submitted}/{c.total}人提出
+                              </span>
                             ) : (
-                              <div>
-                                <h4 className="mb-1 text-sm font-bold">
-                                  {matMenuDetail.title || "練習メニュー"}
-                                </h4>
-                                <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                                  {matMenuDetail.content}
-                                </p>
-                                {canEditMatMenu &&
-                                  !isPastSession(
-                                    matMenuDetail.date,
-                                    matMenuDetail.start_time
-                                  ) && (
-                                    <button
-                                      onClick={() => handleGoToMatMenu()}
-                                      className="mt-2 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
-                                    >
-                                      掲示板で編集する
-                                    </button>
-                                  )}
-                              </div>
-                            )
-                          ) : (
-                            <p className="text-xs text-neutral-400">
-                              各自申告制です。実施状況はマイページの「今日のトレーニングメニュー」から記録できます。
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                              <span className="text-neutral-500">該当なし</span>
+                            )}
+                          </div>
+                        );
+                      })}
                       {isCoach && (
                         <button
                           onClick={handleStartEditSchedule}
