@@ -786,3 +786,45 @@ create policy "team_event_targets_delete_coach" on team_event_targets
     exists (select 1 from profiles where id = auth.uid() and role = 'coach')
   );
 
+
+-- ============================================
+-- 追加: 「体組成の提出」の項目（測定日・骨格筋量・除脂肪体重）
+-- ============================================
+alter table team_event_submissions add column if not exists measurement_date date;
+alter table team_event_submissions add column if not exists muscle_mass_kg numeric;
+alter table team_event_submissions add column if not exists lean_body_mass_kg numeric;
+
+-- ============================================
+-- 追加: ウェイトMAX集計も対象者を限定できるようにする
+-- （行が無いイベントは「全員が対象」として扱う）
+-- ============================================
+create table if not exists weight_max_event_targets (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references weight_max_events(id) on delete cascade,
+  member_id uuid not null references profiles(id) on delete cascade,
+  unique (event_id, member_id)
+);
+alter table weight_max_event_targets enable row level security;
+
+create policy "weight_max_event_targets_select_same_team" on weight_max_event_targets
+  for select using (
+    exists (
+      select 1 from weight_max_events e
+      where e.id = event_id and e.team_id = get_my_team_id()
+    )
+  );
+
+create policy "weight_max_event_targets_insert_coach" on weight_max_event_targets
+  for insert with check (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+create policy "weight_max_event_targets_delete_coach" on weight_max_event_targets
+  for delete using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+-- ============================================
+-- 追加: 「試合の振り返り」に試合結果（優勝・準優勝・◯回戦敗退 など）の項目を追加
+-- ============================================
+alter table team_event_submissions add column if not exists match_result text;

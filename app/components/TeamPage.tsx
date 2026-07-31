@@ -261,6 +261,9 @@ export default function TeamPage({
       content: string;
       weight_kg: number | null;
       body_fat_pct: number | null;
+      measurement_date: string | null;
+      muscle_mass_kg: number | null;
+      lean_body_mass_kg: number | null;
     }[]
   >([]);
   const [loadingTeamEvents, setLoadingTeamEvents] = useState(true);
@@ -1081,7 +1084,9 @@ export default function TeamPage({
 
     const { data: subData, error: subError } = await supabase
       .from("team_event_submissions")
-      .select("event_id, author_id, content, weight_kg, body_fat_pct")
+      .select(
+        "event_id, author_id, content, weight_kg, body_fat_pct, measurement_date, muscle_mass_kg, lean_body_mass_kg"
+      )
       .in(
         "event_id",
         events.map((e) => e.id)
@@ -1097,6 +1102,9 @@ export default function TeamPage({
           content: string;
           weight_kg: number | null;
           body_fat_pct: number | null;
+          measurement_date: string | null;
+          muscle_mass_kg: number | null;
+          lean_body_mass_kg: number | null;
         }[]
       );
     }
@@ -1170,7 +1178,19 @@ export default function TeamPage({
     setLoadingEventDetail(true);
 
     let targetIds: Set<string> | null = null;
-    if (event.type === "match_reflection") {
+    if (event.type === "weight_max") {
+      const { data: targets, error: targetError } = await supabase
+        .from("weight_max_event_targets")
+        .select("member_id")
+        .eq("event_id", event.id);
+      if (targetError) {
+        setErrorMsg(targetError.message);
+      } else if (targets && targets.length > 0) {
+        targetIds = new Set(
+          (targets as { member_id: string }[]).map((t) => t.member_id)
+        );
+      }
+    } else {
       const { data: targets, error: targetError } = await supabase
         .from("team_event_targets")
         .select("member_id")
@@ -2743,13 +2763,20 @@ export default function TeamPage({
                               </div>
                               {sub &&
                                 (event.type === "match_reflection" ? (
-                                  <p className="whitespace-pre-wrap text-neutral-300">
-                                    {sub.content}
-                                  </p>
+                                  <button
+                                    onClick={() => router.push(`/team/${m.id}`)}
+                                    className="self-start text-[11px] text-emerald-400 underline"
+                                  >
+                                    提出済み（マイページで内容を見る）
+                                  </button>
                                 ) : (
                                   <p className="text-neutral-300">
+                                    {sub.measurement_date &&
+                                      `測定日: ${formatMonthDay(sub.measurement_date)}・`}
                                     体重: {sub.weight_kg ?? "-"}kg・体脂肪率:{" "}
-                                    {sub.body_fat_pct ?? "-"}%
+                                    {sub.body_fat_pct ?? "-"}%・骨格筋量:{" "}
+                                    {sub.muscle_mass_kg ?? "-"}kg・除脂肪体重:{" "}
+                                    {sub.lean_body_mass_kg ?? "-"}kg
                                   </p>
                                 ))}
                             </div>

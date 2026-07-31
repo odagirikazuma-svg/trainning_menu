@@ -149,8 +149,8 @@ export default function CoachAdminPage({
     Set<string>
   >(new Set());
   const [activeEventTargetCounts, setActiveEventTargetCounts] = useState<
-    Record<TeamEventType, number | null>
-  >({ match_reflection: null, body_composition: null });
+    Record<"weight_max" | TeamEventType, number | null>
+  >({ weight_max: null, match_reflection: null, body_composition: null });
 
   const rosterEntryYearOptions: number[] = (() => {
     const now = new Date();
@@ -272,6 +272,22 @@ export default function CoachAdminPage({
       } else {
         setWeightMaxSubmittedCount((maxData ?? []).length);
       }
+
+      const { data: targetData, error: targetError } = await supabase
+        .from("weight_max_event_targets")
+        .select("member_id")
+        .eq("event_id", event.id);
+      if (targetError) {
+        setErrorMsg(targetError.message);
+      } else {
+        setActiveEventTargetCounts((prev) => ({
+          ...prev,
+          weight_max:
+            targetData && targetData.length > 0 ? targetData.length : null,
+        }));
+      }
+    } else {
+      setActiveEventTargetCounts((prev) => ({ ...prev, weight_max: null }));
     }
   }
 
@@ -280,18 +296,38 @@ export default function CoachAdminPage({
     if (!newDeadline) return;
     setSavingWeightMaxEvent(true);
 
-    const { error } = await supabase.from("weight_max_events").insert({
-      team_id: profile.team_id,
-      deadline: newDeadline,
-      created_by: profile.id,
-    });
+    const { data: inserted, error } = await supabase
+      .from("weight_max_events")
+      .insert({
+        team_id: profile.team_id,
+        deadline: newDeadline,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
 
     if (error) {
       setErrorMsg(error.message);
-    } else {
-      setNewDeadline("");
-      await loadWeightMaxEvent();
+      setSavingWeightMaxEvent(false);
+      return;
     }
+
+    if (selectedEventTargetIds.size > 0 && inserted) {
+      const targetRows = Array.from(selectedEventTargetIds).map(
+        (memberId) => ({
+          event_id: (inserted as { id: string }).id,
+          member_id: memberId,
+        })
+      );
+      const { error: targetError } = await supabase
+        .from("weight_max_event_targets")
+        .insert(targetRows);
+      if (targetError) setErrorMsg(targetError.message);
+    }
+
+    setNewDeadline("");
+    setSelectedEventTargetIds(new Set());
+    await loadWeightMaxEvent();
     setSavingWeightMaxEvent(false);
   }
 
@@ -371,6 +407,7 @@ export default function CoachAdminPage({
   ) {
     e.preventDefault();
     if (!newDeadline) return;
+    if (type === "match_reflection" && !newEventTitle.trim()) return;
     setSavingTeamEvent(true);
 
     const { data: inserted, error } = await supabase
@@ -620,7 +657,11 @@ export default function CoachAdminPage({
                 </p>
                 <p className="text-xs text-neutral-400">
                   提出済み {weightMaxSubmittedCount}人 /{" "}
-                  {members.filter((m) => m.role !== "manager").length}人
+                  {activeEventTargetCounts.weight_max ??
+                    members.filter((m) => m.role !== "manager").length}
+                  人
+                  {activeEventTargetCounts.weight_max != null &&
+                    "（対象者を限定しています）"}
                 </p>
                 <button
                   onClick={handleEndWeightMaxEvent}
@@ -632,8 +673,14 @@ export default function CoachAdminPage({
             ) : (
               <form
                 onSubmit={handleCreateWeightMaxEvent}
-                className="flex items-end gap-2"
+                className="flex flex-col gap-2"
               >
+                <EventTargetPicker
+                  members={members}
+                  selectedIds={selectedEventTargetIds}
+                  onChange={setSelectedEventTargetIds}
+                />
+                <div className="flex items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
                   締切日
                   <input
@@ -651,6 +698,7 @@ export default function CoachAdminPage({
                 >
                   集計を開始する
                 </button>
+                </div>
               </form>
             )
           ) : teamEvents[selectedEventType] === undefined ? (
@@ -689,62 +737,22 @@ export default function CoachAdminPage({
               className="flex flex-col gap-2"
             >
               <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                タイトル(任意。例：関東大会 一回戦)
+                {selectedEventType === "match_reflection"
+                  ? "タイトル(例：全日本学生選手権、東日本学生リーグ戦)"
+                  : "タイトル(任意)"}
                 <input
                   type="text"
+                  required={selectedEventType === "match_reflection"}
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
                   className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                 />
               </label>
-              {selectedEventType === "match_reflection" && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-neutral-400">
-                      対象者(選ばなければ全員が対象になります)
-                    </span>
-                    {selectedEventTargetIds.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEventTargetIds(new Set())}
-                        className="text-[11px] text-neutral-500 underline"
-                      >
-                        選択をクリア
-                      </button>
-                    )}
-                  </div>
-                  <div className="max-h-40 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-2">
-                    <div className="flex flex-col gap-1">
-                      {members
-                        .filter((m) => m.role !== "manager")
-                        .map((m) => (
-                          <label
-                            key={m.id}
-                            className="flex items-center gap-2 text-xs text-neutral-200"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedEventTargetIds.has(m.id)}
-                              onChange={(e) =>
-                                setSelectedEventTargetIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (e.target.checked) next.add(m.id);
-                                  else next.delete(m.id);
-                                  return next;
-                                })
-                              }
-                              className="h-3.5 w-3.5"
-                            />
-                            {m.display_name}
-                            <span className="text-neutral-500">
-                              （{locationLabel[m.home_location ?? "tama"]}）
-                            </span>
-                          </label>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <EventTargetPicker
+                members={members}
+                selectedIds={selectedEventTargetIds}
+                onChange={setSelectedEventTargetIds}
+              />
               <div className="flex items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-400">
                   締切日
@@ -1308,5 +1316,62 @@ function InjuryListItem({
         </div>
       )}
     </li>
+  );
+}
+
+function EventTargetPicker({
+  members,
+  selectedIds,
+  onChange,
+}: {
+  members: MemberRow[];
+  selectedIds: Set<string>;
+  onChange: (ids: Set<string>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-neutral-400">
+          対象者(選ばなければ全員が対象になります)
+        </span>
+        {selectedIds.size > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange(new Set())}
+            className="text-[11px] text-neutral-500 underline"
+          >
+            選択をクリア
+          </button>
+        )}
+      </div>
+      <div className="max-h-40 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-2">
+        <div className="flex flex-col gap-1">
+          {members
+            .filter((m) => m.role !== "manager")
+            .map((m) => (
+              <label
+                key={m.id}
+                className="flex items-center gap-2 text-xs text-neutral-200"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(m.id)}
+                  onChange={(e) => {
+                    const next = new Set(selectedIds);
+                    if (e.target.checked) next.add(m.id);
+                    else next.delete(m.id);
+                    onChange(next);
+                  }}
+                  className="h-3.5 w-3.5"
+                />
+                {m.display_name}
+                <span className="text-neutral-500">
+                  （{locationLabel[m.home_location ?? "tama"]}）
+                </span>
+              </label>
+            ))}
+        </div>
+      </div>
+    </div>
   );
 }

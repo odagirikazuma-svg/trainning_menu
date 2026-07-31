@@ -164,6 +164,7 @@ export default function MemberHome({
   const [openTeamEventTodoId, setOpenTeamEventTodoId] = useState<
     string | null
   >(null);
+  const [matchResult, setMatchResult] = useState("");
   const [matchTitle, setMatchTitle] = useState("");
   const [matchCount, setMatchCount] = useState("");
   const [matchWinCount, setMatchWinCount] = useState("");
@@ -173,13 +174,18 @@ export default function MemberHome({
   const [matchChallenges, setMatchChallenges] = useState("");
   const [matchImprovementPlan, setMatchImprovementPlan] = useState("");
   const [matchTeamChallenges, setMatchTeamChallenges] = useState("");
+  const [teamEventMeasurementDate, setTeamEventMeasurementDate] =
+    useState("");
   const [teamEventWeightKg, setTeamEventWeightKg] = useState("");
   const [teamEventBodyFatPct, setTeamEventBodyFatPct] = useState("");
+  const [teamEventMuscleMassKg, setTeamEventMuscleMassKg] = useState("");
+  const [teamEventLeanBodyMassKg, setTeamEventLeanBodyMassKg] = useState("");
   const [matchReflections, setMatchReflections] = useState<
     {
       eventId: string;
       eventTitle: string;
       submittedAt: string;
+      matchResult: string;
       matchTitle: string;
       matchCount: number | null;
       winCount: number | null;
@@ -592,6 +598,23 @@ export default function MemberHome({
       created_at: string;
     };
 
+    const { data: targetData, error: targetError } = await supabase
+      .from("weight_max_event_targets")
+      .select("member_id")
+      .eq("event_id", event.id);
+    if (targetError) {
+      setErrorMsg(targetError.message);
+      return;
+    }
+    const targetRows = (targetData ?? []) as { member_id: string }[];
+    if (
+      targetRows.length > 0 &&
+      !targetRows.some((r) => r.member_id === profile.id)
+    ) {
+      setWeightMaxTodo(null);
+      return;
+    }
+
     const { data: maxData, error: maxError } = await supabase
       .from("weight_maxes")
       .select("id")
@@ -620,7 +643,7 @@ export default function MemberHome({
     const { data, error } = await supabase
       .from("team_event_submissions")
       .select(
-        "event_id, updated_at, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
+        "event_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
       )
       .eq("author_id", profile.id);
 
@@ -633,6 +656,7 @@ export default function MemberHome({
     const rows = (data ?? []) as unknown as {
       event_id: string;
       updated_at: string;
+      match_result: string | null;
       match_title: string | null;
       match_count: number | null;
       win_count: number | null;
@@ -651,6 +675,7 @@ export default function MemberHome({
         eventId: r.event_id,
         eventTitle: r.event?.title || r.match_title || "試合の振り返り",
         submittedAt: r.updated_at,
+        matchResult: r.match_result ?? "",
         matchTitle: r.match_title ?? "",
         matchCount: r.match_count,
         winCount: r.win_count,
@@ -756,6 +781,10 @@ export default function MemberHome({
       content?: string;
       weight_kg?: number | null;
       body_fat_pct?: number | null;
+      measurement_date?: string | null;
+      muscle_mass_kg?: number | null;
+      lean_body_mass_kg?: number | null;
+      match_result?: string;
       match_title?: string;
       match_count?: number | null;
       win_count?: number | null;
@@ -773,6 +802,7 @@ export default function MemberHome({
     };
     if (todo.type === "match_reflection") {
       payload.content = "";
+      payload.match_result = matchResult;
       payload.match_title = matchTitle;
       payload.match_count = matchCount ? Number(matchCount) : null;
       payload.win_count = matchWinCount ? Number(matchWinCount) : null;
@@ -784,9 +814,16 @@ export default function MemberHome({
       payload.team_challenges = matchTeamChallenges;
     } else {
       payload.content = "";
+      payload.measurement_date = teamEventMeasurementDate || null;
       payload.weight_kg = teamEventWeightKg ? Number(teamEventWeightKg) : null;
       payload.body_fat_pct = teamEventBodyFatPct
         ? Number(teamEventBodyFatPct)
+        : null;
+      payload.muscle_mass_kg = teamEventMuscleMassKg
+        ? Number(teamEventMuscleMassKg)
+        : null;
+      payload.lean_body_mass_kg = teamEventLeanBodyMassKg
+        ? Number(teamEventLeanBodyMassKg)
         : null;
     }
 
@@ -798,6 +835,7 @@ export default function MemberHome({
       setErrorMsg(error.message);
     } else {
       setOpenTeamEventTodoId(null);
+      setMatchResult("");
       setMatchTitle("");
       setMatchCount("");
       setMatchWinCount("");
@@ -807,8 +845,11 @@ export default function MemberHome({
       setMatchChallenges("");
       setMatchImprovementPlan("");
       setMatchTeamChallenges("");
+      setTeamEventMeasurementDate("");
       setTeamEventWeightKg("");
       setTeamEventBodyFatPct("");
+      setTeamEventMuscleMassKg("");
+      setTeamEventLeanBodyMassKg("");
       await loadTeamEventTodos();
       await loadMatchReflections();
     }
@@ -1633,6 +1674,15 @@ export default function MemberHome({
                   {todo.type === "match_reflection" ? (
                     <div className="flex flex-col gap-2">
                       <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        試合結果(優勝・準優勝・3位・◯回戦敗退 など)
+                        <input
+                          type="text"
+                          value={matchResult}
+                          onChange={(e) => setMatchResult(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                         出場した試合名
                         <input
                           type="text"
@@ -1724,31 +1774,68 @@ export default function MemberHome({
                       </label>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-2">
                       <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                        体重(kg)
+                        測定日
                         <input
-                          type="number"
-                          inputMode="decimal"
-                          value={teamEventWeightKg}
+                          type="date"
+                          value={teamEventMeasurementDate}
                           onChange={(e) =>
-                            setTeamEventWeightKg(e.target.value)
+                            setTeamEventMeasurementDate(e.target.value)
                           }
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                        体脂肪率(%)
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          value={teamEventBodyFatPct}
-                          onChange={(e) =>
-                            setTeamEventBodyFatPct(e.target.value)
-                          }
-                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                        />
-                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          体重(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventWeightKg}
+                            onChange={(e) =>
+                              setTeamEventWeightKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          体脂肪率(%)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventBodyFatPct}
+                            onChange={(e) =>
+                              setTeamEventBodyFatPct(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          骨格筋量(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventMuscleMassKg}
+                            onChange={(e) =>
+                              setTeamEventMuscleMassKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          除脂肪体重(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventLeanBodyMassKg}
+                            onChange={(e) =>
+                              setTeamEventLeanBodyMassKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                      </div>
                     </div>
                   )}
                   <button
@@ -2155,6 +2242,12 @@ export default function MemberHome({
                   </button>
                   {isOpen && (
                     <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
+                      {r.matchResult && (
+                        <p>
+                          <span className="text-neutral-500">試合結果：</span>
+                          {r.matchResult}
+                        </p>
+                      )}
                       {r.matchTitle && (
                         <p>
                           <span className="text-neutral-500">試合名：</span>

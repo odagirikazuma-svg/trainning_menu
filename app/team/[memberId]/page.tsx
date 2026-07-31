@@ -47,6 +47,7 @@ type MatchReflectionInfo = {
   eventId: string;
   eventTitle: string;
   submittedAt: string;
+  matchResult: string;
   matchTitle: string;
   matchCount: number | null;
   winCount: number | null;
@@ -162,12 +163,13 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
     const { data: reflectionData } = await supabase
       .from("team_event_submissions")
       .select(
-        "event_id, updated_at, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
+        "event_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
       )
       .eq("author_id", memberId);
     const reflectionRows = (reflectionData ?? []) as unknown as {
       event_id: string;
       updated_at: string;
+      match_result: string | null;
       match_title: string | null;
       match_count: number | null;
       win_count: number | null;
@@ -186,6 +188,7 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
           eventId: r.event_id,
           eventTitle: r.event?.title || r.match_title || "試合の振り返り",
           submittedAt: r.updated_at,
+          matchResult: r.match_result ?? "",
           matchTitle: r.match_title ?? "",
           matchCount: r.match_count,
           winCount: r.win_count,
@@ -512,6 +515,14 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
                     </button>
                     {isOpen && (
                       <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
+                        {r.matchResult && (
+                          <p>
+                            <span className="text-neutral-500">
+                              試合結果：
+                            </span>
+                            {r.matchResult}
+                          </p>
+                        )}
                         {r.matchTitle && (
                           <p>
                             <span className="text-neutral-500">
