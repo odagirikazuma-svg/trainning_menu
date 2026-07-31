@@ -707,6 +707,7 @@ export default function TrainingBoardSupabase({
   // コーチ・マネージャー以外（マイページに統合された部員view）には、
   // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
   const isMemberView = !isCoachView && profile.role !== "manager";
+  const isManager = profile.role === "manager";
   const visibleReports = isMemberView
     ? reports.filter((r) => r.author_id === profile.id)
     : reports;
@@ -1248,6 +1249,8 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
+            {!isManager && (
+              <>
             {/* 実施報告 */}
             <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
               <div className="flex items-center justify-between">
@@ -1432,6 +1435,8 @@ export default function TrainingBoardSupabase({
               </form>
               )}
             </section>
+              </>
+            )}
           </>
         ) : (
           <div className="rounded-lg border border-neutral-800 p-4">
@@ -1534,7 +1539,7 @@ export default function TrainingBoardSupabase({
         )}
 
 
-        {isCoachView || profile.role === "manager" ? (
+        {isCoachView ? (
           <>
             {practiceSection}
 
@@ -1560,17 +1565,6 @@ export default function TrainingBoardSupabase({
                 location={activeLocation}
               />
             </section>
-
-            {profile.role === "manager" && (
-              <div className="border-t border-neutral-800 pt-4">
-                <button
-                  onClick={signOut}
-                  className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
-                >
-                  ログアウト
-                </button>
-              </div>
-            )}
           </>
         ) : (
           <MemberHome
@@ -1578,6 +1572,7 @@ export default function TrainingBoardSupabase({
             signOut={signOut}
             practiceMenuSlot={practiceSection}
             refreshSignal={taskRefreshSignal}
+            isManager={profile.role === "manager"}
             onGoToMenu={async (_loc, date) => {
               await applySelectionForDate(date, menus, jointElsewhere);
               setShowReportForm(true);

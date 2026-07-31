@@ -114,6 +114,7 @@ export default function MemberHome({
   onGoToMenu,
   onCalendarDateSelect,
   refreshSignal,
+  isManager,
 }: {
   profile: Profile;
   signOut: () => void;
@@ -121,6 +122,7 @@ export default function MemberHome({
   onGoToMenu: (location: Location, date: string) => void;
   onCalendarDateSelect?: (date: string) => void;
   refreshSignal?: number;
+  isManager?: boolean;
 }) {
   const supabase = createClient();
   const logSectionRef = useRef<HTMLDivElement>(null);
@@ -262,6 +264,11 @@ export default function MemberHome({
   }, []);
 
   useEffect(() => {
+    if (isManager) {
+      checkPushSubscription();
+      setLoadingTodo(false);
+      return;
+    }
     if (effectiveHomeLocation) loadTodo();
     else setLoadingTodo(false);
     loadSelfTrainingTodo();
@@ -1196,6 +1203,8 @@ export default function MemberHome({
         </p>
       )}
 
+      {!isManager && (
+        <>
       {/* 次の試合まで */}
       <section className="flex flex-col gap-2">
         {loadingMatch ? (
@@ -1575,6 +1584,8 @@ export default function MemberHome({
           </ul>
         )}
       </section>
+        </>
+      )}
 
       {/* カレンダー */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
@@ -1588,17 +1599,20 @@ export default function MemberHome({
           weightLogs={calendarWeightLogs}
           absentLogs={calendarAbsentLogs}
           scheduleByDate={calendarSchedule}
-          matPendingDates={matPendingDates}
+          matPendingDates={isManager ? new Set() : matPendingDates}
+          disablePendingIndicator={isManager}
           onSelectDate={handleSelectCalendarDate}
           highlightDate={selectedCalendarDate}
           todayDate={todayStr}
-          nextMatchDate={nextMatch?.date ?? null}
+          nextMatchDate={isManager ? null : (nextMatch?.date ?? null)}
         />
       </section>
       {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
       {practiceMenuSlot}
 
 
+      {!isManager && (
+        <>
       {/* トレーニングメニュー記入欄 */}
       <section
         ref={logSectionRef}
@@ -1955,6 +1969,8 @@ export default function MemberHome({
           </div>
         )}
       </section>
+        </>
+      )}
 
       {/* 通知設定 */}
       {pushSupported && (
@@ -2078,6 +2094,7 @@ function UnifiedCalendar({
   absentLogs,
   scheduleByDate,
   matPendingDates,
+  disablePendingIndicator,
   onSelectDate,
   highlightDate,
   todayDate,
@@ -2087,6 +2104,7 @@ function UnifiedCalendar({
   onCursorChange: (d: Date) => void;
   weightLogs: { date: string; type: TrainingType; title: string | null }[];
   absentLogs: { date: string; type: TrainingType; title: string | null }[];
+  disablePendingIndicator?: boolean;
   scheduleByDate: Map<
     string,
     {
@@ -2182,6 +2200,7 @@ function UnifiedCalendar({
             !schedule.isOff &&
             schedule.sessions.some((s) => s.type !== "mat");
           const isPending =
+            !disablePendingIndicator &&
             isPast &&
             !schedule?.isOff &&
             (matPendingDates.has(key) ||
@@ -2295,10 +2314,12 @@ function UnifiedCalendar({
           <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
           合宿
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-400" />
-          未提出あり
-        </span>
+        {!disablePendingIndicator && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-400" />
+            未提出あり
+          </span>
+        )}
         {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
           <span key={t} className="flex items-center gap-1">
             <span
