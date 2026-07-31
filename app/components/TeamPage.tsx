@@ -2219,12 +2219,18 @@ export default function TeamPage({
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {(["tama", "otsuka"] as Location[]).map((loc) => (
+            <div
+              className={
+                isCoach ? "flex flex-col gap-3" : "grid grid-cols-2 gap-3"
+              }
+            >
+              {(isCoach ? [scheduleLocation] : (["tama", "otsuka"] as Location[])).map((loc) => (
                 <div key={loc} className="flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-neutral-400">
-                    {locationLabel[loc]}
-                  </p>
+                  {!isCoach && (
+                    <p className="text-xs font-semibold text-neutral-400">
+                      {locationLabel[loc]}
+                    </p>
+                  )}
                   {daySubmissionDetail.filter((d) => d.location === loc)
                     .length === 0 ? (
                     <p className="text-[11px] text-neutral-600">該当なし</p>
