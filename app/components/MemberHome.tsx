@@ -164,9 +164,37 @@ export default function MemberHome({
   const [openTeamEventTodoId, setOpenTeamEventTodoId] = useState<
     string | null
   >(null);
-  const [teamEventContent, setTeamEventContent] = useState("");
+  const [matchTitle, setMatchTitle] = useState("");
+  const [matchCount, setMatchCount] = useState("");
+  const [matchWinCount, setMatchWinCount] = useState("");
+  const [matchLossCount, setMatchLossCount] = useState("");
+  const [matchReflection, setMatchReflection] = useState("");
+  const [matchGoodPoints, setMatchGoodPoints] = useState("");
+  const [matchChallenges, setMatchChallenges] = useState("");
+  const [matchImprovementPlan, setMatchImprovementPlan] = useState("");
+  const [matchTeamChallenges, setMatchTeamChallenges] = useState("");
   const [teamEventWeightKg, setTeamEventWeightKg] = useState("");
   const [teamEventBodyFatPct, setTeamEventBodyFatPct] = useState("");
+  const [matchReflections, setMatchReflections] = useState<
+    {
+      eventId: string;
+      eventTitle: string;
+      submittedAt: string;
+      matchTitle: string;
+      matchCount: number | null;
+      winCount: number | null;
+      lossCount: number | null;
+      reflection: string;
+      goodPoints: string;
+      challenges: string;
+      improvementPlan: string;
+      teamChallenges: string;
+    }[]
+  >([]);
+  const [loadingMatchReflections, setLoadingMatchReflections] = useState(true);
+  const [openMatchReflectionId, setOpenMatchReflectionId] = useState<
+    string | null
+  >(null);
   const [savingTeamEventTodo, setSavingTeamEventTodo] = useState(false);
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
@@ -294,6 +322,7 @@ export default function MemberHome({
     loadTitleOptions();
     loadWeightMaxTodo();
     loadTeamEventTodos();
+    loadMatchReflections();
     loadInjuries();
     checkPushSubscription();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,6 +615,58 @@ export default function MemberHome({
     );
   }
 
+  async function loadMatchReflections() {
+    setLoadingMatchReflections(true);
+    const { data, error } = await supabase
+      .from("team_event_submissions")
+      .select(
+        "event_id, updated_at, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
+      )
+      .eq("author_id", profile.id);
+
+    if (error) {
+      setErrorMsg(error.message);
+      setLoadingMatchReflections(false);
+      return;
+    }
+
+    const rows = (data ?? []) as unknown as {
+      event_id: string;
+      updated_at: string;
+      match_title: string | null;
+      match_count: number | null;
+      win_count: number | null;
+      loss_count: number | null;
+      reflection: string | null;
+      good_points: string | null;
+      challenges: string | null;
+      improvement_plan: string | null;
+      team_challenges: string | null;
+      event: { title: string; type: string } | null;
+    }[];
+
+    const reflections = rows
+      .filter((r) => r.event?.type === "match_reflection")
+      .map((r) => ({
+        eventId: r.event_id,
+        eventTitle: r.event?.title || r.match_title || "試合の振り返り",
+        submittedAt: r.updated_at,
+        matchTitle: r.match_title ?? "",
+        matchCount: r.match_count,
+        winCount: r.win_count,
+        lossCount: r.loss_count,
+        reflection: r.reflection ?? "",
+        goodPoints: r.good_points ?? "",
+        challenges: r.challenges ?? "",
+        improvementPlan: r.improvement_plan ?? "",
+        teamChallenges: r.team_challenges ?? "",
+      }))
+      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+
+    setMatchReflections(reflections);
+    setLoadingMatchReflections(false);
+  }
+
   async function loadTeamEventTodos() {
     if (profile.role === "coach") return;
 
@@ -627,9 +708,32 @@ export default function MemberHome({
       ((subData ?? []) as { event_id: string }[]).map((r) => r.event_id)
     );
 
+    const { data: targetData, error: targetError } = await supabase
+      .from("team_event_targets")
+      .select("event_id, member_id")
+      .in(
+        "event_id",
+        events.map((e) => e.id)
+      );
+    if (targetError) {
+      setErrorMsg(targetError.message);
+      return;
+    }
+    const targetRows = (targetData ?? []) as {
+      event_id: string;
+      member_id: string;
+    }[];
+    const eventsWithTargets = new Set(targetRows.map((r) => r.event_id));
+    const myTargetedEventIds = new Set(
+      targetRows.filter((r) => r.member_id === profile.id).map((r) => r.event_id)
+    );
+
     setTeamEventTodos(
       events
         .filter((e) => !submittedIds.has(e.id))
+        .filter(
+          (e) => !eventsWithTargets.has(e.id) || myTargetedEventIds.has(e.id)
+        )
         .map((e) => ({
           eventId: e.id,
           type: e.type,
@@ -652,6 +756,15 @@ export default function MemberHome({
       content?: string;
       weight_kg?: number | null;
       body_fat_pct?: number | null;
+      match_title?: string;
+      match_count?: number | null;
+      win_count?: number | null;
+      loss_count?: number | null;
+      reflection?: string;
+      good_points?: string;
+      challenges?: string;
+      improvement_plan?: string;
+      team_challenges?: string;
     } = {
       team_id: profile.team_id,
       event_id: todo.eventId,
@@ -659,7 +772,16 @@ export default function MemberHome({
       updated_at: new Date().toISOString(),
     };
     if (todo.type === "match_reflection") {
-      payload.content = teamEventContent;
+      payload.content = "";
+      payload.match_title = matchTitle;
+      payload.match_count = matchCount ? Number(matchCount) : null;
+      payload.win_count = matchWinCount ? Number(matchWinCount) : null;
+      payload.loss_count = matchLossCount ? Number(matchLossCount) : null;
+      payload.reflection = matchReflection;
+      payload.good_points = matchGoodPoints;
+      payload.challenges = matchChallenges;
+      payload.improvement_plan = matchImprovementPlan;
+      payload.team_challenges = matchTeamChallenges;
     } else {
       payload.content = "";
       payload.weight_kg = teamEventWeightKg ? Number(teamEventWeightKg) : null;
@@ -676,10 +798,19 @@ export default function MemberHome({
       setErrorMsg(error.message);
     } else {
       setOpenTeamEventTodoId(null);
-      setTeamEventContent("");
+      setMatchTitle("");
+      setMatchCount("");
+      setMatchWinCount("");
+      setMatchLossCount("");
+      setMatchReflection("");
+      setMatchGoodPoints("");
+      setMatchChallenges("");
+      setMatchImprovementPlan("");
+      setMatchTeamChallenges("");
       setTeamEventWeightKg("");
       setTeamEventBodyFatPct("");
       await loadTeamEventTodos();
+      await loadMatchReflections();
     }
     setSavingTeamEventTodo(false);
   }
@@ -1500,13 +1631,98 @@ export default function MemberHome({
               {isOpen && (
                 <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
                   {todo.type === "match_reflection" ? (
-                    <textarea
-                      value={teamEventContent}
-                      onChange={(e) => setTeamEventContent(e.target.value)}
-                      placeholder="試合の振り返りを書いてください"
-                      rows={4}
-                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                    />
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        出場した試合名
+                        <input
+                          type="text"
+                          value={matchTitle}
+                          onChange={(e) => setMatchTitle(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          試合数
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchCount}
+                            onChange={(e) => setMatchCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          勝ち
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchWinCount}
+                            onChange={(e) => setMatchWinCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          負け
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchLossCount}
+                            onChange={(e) => setMatchLossCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                      </div>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        試合の反省
+                        <textarea
+                          value={matchReflection}
+                          onChange={(e) => setMatchReflection(e.target.value)}
+                          rows={3}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        良かった点
+                        <textarea
+                          value={matchGoodPoints}
+                          onChange={(e) => setMatchGoodPoints(e.target.value)}
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        課題に感じた点
+                        <textarea
+                          value={matchChallenges}
+                          onChange={(e) => setMatchChallenges(e.target.value)}
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        改善方法と必要だと考えるトレーニング
+                        <textarea
+                          value={matchImprovementPlan}
+                          onChange={(e) =>
+                            setMatchImprovementPlan(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        当部の課題
+                        <textarea
+                          value={matchTeamChallenges}
+                          onChange={(e) =>
+                            setMatchTeamChallenges(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
@@ -1899,6 +2115,116 @@ export default function MemberHome({
                 label={`直近の${todayLogTitle.trim()}のトレーニングメニュー`}
               />
             )}
+          </div>
+        )}
+      </section>
+
+      {/* 試合の振り返り */}
+      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+          試合の振り返り
+        </h2>
+        {loadingMatchReflections ? (
+          <p className="text-xs text-neutral-500">読み込み中…</p>
+        ) : matchReflections.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            まだ振り返りの提出はありません。
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {matchReflections.map((r) => {
+              const isOpen = openMatchReflectionId === r.eventId;
+              return (
+                <div
+                  key={r.eventId}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900"
+                >
+                  <button
+                    onClick={() =>
+                      setOpenMatchReflectionId(isOpen ? null : r.eventId)
+                    }
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+                  >
+                    <span className="font-medium text-neutral-100">
+                      {r.eventTitle}の振り返り
+                    </span>
+                    <span className="shrink-0 text-[11px] text-neutral-500">
+                      提出日{formatMonthDay(r.submittedAt.slice(0, 10))}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
+                      {r.matchTitle && (
+                        <p>
+                          <span className="text-neutral-500">試合名：</span>
+                          {r.matchTitle}
+                        </p>
+                      )}
+                      {r.matchCount != null && (
+                        <p>
+                          <span className="text-neutral-500">
+                            試合数：
+                          </span>
+                          {r.matchCount}試合（{r.winCount ?? 0}勝{" "}
+                          {r.lossCount ?? 0}敗）
+                        </p>
+                      )}
+                      {r.reflection && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            試合の反省
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.reflection}
+                          </p>
+                        </div>
+                      )}
+                      {r.goodPoints && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            良かった点
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.goodPoints}
+                          </p>
+                        </div>
+                      )}
+                      {r.challenges && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            課題に感じた点
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.challenges}
+                          </p>
+                        </div>
+                      )}
+                      {r.improvementPlan && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            改善方法と必要だと考えるトレーニング
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.improvementPlan}
+                          </p>
+                        </div>
+                      )}
+                      {r.teamChallenges && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            当部の課題
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.teamChallenges}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

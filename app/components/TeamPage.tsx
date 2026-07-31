@@ -230,6 +230,16 @@ export default function TeamPage({
   const todayStr = toDateKey(new Date());
 
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
+
+  const [activeEvents, setActiveEvents] = useState<
+    { id: string; type: "weight_max" | TeamEventType; label: string; deadline: string }[]
+  >([]);
+  const [loadingActiveEvents, setLoadingActiveEvents] = useState(true);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [eventSubmissionDetail, setEventSubmissionDetail] = useState<
+    { memberId: string; displayName: string; location: Location; submitted: boolean }[]
+  >([]);
+  const [loadingEventDetail, setLoadingEventDetail] = useState(false);
   const [loadingMaxes, setLoadingMaxes] = useState(true);
   const [weightMaxEvents, setWeightMaxEvents] = useState<WeightMaxEventInfo[]>(
     []
@@ -283,6 +293,7 @@ export default function TeamPage({
     loadMembers();
     loadWeightMaxes();
     loadTeamEvents();
+    loadActiveEvents();
     if (selectedScheduleDate) loadDayDetail(selectedScheduleDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1090,6 +1101,143 @@ export default function TeamPage({
       );
     }
     setLoadingTeamEvents(false);
+  }
+
+  // 現在開催中の全イベント（ウェイトMAX集計＋試合の振り返り＋体組成の提出）を一覧化する
+  async function loadActiveEvents() {
+    setLoadingActiveEvents(true);
+    const list: {
+      id: string;
+      type: "weight_max" | TeamEventType;
+      label: string;
+      deadline: string;
+    }[] = [];
+
+    const { data: wmEvent, error: wmError } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline")
+      .eq("team_id", profile.team_id)
+      .is("closed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (wmError) {
+      setErrorMsg(wmError.message);
+    } else if (wmEvent) {
+      const event = wmEvent as { id: string; deadline: string };
+      list.push({
+        id: event.id,
+        type: "weight_max",
+        label: "ウェイトMAX集計",
+        deadline: event.deadline,
+      });
+    }
+
+    const { data: teEvents, error: teError } = await supabase
+      .from("team_events")
+      .select("id, type, title, deadline")
+      .eq("team_id", profile.team_id)
+      .is("closed_at", null);
+    if (teError) {
+      setErrorMsg(teError.message);
+    } else {
+      for (const e of (teEvents ?? []) as {
+        id: string;
+        type: TeamEventType;
+        title: string;
+        deadline: string;
+      }[]) {
+        list.push({
+          id: e.id,
+          type: e.type,
+          label: e.title
+            ? `${teamEventTypeLabel[e.type]}：${e.title}`
+            : teamEventTypeLabel[e.type],
+          deadline: e.deadline,
+        });
+      }
+    }
+
+    list.sort((a, b) => a.deadline.localeCompare(b.deadline));
+    setActiveEvents(list);
+    setLoadingActiveEvents(false);
+  }
+
+  async function loadEventSubmissionDetail(event: {
+    id: string;
+    type: "weight_max" | TeamEventType;
+  }) {
+    setLoadingEventDetail(true);
+
+    let targetIds: Set<string> | null = null;
+    if (event.type === "match_reflection") {
+      const { data: targets, error: targetError } = await supabase
+        .from("team_event_targets")
+        .select("member_id")
+        .eq("event_id", event.id);
+      if (targetError) {
+        setErrorMsg(targetError.message);
+      } else if (targets && targets.length > 0) {
+        targetIds = new Set(
+          (targets as { member_id: string }[]).map((t) => t.member_id)
+        );
+      }
+    }
+
+    const requiredMembers = members.filter(
+      (m) =>
+        m.role !== "coach" &&
+        m.role !== "manager" &&
+        !m.isPending &&
+        (!targetIds || targetIds.has(m.id))
+    );
+
+    let submittedIds = new Set<string>();
+    if (event.type === "weight_max") {
+      const { data, error } = await supabase
+        .from("weight_maxes")
+        .select("author_id")
+        .eq("event_id", event.id);
+      if (error) setErrorMsg(error.message);
+      else
+        submittedIds = new Set(
+          ((data ?? []) as { author_id: string }[]).map((r) => r.author_id)
+        );
+    } else {
+      const { data, error } = await supabase
+        .from("team_event_submissions")
+        .select("author_id")
+        .eq("event_id", event.id);
+      if (error) setErrorMsg(error.message);
+      else
+        submittedIds = new Set(
+          ((data ?? []) as { author_id: string }[]).map((r) => r.author_id)
+        );
+    }
+
+    setEventSubmissionDetail(
+      requiredMembers
+        .map((m) => ({
+          memberId: m.id,
+          displayName: m.display_name,
+          location: m.home_location ?? "tama",
+          submitted: submittedIds.has(m.id),
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"))
+    );
+    setLoadingEventDetail(false);
+  }
+
+  function handleToggleEventDetail(event: {
+    id: string;
+    type: "weight_max" | TeamEventType;
+  }) {
+    if (expandedEventId === event.id) {
+      setExpandedEventId(null);
+      return;
+    }
+    setExpandedEventId(event.id);
+    loadEventSubmissionDetail(event);
   }
 
   // 直近1週間の「オフではない練習」のうち、実施報告・未実施報告が
@@ -2328,6 +2476,103 @@ export default function TeamPage({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* 開催中のイベント */}
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            開催中のイベント
+          </h2>
+          {loadingActiveEvents ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : activeEvents.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              現在開催中のイベントはありません。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {activeEvents.map((event) => {
+                const isExpanded = expandedEventId === event.id;
+                return (
+                  <div
+                    key={event.id}
+                    className="rounded-lg border border-neutral-800 bg-neutral-900"
+                  >
+                    <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-neutral-100">
+                          {event.label}
+                        </span>
+                        <span className="text-[11px] text-neutral-500">
+                          締切：{formatMonthDay(event.deadline)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleToggleEventDetail(event)}
+                        className="shrink-0 rounded border border-neutral-700 px-2.5 py-1.5 text-[11px] text-neutral-300 active:bg-neutral-800"
+                      >
+                        {isExpanded ? "閉じる" : "提出者を確認する"}
+                      </button>
+                    </div>
+                    {isExpanded && (
+                      <div className="border-t border-neutral-800 p-3">
+                        {loadingEventDetail ? (
+                          <p className="text-xs text-neutral-500">
+                            読み込み中…
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-3">
+                            {(["tama", "otsuka"] as Location[]).map((loc) => {
+                              const rows = eventSubmissionDetail.filter(
+                                (r) => r.location === loc
+                              );
+                              return (
+                                <div key={loc} className="flex flex-col gap-1.5">
+                                  <p className="text-xs font-semibold text-neutral-400">
+                                    {locationLabel[loc]}
+                                  </p>
+                                  {rows.length === 0 ? (
+                                    <p className="text-[11px] text-neutral-600">
+                                      該当なし
+                                    </p>
+                                  ) : (
+                                    rows.map((r) => (
+                                      <div
+                                        key={r.memberId}
+                                        className={`flex items-center justify-between rounded px-2 py-1 text-xs ${
+                                          r.submitted
+                                            ? "bg-emerald-950/20 text-neutral-100"
+                                            : "bg-neutral-950 text-neutral-300"
+                                        }`}
+                                      >
+                                        <span className="truncate">
+                                          {r.displayName}
+                                        </span>
+                                        <span
+                                          className={`shrink-0 text-[10px] font-semibold ${
+                                            r.submitted
+                                              ? "text-emerald-400"
+                                              : "text-red-400"
+                                          }`}
+                                        >
+                                          {r.submitted ? "済" : "未"}
+                                        </span>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

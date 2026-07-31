@@ -743,3 +743,46 @@ create policy "team_event_submissions_insert_self" on team_event_submissions
 create policy "team_event_submissions_update_self" on team_event_submissions
   for update using (author_id = auth.uid());
 
+-- ============================================
+-- 追加: 「試合の振り返り」イベントの構造化項目
+-- ============================================
+alter table team_event_submissions add column if not exists match_title text;
+alter table team_event_submissions add column if not exists match_count integer;
+alter table team_event_submissions add column if not exists win_count integer;
+alter table team_event_submissions add column if not exists loss_count integer;
+alter table team_event_submissions add column if not exists reflection text;
+alter table team_event_submissions add column if not exists good_points text;
+alter table team_event_submissions add column if not exists challenges text;
+alter table team_event_submissions add column if not exists improvement_plan text;
+alter table team_event_submissions add column if not exists team_challenges text;
+
+-- ============================================
+-- 追加: イベントの対象者を限定できるようにする
+-- （行が無いイベントは「全員が対象」として扱う）
+-- ============================================
+create table if not exists team_event_targets (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references team_events(id) on delete cascade,
+  member_id uuid not null references profiles(id) on delete cascade,
+  unique (event_id, member_id)
+);
+alter table team_event_targets enable row level security;
+
+create policy "team_event_targets_select_same_team" on team_event_targets
+  for select using (
+    exists (
+      select 1 from team_events e
+      where e.id = event_id and e.team_id = get_my_team_id()
+    )
+  );
+
+create policy "team_event_targets_insert_coach" on team_event_targets
+  for insert with check (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+
+create policy "team_event_targets_delete_coach" on team_event_targets
+  for delete using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
+

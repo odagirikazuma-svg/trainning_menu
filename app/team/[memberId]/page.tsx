@@ -43,6 +43,21 @@ type InjuryInfo = {
   mat_participation_detail: string | null;
 };
 
+type MatchReflectionInfo = {
+  eventId: string;
+  eventTitle: string;
+  submittedAt: string;
+  matchTitle: string;
+  matchCount: number | null;
+  winCount: number | null;
+  lossCount: number | null;
+  reflection: string;
+  goodPoints: string;
+  challenges: string;
+  improvementPlan: string;
+  teamChallenges: string;
+};
+
 const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
   yes: "可",
   no: "非",
@@ -85,6 +100,12 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
   const [nextMatch, setNextMatch] = useState<NextMatchInfo | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [injuries, setInjuries] = useState<InjuryInfo[]>([]);
+  const [matchReflections, setMatchReflections] = useState<
+    MatchReflectionInfo[]
+  >([]);
+  const [openMatchReflectionId, setOpenMatchReflectionId] = useState<
+    string | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -136,6 +157,47 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
       .eq("is_recovered", false)
       .order("created_at", { ascending: false });
     setInjuries((injuryData ?? []) as InjuryInfo[]);
+
+    // 試合の振り返り履歴
+    const { data: reflectionData } = await supabase
+      .from("team_event_submissions")
+      .select(
+        "event_id, updated_at, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
+      )
+      .eq("author_id", memberId);
+    const reflectionRows = (reflectionData ?? []) as unknown as {
+      event_id: string;
+      updated_at: string;
+      match_title: string | null;
+      match_count: number | null;
+      win_count: number | null;
+      loss_count: number | null;
+      reflection: string | null;
+      good_points: string | null;
+      challenges: string | null;
+      improvement_plan: string | null;
+      team_challenges: string | null;
+      event: { title: string; type: string } | null;
+    }[];
+    setMatchReflections(
+      reflectionRows
+        .filter((r) => r.event?.type === "match_reflection")
+        .map((r) => ({
+          eventId: r.event_id,
+          eventTitle: r.event?.title || r.match_title || "試合の振り返り",
+          submittedAt: r.updated_at,
+          matchTitle: r.match_title ?? "",
+          matchCount: r.match_count,
+          winCount: r.win_count,
+          lossCount: r.loss_count,
+          reflection: r.reflection ?? "",
+          goodPoints: r.good_points ?? "",
+          challenges: r.challenges ?? "",
+          improvementPlan: r.improvement_plan ?? "",
+          teamChallenges: r.team_challenges ?? "",
+        }))
+        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+    );
 
     // その日のスケジュール（マット・マット以外の有無）
     const { data: dayData } = await supabase
@@ -412,6 +474,116 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
               <p className="whitespace-pre-wrap text-sm text-neutral-100">
                 {detail?.selfText}
               </p>
+            </div>
+          )}
+        </section>
+
+        {/* 試合の振り返り */}
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            試合の振り返り
+          </h2>
+          {matchReflections.length === 0 ? (
+            <p className="text-xs text-neutral-500">
+              まだ振り返りの提出はありません。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {matchReflections.map((r) => {
+                const isOpen = openMatchReflectionId === r.eventId;
+                return (
+                  <div
+                    key={r.eventId}
+                    className="rounded-lg border border-neutral-800 bg-neutral-900"
+                  >
+                    <button
+                      onClick={() =>
+                        setOpenMatchReflectionId(isOpen ? null : r.eventId)
+                      }
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+                    >
+                      <span className="font-medium text-neutral-100">
+                        {r.eventTitle}の振り返り
+                      </span>
+                      <span className="shrink-0 text-[11px] text-neutral-500">
+                        提出日{formatMonthDay(r.submittedAt.slice(0, 10))}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
+                        {r.matchTitle && (
+                          <p>
+                            <span className="text-neutral-500">
+                              試合名：
+                            </span>
+                            {r.matchTitle}
+                          </p>
+                        )}
+                        {r.matchCount != null && (
+                          <p>
+                            <span className="text-neutral-500">
+                              試合数：
+                            </span>
+                            {r.matchCount}試合（{r.winCount ?? 0}勝{" "}
+                            {r.lossCount ?? 0}敗）
+                          </p>
+                        )}
+                        {r.reflection && (
+                          <div>
+                            <p className="text-[11px] text-neutral-500">
+                              試合の反省
+                            </p>
+                            <p className="whitespace-pre-wrap text-neutral-100">
+                              {r.reflection}
+                            </p>
+                          </div>
+                        )}
+                        {r.goodPoints && (
+                          <div>
+                            <p className="text-[11px] text-neutral-500">
+                              良かった点
+                            </p>
+                            <p className="whitespace-pre-wrap text-neutral-100">
+                              {r.goodPoints}
+                            </p>
+                          </div>
+                        )}
+                        {r.challenges && (
+                          <div>
+                            <p className="text-[11px] text-neutral-500">
+                              課題に感じた点
+                            </p>
+                            <p className="whitespace-pre-wrap text-neutral-100">
+                              {r.challenges}
+                            </p>
+                          </div>
+                        )}
+                        {r.improvementPlan && (
+                          <div>
+                            <p className="text-[11px] text-neutral-500">
+                              改善方法と必要だと考えるトレーニング
+                            </p>
+                            <p className="whitespace-pre-wrap text-neutral-100">
+                              {r.improvementPlan}
+                            </p>
+                          </div>
+                        )}
+                        {r.teamChallenges && (
+                          <div>
+                            <p className="text-[11px] text-neutral-500">
+                              当部の課題
+                            </p>
+                            <p className="whitespace-pre-wrap text-neutral-100">
+                              {r.teamChallenges}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
