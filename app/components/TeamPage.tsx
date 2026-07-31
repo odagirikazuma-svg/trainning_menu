@@ -164,6 +164,7 @@ export default function TeamPage({
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<
     string | null
   >(() => toDateKey(new Date()));
+  const [showDayPopup, setShowDayPopup] = useState(false);
   const [dayDetail, setDayDetail] = useState<
     ScheduleDayRow | null | undefined
   >(undefined);
@@ -436,15 +437,14 @@ export default function TeamPage({
 
   function handleSelectScheduleDate(dateStr: string) {
     setSelectedScheduleDate(dateStr);
+    setShowDayPopup(true);
     setEditingSchedule(false);
     loadDayDetail(dateStr);
     loadDaySubmissionDetail(dateStr);
   }
 
   function handleCloseScheduleDetail() {
-    setSelectedScheduleDate(null);
-    setDayDetail(undefined);
-    setMatMenuDetail(undefined);
+    setShowDayPopup(false);
     setEditingSchedule(false);
   }
 
@@ -1744,7 +1744,7 @@ export default function TeamPage({
               viewLocation={scheduleLocation}
               submissionCounts={submissionCounts}
             />
-            {selectedScheduleDate && (
+            {selectedScheduleDate && showDayPopup && (
               <div
                 className="absolute inset-0 z-20 flex items-center justify-center p-2"
                 onClick={handleCloseScheduleDetail}
