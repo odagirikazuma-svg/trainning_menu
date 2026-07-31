@@ -257,9 +257,9 @@ export default function TeamPage({
       location: Location;
       entryYear: number | null;
       isPending: boolean;
-      matStatus: "not_required" | "report" | "absent" | "missing";
+      matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
-      selfStatus: "not_required" | "done" | "missing";
+      selfStatus: "not_required" | "not_started" | "done" | "missing";
       selfText: string | null;
     }[]
   >([]);
@@ -1274,24 +1274,44 @@ export default function TeamPage({
     const { data: scheduleData } = await supabase
       .from("schedule_days")
       .select(
-        "location, is_off, sessions:schedule_sessions(session_type)"
+        "location, is_off, sessions:schedule_sessions(session_type, start_time)"
       )
       .eq("team_id", profile.team_id)
       .eq("date", dateStr);
 
+    const now = new Date();
     const scheduleByLoc = new Map<
       Location,
-      { isOff: boolean; hasMat: boolean; hasNonMat: boolean }
+      {
+        isOff: boolean;
+        hasMat: boolean;
+        hasNonMat: boolean;
+        matStarted: boolean;
+        selfStarted: boolean;
+      }
     >();
     for (const row of (scheduleData ?? []) as unknown as {
       location: Location;
       is_off: boolean;
-      sessions: { session_type: SessionType }[];
+      sessions: { session_type: SessionType; start_time: string }[];
     }[]) {
+      const matSession = row.sessions.find((s) => s.session_type === "mat");
+      const nonMatSessions = row.sessions.filter(
+        (s) => s.session_type !== "mat"
+      );
+      const earliestNonMat = nonMatSessions
+        .map((s) => s.start_time)
+        .sort()[0];
       scheduleByLoc.set(row.location, {
         isOff: row.is_off,
-        hasMat: row.sessions.some((s) => s.session_type === "mat"),
-        hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
+        hasMat: !!matSession,
+        hasNonMat: nonMatSessions.length > 0,
+        matStarted: matSession
+          ? now >= new Date(`${dateStr}T${matSession.start_time}`)
+          : true,
+        selfStarted: earliestNonMat
+          ? now >= new Date(`${dateStr}T${earliestNonMat}`)
+          : true,
       });
     }
 
@@ -1367,9 +1387,9 @@ export default function TeamPage({
       location: Location;
       entryYear: number | null;
       isPending: boolean;
-      matStatus: "not_required" | "report" | "absent" | "missing";
+      matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
-      selfStatus: "not_required" | "done" | "missing";
+      selfStatus: "not_required" | "not_started" | "done" | "missing";
       selfText: string | null;
     }[] = [];
 
@@ -1390,17 +1410,21 @@ export default function TeamPage({
           isPending: !!m.isPending,
           matStatus: !hasMat
             ? ("not_required" as const)
-            : matComment
-              ? matComment.kind === "absent"
-                ? ("absent" as const)
-                : ("report" as const)
-              : ("missing" as const),
+            : !day.matStarted
+              ? ("not_started" as const)
+              : matComment
+                ? matComment.kind === "absent"
+                  ? ("absent" as const)
+                  : ("report" as const)
+                : ("missing" as const),
           matText: matComment?.text ?? null,
           selfStatus: !hasNonMat
             ? ("not_required" as const)
-            : selfContent
-              ? ("done" as const)
-              : ("missing" as const),
+            : !day.selfStarted
+              ? ("not_started" as const)
+              : selfContent
+                ? ("done" as const)
+                : ("missing" as const),
           selfText: selfContent ?? null,
         });
       }
@@ -2022,6 +2046,118 @@ export default function TeamPage({
                     <p className="py-6 text-center text-xs text-neutral-500">
                       読み込み中…
                     </p>
+                  ) : isCoach ? (
+                    <div className="flex flex-col gap-3 pr-5">
+                      <p className="text-xs text-neutral-500">
+                        {locationLabel[scheduleLocation]}・
+                        {formatMonthDay(dayDetail.date)}
+                      </p>
+                      {(dayDetail.day_type === "camp" ||
+                        dayDetail.day_type === "match" ||
+                        dayDetail.day_type === "away") && (
+                        <span
+                          className={`self-start rounded px-2 py-1 text-xs font-semibold ${dayTypeFillColorDark[dayDetail.day_type]}`}
+                        >
+                          {dayTypeLabel[dayDetail.day_type]}
+                          {dayDetail.event_name && `：${dayDetail.event_name}`}
+                        </span>
+                      )}
+                      {dayDetail.sessions.length === 0 && (
+                        <div className="flex flex-col items-start gap-2 py-2">
+                          <p className="text-xs text-neutral-500">
+                            この日は練習セクションの設定はありません。
+                          </p>
+                          <button
+                            onClick={handleStartEditSchedule}
+                            className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                          >
+                            時間割を編集する
+                          </button>
+                        </div>
+                      )}
+                      {dayDetail.sessions.map((s) => (
+                        <div
+                          key={s.id}
+                          className="rounded-lg border border-neutral-800 p-3"
+                        >
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                            />
+                            第{s.session_no}セッション・
+                            {sessionTypeLabel[s.session_type]}・
+                            {s.start_time.slice(0, 5)}〜
+                          </div>
+                          {s.location_note ? (
+                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                              練習場所：{s.location_note}
+                            </p>
+                          ) : (
+                            s.is_joint && (
+                              <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                                全体練習（
+                                {locationLabel[s.joint_location ?? scheduleLocation]}
+                                で実施）
+                              </p>
+                            )
+                          )}
+                          {s.session_type === "mat" ? (
+                            matMenuDetail === undefined ? (
+                              <p className="text-xs text-neutral-500">
+                                読み込み中…
+                              </p>
+                            ) : matMenuDetail === null ? (
+                              <div className="flex flex-col items-start gap-2">
+                                <p className="text-xs text-neutral-500">
+                                  このセッションの練習メニューはまだ掲示板に投稿されていません
+                                </p>
+                                {canEditMatMenu && (
+                                  <button
+                                    onClick={() =>
+                                      handleGoToMatMenu(s.start_time)
+                                    }
+                                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
+                                  >
+                                    このセッションの練習メニューを作成する
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <h4 className="mb-1 text-sm font-bold">
+                                  {matMenuDetail.title || "練習メニュー"}
+                                </h4>
+                                <p className="whitespace-pre-wrap text-sm text-neutral-100">
+                                  {matMenuDetail.content}
+                                </p>
+                                {canEditMatMenu &&
+                                  !isPastSession(
+                                    matMenuDetail.date,
+                                    matMenuDetail.start_time
+                                  ) && (
+                                    <button
+                                      onClick={() => handleGoToMatMenu()}
+                                      className="mt-2 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                                    >
+                                      掲示板で編集する
+                                    </button>
+                                  )}
+                              </div>
+                            )
+                          ) : (
+                            <p className="text-xs text-neutral-400">
+                              各自申告制です。実施状況はマイページの「今日のトレーニングメニュー」から記録できます。
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={handleStartEditSchedule}
+                        className="self-start text-xs font-medium text-neutral-400 underline"
+                      >
+                        時間割を編集する
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex flex-col gap-3 pr-5">
                       <p className="text-xs text-neutral-500">
@@ -2053,14 +2189,6 @@ export default function TeamPage({
                           </div>
                         );
                       })}
-                      {isCoach && (
-                        <button
-                          onClick={handleStartEditSchedule}
-                          className="self-start text-xs font-medium text-neutral-400 underline"
-                        >
-                          時間割を編集する
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -2109,8 +2237,20 @@ export default function TeamPage({
                           {group.label}
                         </p>
                         {group.rows.map((d) => {
+                          const resolved =
+                            d.matStatus === "missing" ||
+                            d.matStatus === "report" ||
+                            d.matStatus === "absent" ||
+                            d.selfStatus === "missing" ||
+                            d.selfStatus === "done";
+                          const notStarted =
+                            !d.isPending &&
+                            !resolved &&
+                            (d.matStatus === "not_started" ||
+                              d.selfStatus === "not_started");
                           const allDone =
                             !d.isPending &&
+                            !notStarted &&
                             (d.matStatus === "not_required" ||
                               d.matStatus !== "missing") &&
                             (d.selfStatus === "not_required" ||
@@ -2127,15 +2267,21 @@ export default function TeamPage({
                               className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
                                 d.isPending
                                   ? "border-neutral-800 bg-neutral-900 text-neutral-600"
-                                  : allDone
-                                    ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
-                                    : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
+                                  : notStarted
+                                    ? "border-neutral-800 bg-neutral-900 text-neutral-400"
+                                    : allDone
+                                      ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
+                                      : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
                               }`}
                             >
                               <span className="truncate">{d.displayName}</span>
                               {d.isPending ? (
                                 <span className="shrink-0 text-[10px] text-neutral-600">
                                   未登録
+                                </span>
+                              ) : notStarted ? (
+                                <span className="shrink-0 text-[10px] text-neutral-500">
+                                  未開始
                                 </span>
                               ) : (
                                 <span
