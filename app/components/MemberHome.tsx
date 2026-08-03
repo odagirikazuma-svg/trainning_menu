@@ -8,6 +8,7 @@ import {
   dayTypeLabel,
   getTitleColor,
   Location,
+  locationLabel,
   SessionType,
   sessionTypeDotColor,
   teamEventTypeLabel,
@@ -278,6 +279,8 @@ export default function MemberHome({
           type: SessionType;
           time: string;
           locationNote: string | null;
+          isJoint: boolean;
+          jointLocation: Location | null;
         }[];
       }
     >
@@ -1324,7 +1327,7 @@ export default function MemberHome({
       const { data: scheduleData, error: scheduleError } = await supabase
         .from("schedule_days")
         .select(
-          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, location_note)"
+          "date, is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, location_note, is_joint, joint_location)"
         )
         .eq("team_id", profile.team_id)
         .eq("location", effectiveHomeLocation)
@@ -1345,6 +1348,8 @@ export default function MemberHome({
               type: SessionType;
               time: string;
               locationNote: string | null;
+              isJoint: boolean;
+              jointLocation: Location | null;
             }[];
           }
         >();
@@ -1357,6 +1362,8 @@ export default function MemberHome({
             session_type: SessionType;
             start_time: string;
             location_note: string | null;
+            is_joint: boolean;
+            joint_location: Location | null;
           }[];
         }[]) {
           const sessions = row.sessions
@@ -1366,6 +1373,8 @@ export default function MemberHome({
               type: s.session_type,
               time: s.start_time,
               locationNote: s.location_note,
+              isJoint: s.is_joint,
+              jointLocation: s.joint_location,
             }));
           const hasMat = row.sessions.some((s) => s.session_type === "mat");
           map.set(row.date, {
@@ -2066,6 +2075,7 @@ export default function MemberHome({
           highlightDate={selectedCalendarDate}
           todayDate={todayStr}
           nextMatchDate={isManager ? null : (nextMatch?.date ?? null)}
+          homeLocation={effectiveHomeLocation ?? "tama"}
         />
       </section>
       {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
@@ -2676,6 +2686,7 @@ function UnifiedCalendar({
   highlightDate,
   todayDate,
   nextMatchDate,
+  homeLocation,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2689,7 +2700,13 @@ function UnifiedCalendar({
       isOff: boolean;
       eventName: string | null;
       hasMat: boolean;
-      sessions: { type: SessionType; time: string; locationNote: string | null }[];
+      sessions: {
+        type: SessionType;
+        time: string;
+        locationNote: string | null;
+        isJoint: boolean;
+        jointLocation: Location | null;
+      }[];
     }
   >;
   matPendingDates: Set<string>;
@@ -2697,6 +2714,7 @@ function UnifiedCalendar({
   highlightDate?: string | null;
   todayDate?: string;
   nextMatchDate?: string | null;
+  homeLocation: Location;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
@@ -2857,7 +2875,22 @@ function UnifiedCalendar({
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
                       />
                       {s.time.slice(0, 5)}
-                      {s.locationNote ? `(${s.locationNote})` : ""}
+                      {schedule?.dayType === "camp" ||
+                      schedule?.dayType === "away"
+                        ? s.locationNote
+                          ? `(${s.locationNote})`
+                          : ""
+                        : s.type === "mat"
+                          ? `(${
+                              locationLabel[
+                                s.isJoint
+                                  ? (s.jointLocation ?? homeLocation)
+                                  : homeLocation
+                              ]
+                            })`
+                          : s.locationNote
+                            ? `(${s.locationNote})`
+                            : ""}
                     </span>
                   ))}
                 </span>

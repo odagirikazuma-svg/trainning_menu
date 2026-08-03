@@ -296,25 +296,42 @@ export default function TrainingBoardSupabase({
 
   // 「＋ メニューを作成」ボタン：閉じている場合は開き、
   // 管理者が設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
-  function handleOpenNewForm() {
+  async function handleOpenNewForm() {
     if (showNewForm) {
       setShowNewForm(false);
       return;
     }
     setConfirmingNew(false);
-    const isRegularJoint =
-      !isAwayLikeForViewDate && !!matSessionForViewDate?.is_joint;
+
+    // 表示中のstateではなく、クリック時点の最新情報をDBから直接取得して判定する
+    const { data: dayData } = await supabase
+      .from("schedule_days")
+      .select(
+        "day_type, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", activeLocation)
+      .eq("date", viewDate)
+      .maybeSingle();
+    const dayRow = dayData as {
+      day_type: DayType;
+      sessions: {
+        session_type: SessionType;
+        start_time: string;
+        is_joint: boolean;
+        joint_location: Location | null;
+      }[];
+    } | null;
+    const isAwayLikeDay =
+      dayRow?.day_type === "camp" || dayRow?.day_type === "away";
+    const matSession = dayRow?.sessions.find((s) => s.session_type === "mat");
+    const isRegularJoint = !isAwayLikeDay && !!matSession?.is_joint;
+
     setNewMenuType(isRegularJoint ? "joint" : "normal");
-    setNewOffBothLocations(
-      isAwayLikeForViewDate ? !!matSessionForViewDate?.is_joint : false
-    );
-    setNewJointLocation(
-      matSessionForViewDate?.joint_location ?? activeLocation
-    );
+    setNewOffBothLocations(isAwayLikeDay ? !!matSession?.is_joint : false);
+    setNewJointLocation(matSession?.joint_location ?? activeLocation);
     setNewDate(viewDate);
-    setNewStartTime(
-      matSessionForViewDate ? matSessionForViewDate.start_time.slice(0, 5) : ""
-    );
+    setNewStartTime(matSession ? matSession.start_time.slice(0, 5) : "");
 
     setShowNewForm(true);
   }
