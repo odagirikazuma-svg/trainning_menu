@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
   const { data: profileRows, error: profileError } = await supabase
     .from("profiles")
     .select("id, team_id, home_location, role")
-    .not("role", "in", "(coach,manager)");
+    .not("role", "in", "(coach,manager,ob)");
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });

@@ -1,4 +1,4 @@
-export type Role = "leader" | "vice_leader" | "captain" | "coach" | "manager" | "member";
+export type Role = "leader" | "vice_leader" | "captain" | "coach" | "manager" | "member" | "ob";
 
 export type Location = "tama" | "otsuka";
 
@@ -109,6 +109,7 @@ export const roleLabel: Record<Role, string> = {
   coach: "管理者",
   manager: "マネージャー",
   member: "部員",
+  ob: "OB",
 };
 
 // メニューを作成できる権限を持つロール

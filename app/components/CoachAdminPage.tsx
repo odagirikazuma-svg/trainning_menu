@@ -16,7 +16,7 @@ const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   member: "役職なし",
 };
 
-type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member";
+type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
 
 const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
   captain: "主将",
@@ -25,6 +25,7 @@ const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
   vice_leader: "副リーダー",
   manager: "マネージャー",
   member: "役職なし",
+  ob: "OB(引退)",
 };
 
 type MemberRow = {
@@ -661,7 +662,7 @@ export default function CoachAdminPage({
                 <p className="text-xs text-neutral-400">
                   提出済み {weightMaxSubmittedCount}人 /{" "}
                   {activeEventTargetCounts.weight_max ??
-                    members.filter((m) => m.role !== "manager").length}
+                    members.filter((m) => m.role !== "manager" && m.role !== "ob").length}
                   人
                   {activeEventTargetCounts.weight_max != null &&
                     "（対象者を限定しています）"}
@@ -722,7 +723,7 @@ export default function CoachAdminPage({
               <p className="text-xs text-neutral-400">
                 提出済み {teamEventSubmittedCounts[selectedEventType]}人 /{" "}
                 {activeEventTargetCounts[selectedEventType] ??
-                  members.filter((m) => m.role !== "manager").length}
+                  members.filter((m) => m.role !== "manager" && m.role !== "ob").length}
                 人
                 {activeEventTargetCounts[selectedEventType] != null &&
                   "（対象者を限定しています）"}
@@ -1350,7 +1351,7 @@ function EventTargetPicker({
       <div className="max-h-40 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-2">
         <div className="flex flex-col gap-1">
           {members
-            .filter((m) => m.role !== "manager")
+            .filter((m) => m.role !== "manager" && m.role !== "ob")
             .map((m) => (
               <label
                 key={m.id}

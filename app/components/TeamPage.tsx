@@ -1208,6 +1208,7 @@ export default function TeamPage({
       (m) =>
         m.role !== "coach" &&
         m.role !== "manager" &&
+        m.role !== "ob" &&
         !m.isPending &&
         (!targetIds || targetIds.has(m.id))
     );
@@ -1267,6 +1268,7 @@ export default function TeamPage({
       (m) =>
         m.role !== "coach" &&
         m.role !== "manager" &&
+        m.role !== "ob" &&
         (m.home_location === loc || (loc === "tama" && m.home_location == null))
     );
   }
@@ -2654,7 +2656,7 @@ export default function TeamPage({
                         </thead>
                         <tbody className="divide-y divide-neutral-800">
                           {members
-                            .filter((m) => m.role !== "coach" && m.role !== "manager" && !m.isPending)
+                            .filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob" && !m.isPending)
                             .map((m) => {
                               const max = currentMap?.get(m.id);
                               const prev = previousMap?.get(m.id);
@@ -2742,6 +2744,7 @@ export default function TeamPage({
                           (m) =>
                             m.role !== "coach" &&
                             m.role !== "manager" &&
+                            m.role !== "ob" &&
                             !m.isPending
                         )
                         .map((m) => {

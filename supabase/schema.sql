@@ -828,3 +828,9 @@ create policy "weight_max_event_targets_delete_coach" on weight_max_event_target
 -- 追加: 「試合の振り返り」に試合結果（優勝・準優勝・◯回戦敗退 など）の項目を追加
 -- ============================================
 alter table team_event_submissions add column if not exists match_result text;
+
+-- ============================================
+-- 追加: 部員の役職に「OB」を追加する
+-- （引退した部員が、これまでの提出記録だけを閲覧できる立場）
+-- ============================================
+alter type member_role add value if not exists 'ob';
