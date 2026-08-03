@@ -2079,6 +2079,9 @@ export default function MemberHome({
         />
       </section>
       {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
+      <p className="text-sm font-semibold text-neutral-300">
+        {formatMonthDay(selectedCalendarDate ?? todayStr)}のメニュー
+      </p>
       {practiceMenuSlot}
 
 
