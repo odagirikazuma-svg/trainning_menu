@@ -1945,6 +1945,8 @@ export default function TeamPage({
               onSelectDate={handleSelectScheduleDate}
               highlightDate={selectedScheduleDate}
               submissionCounts={submissionCounts}
+              isCoach={isCoach}
+              viewLocation={scheduleLocation}
             />
             {selectedScheduleDate && showDayPopup && (
               <div
@@ -2387,6 +2389,8 @@ export default function TeamPage({
           </div>
         </section>
 
+        {!isCoach && (
+          <>
         {/* 日別の提出状況 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -2501,6 +2505,8 @@ export default function TeamPage({
             </div>
           )}
         </section>
+          </>
+        )}
 
         {/* 開催中のイベント */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
@@ -2599,198 +2605,271 @@ export default function TeamPage({
           )}
         </section>
 
-        {/* 全員のウェイトMAX */}
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        {/* イベント一覧 */}
+        <section className="flex flex-col gap-4 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            ウェイトMAX一覧
+            イベント一覧
           </h2>
           <p className="text-[11px] text-neutral-500">
-            管理者が「ウェイトMAXを集計する」を実行すると、部員が提出した記録がここに反映されます。（　）内は前回の計測からの増減です。
+            管理者が作成したイベント（ウェイトMAX集計・体組成の提出・試合の振り返り）の提出内容が、種類ごとに新着順で反映されます。
           </p>
-          {loadingMembers || loadingMaxes ? (
-            <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : members.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-              部員が登録されていません。
-            </p>
-          ) : weightMaxEvents.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-              まだウェイトMAXの計測は行われていません。
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {weightMaxEvents.map((event, eventIdx) => {
-                const currentMap = weightMaxesByEvent.get(event.id);
-                const previousEvent = weightMaxEvents[eventIdx + 1];
-                const previousMap = previousEvent
-                  ? weightMaxesByEvent.get(previousEvent.id)
-                  : undefined;
 
-                return (
-                  <details
-                    key={event.id}
-                    open={eventIdx === 0}
-                    className="rounded-lg border border-neutral-800"
-                  >
-                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
-                      {formatMonthDay(event.measurementDate)}計測一覧
-                    </summary>
-                    <div className="overflow-x-auto border-t border-neutral-800">
-                      <table className="w-full text-xs">
-                        <thead className="bg-neutral-900">
-                          <tr className="border-b border-neutral-800 text-neutral-500">
-                            <th className="px-2 py-1.5 text-left font-medium">
-                              氏名
-                            </th>
-                            <th className="px-1 py-1.5 text-right font-medium">
-                              BP
-                            </th>
-                            <th className="px-1 py-1.5 text-right font-medium">
-                              SQ
-                            </th>
-                            <th className="px-2 py-1.5 text-right font-medium">
-                              DL
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-800">
+          {/* ウェイトMAX一覧 */}
+          <div className="flex flex-col gap-2">
+            <h3 className="text-xs font-semibold text-neutral-300">
+              ウェイトMAX一覧
+            </h3>
+            {loadingMembers || loadingMaxes ? (
+              <p className="text-xs text-neutral-500">読み込み中…</p>
+            ) : weightMaxEvents.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                まだウェイトMAXの計測は行われていません。
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {weightMaxEvents.map((event, eventIdx) => {
+                  const currentMap = weightMaxesByEvent.get(event.id);
+                  const previousEvent = weightMaxEvents[eventIdx + 1];
+                  const previousMap = previousEvent
+                    ? weightMaxesByEvent.get(previousEvent.id)
+                    : undefined;
+
+                  return (
+                    <details
+                      key={event.id}
+                      open={eventIdx === 0}
+                      className="rounded-lg border border-neutral-800"
+                    >
+                      <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
+                        {formatMonthDay(event.measurementDate)}計測一覧
+                      </summary>
+                      <div className="overflow-x-auto border-t border-neutral-800">
+                        <table className="w-full text-xs">
+                          <thead className="bg-neutral-900">
+                            <tr className="border-b border-neutral-800 text-neutral-500">
+                              <th className="px-2 py-1.5 text-left font-medium">
+                                氏名
+                              </th>
+                              <th className="px-1 py-1.5 text-right font-medium">
+                                BP
+                              </th>
+                              <th className="px-1 py-1.5 text-right font-medium">
+                                SQ
+                              </th>
+                              <th className="px-2 py-1.5 text-right font-medium">
+                                DL
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-800">
+                            {members
+                              .filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob" && !m.isPending)
+                              .map((m) => {
+                                const max = currentMap?.get(m.id);
+                                const prev = previousMap?.get(m.id);
+                                const bench = formatWithDiff(
+                                  max?.bench ?? null,
+                                  prev?.bench
+                                );
+                                const squat = formatWithDiff(
+                                  max?.squat ?? null,
+                                  prev?.squat
+                                );
+                                const deadlift = formatWithDiff(
+                                  max?.deadlift ?? null,
+                                  prev?.deadlift
+                                );
+                                return (
+                                  <tr key={m.id}>
+                                    <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-100">
+                                      {m.display_name}
+                                    </td>
+                                    <td
+                                      className={`px-1 py-1.5 text-right ${bench.className}`}
+                                    >
+                                      {bench.text}
+                                    </td>
+                                    <td
+                                      className={`px-1 py-1.5 text-right ${squat.className}`}
+                                    >
+                                      {squat.text}
+                                    </td>
+                                    <td
+                                      className={`px-2 py-1.5 text-right ${deadlift.className}`}
+                                    >
+                                      {deadlift.text}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 体組成一覧 */}
+          <div className="flex flex-col gap-2">
+            <h3 className="text-xs font-semibold text-neutral-300">
+              体組成一覧
+            </h3>
+            {loadingMembers || loadingTeamEvents ? (
+              <p className="text-xs text-neutral-500">読み込み中…</p>
+            ) : teamEvents.filter((e) => e.type === "body_composition").length === 0 ? (
+              <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                まだイベントは作成されていません。
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {teamEvents
+                  .filter((e) => e.type === "body_composition")
+                  .map((event, idx) => {
+                    const subs = teamEventSubmissions.filter(
+                      (s) => s.event_id === event.id
+                    );
+                    const subByAuthor = new Map(
+                      subs.map((s) => [s.author_id, s])
+                    );
+                    return (
+                      <details
+                        key={event.id}
+                        open={idx === 0}
+                        className="rounded-lg border border-neutral-800"
+                      >
+                        <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
+                          {event.title || "体組成の提出"}（締切{" "}
+                          {formatMonthDay(event.deadline)}）
+                        </summary>
+                        <div className="flex flex-col gap-2 border-t border-neutral-800 p-3">
                           {members
-                            .filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob" && !m.isPending)
+                            .filter(
+                              (m) =>
+                                m.role !== "coach" &&
+                                m.role !== "manager" &&
+                                m.role !== "ob" &&
+                                !m.isPending
+                            )
                             .map((m) => {
-                              const max = currentMap?.get(m.id);
-                              const prev = previousMap?.get(m.id);
-                              const bench = formatWithDiff(
-                                max?.bench ?? null,
-                                prev?.bench
-                              );
-                              const squat = formatWithDiff(
-                                max?.squat ?? null,
-                                prev?.squat
-                              );
-                              const deadlift = formatWithDiff(
-                                max?.deadlift ?? null,
-                                prev?.deadlift
-                              );
+                              const sub = subByAuthor.get(m.id);
                               return (
-                                <tr key={m.id}>
-                                  <td className="max-w-[6rem] truncate px-2 py-1.5 font-medium text-neutral-100">
-                                    {m.display_name}
-                                  </td>
-                                  <td
-                                    className={`px-1 py-1.5 text-right ${bench.className}`}
-                                  >
-                                    {bench.text}
-                                  </td>
-                                  <td
-                                    className={`px-1 py-1.5 text-right ${squat.className}`}
-                                  >
-                                    {squat.text}
-                                  </td>
-                                  <td
-                                    className={`px-2 py-1.5 text-right ${deadlift.className}`}
-                                  >
-                                    {deadlift.text}
-                                  </td>
-                                </tr>
+                                <div
+                                  key={m.id}
+                                  className="flex flex-col gap-1 rounded border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-neutral-100">
+                                      {m.display_name}
+                                    </span>
+                                    {!sub && (
+                                      <span className="text-[10px] text-red-400">
+                                        未提出
+                                      </span>
+                                    )}
+                                  </div>
+                                  {sub && (
+                                    <p className="text-neutral-300">
+                                      {sub.measurement_date &&
+                                        `測定日: ${formatMonthDay(sub.measurement_date)}・`}
+                                      体重: {sub.weight_kg ?? "-"}kg・体脂肪率:{" "}
+                                      {sub.body_fat_pct ?? "-"}%・骨格筋量:{" "}
+                                      {sub.muscle_mass_kg ?? "-"}kg・除脂肪体重:{" "}
+                                      {sub.lean_body_mass_kg ?? "-"}kg
+                                    </p>
+                                  )}
+                                </div>
                               );
                             })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </details>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                        </div>
+                      </details>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
 
-        {/* イベント提出一覧（試合の振り返り・体組成の提出） */}
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            イベント提出一覧
-          </h2>
-          <p className="text-[11px] text-neutral-500">
-            管理者が作成した「試合の振り返り」「体組成の提出」イベントの提出内容がここに反映されます。
-          </p>
-          {loadingMembers || loadingTeamEvents ? (
-            <p className="text-xs text-neutral-500">読み込み中…</p>
-          ) : teamEvents.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
-              まだイベントは作成されていません。
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {teamEvents.map((event, idx) => {
-                const subs = teamEventSubmissions.filter(
-                  (s) => s.event_id === event.id
-                );
-                const subByAuthor = new Map(subs.map((s) => [s.author_id, s]));
-                return (
-                  <details
-                    key={event.id}
-                    open={idx === 0}
-                    className="rounded-lg border border-neutral-800"
-                  >
-                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
-                      {teamEventTypeLabel[event.type]}
-                      {event.title && `：${event.title}`}
-                      （締切 {formatMonthDay(event.deadline)}）
-                    </summary>
-                    <div className="flex flex-col gap-2 border-t border-neutral-800 p-3">
-                      {members
-                        .filter(
-                          (m) =>
-                            m.role !== "coach" &&
-                            m.role !== "manager" &&
-                            m.role !== "ob" &&
-                            !m.isPending
-                        )
-                        .map((m) => {
-                          const sub = subByAuthor.get(m.id);
-                          return (
-                            <div
-                              key={m.id}
-                              className="flex flex-col gap-1 rounded border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-neutral-100">
-                                  {m.display_name}
-                                </span>
-                                {!sub && (
-                                  <span className="text-[10px] text-red-400">
-                                    未提出
-                                  </span>
-                                )}
-                              </div>
-                              {sub &&
-                                (event.type === "match_reflection" ? (
-                                  <button
-                                    onClick={() => router.push(`/team/${m.id}`)}
-                                    className="self-start text-[11px] text-emerald-400 underline"
-                                  >
-                                    提出済み（マイページで内容を見る）
-                                  </button>
-                                ) : (
-                                  <p className="text-neutral-300">
-                                    {sub.measurement_date &&
-                                      `測定日: ${formatMonthDay(sub.measurement_date)}・`}
-                                    体重: {sub.weight_kg ?? "-"}kg・体脂肪率:{" "}
-                                    {sub.body_fat_pct ?? "-"}%・骨格筋量:{" "}
-                                    {sub.muscle_mass_kg ?? "-"}kg・除脂肪体重:{" "}
-                                    {sub.lean_body_mass_kg ?? "-"}kg
-                                  </p>
-                                ))}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </details>
-                );
-              })}
-            </div>
-          )}
+          {/* 試合の振り返り */}
+          <div className="flex flex-col gap-2">
+            <h3 className="text-xs font-semibold text-neutral-300">
+              試合の振り返り
+            </h3>
+            {loadingMembers || loadingTeamEvents ? (
+              <p className="text-xs text-neutral-500">読み込み中…</p>
+            ) : teamEvents.filter((e) => e.type === "match_reflection").length === 0 ? (
+              <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                まだイベントは作成されていません。
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {teamEvents
+                  .filter((e) => e.type === "match_reflection")
+                  .map((event, idx) => {
+                    const subs = teamEventSubmissions.filter(
+                      (s) => s.event_id === event.id
+                    );
+                    const subByAuthor = new Map(
+                      subs.map((s) => [s.author_id, s])
+                    );
+                    return (
+                      <details
+                        key={event.id}
+                        open={idx === 0}
+                        className="rounded-lg border border-neutral-800"
+                      >
+                        <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-neutral-200">
+                          {event.title || "試合の振り返り"}（締切{" "}
+                          {formatMonthDay(event.deadline)}）
+                        </summary>
+                        <div className="flex flex-col gap-2 border-t border-neutral-800 p-3">
+                          {members
+                            .filter(
+                              (m) =>
+                                m.role !== "coach" &&
+                                m.role !== "manager" &&
+                                m.role !== "ob" &&
+                                !m.isPending
+                            )
+                            .map((m) => {
+                              const sub = subByAuthor.get(m.id);
+                              return (
+                                <div
+                                  key={m.id}
+                                  className="flex flex-col gap-1 rounded border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-xs"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-neutral-100">
+                                      {m.display_name}
+                                    </span>
+                                    {!sub && (
+                                      <span className="text-[10px] text-red-400">
+                                        未提出
+                                      </span>
+                                    )}
+                                  </div>
+                                  {sub && (
+                                    <button
+                                      onClick={() =>
+                                        router.push(`/team/${m.id}`)
+                                      }
+                                      className="self-start text-[11px] text-emerald-400 underline"
+                                    >
+                                      提出済み（マイページで内容を見る）
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </details>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </div>
@@ -2846,6 +2925,8 @@ function MonthlyCalendar({
   onSelectDate,
   highlightDate,
   submissionCounts,
+  isCoach,
+  viewLocation,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2854,6 +2935,8 @@ function MonthlyCalendar({
   onSelectDate: (dateStr: string) => void;
   highlightDate?: string | null;
   submissionCounts: Map<string, { submitted: number; total: number }>;
+  isCoach: boolean;
+  viewLocation: Location;
 }) {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -2921,7 +3004,7 @@ function MonthlyCalendar({
                   className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
                       ? "border-neutral-700 bg-neutral-900"
-                      : isFullySubmitted
+                      : !isCoach && isFullySubmitted
                         ? "border-emerald-700 bg-emerald-900/60"
                         : day?.day_type === "camp"
                           ? "border-pink-900/60 bg-pink-950/40"
@@ -2961,37 +3044,88 @@ function MonthlyCalendar({
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
                     )}
-                  {day && !day.is_off && count && (
-                    <span
-                      className={`text-[10px] font-semibold ${
-                        isFullySubmitted ? "text-emerald-300" : "text-neutral-300"
-                      }`}
-                    >
-                      {count.submitted}/{count.total}人
-                    </span>
+                  {isCoach ? (
+                    day &&
+                    !day.is_off &&
+                    day.sessions.map((s) => (
+                      <span
+                        key={s.id}
+                        className="flex w-full items-start gap-0.5 leading-tight"
+                      >
+                        <span
+                          className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
+                        />
+                        <span className="break-words text-[9px] text-neutral-300">
+                          {sessionTypeLabel[s.session_type]}
+                          {s.start_time.slice(0, 5)}〜
+                          {s.location_note
+                            ? `（${s.location_note}）`
+                            : s.is_joint &&
+                              (s.joint_location &&
+                              s.joint_location !== viewLocation
+                                ? `（${locationLabel[s.joint_location]}）`
+                                : "（全体）")}
+                        </span>
+                      </span>
+                    ))
+                  ) : (
+                    day && !day.is_off && count && (
+                      <span
+                        className={`text-[10px] font-semibold ${
+                          isFullySubmitted ? "text-emerald-300" : "text-neutral-300"
+                        }`}
+                      >
+                        {count.submitted}/{count.total}人
+                      </span>
+                    )
                   )}
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
-              全員提出済み
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
-              合宿
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
-              試合
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
-              オフ
-            </span>
-          </p>
+          {isCoach ? (
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+              {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
+                <span key={t} className="flex items-center gap-1">
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${sessionTypeDotColor[t]}`}
+                  />
+                  {sessionTypeLabel[t]}
+                </span>
+              ))}
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+                合宿
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+                試合
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
+                オフ
+              </span>
+            </p>
+          ) : (
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
+                全員提出済み
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+                合宿
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+                試合
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
+                オフ
+              </span>
+            </p>
+          )}
         </>
       )}
     </div>

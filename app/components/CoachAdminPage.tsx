@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, Location, locationLabel, locations, teamEventTypeLabel, TeamEventType } from "../lib/types";
+import { currentGrade, Location, locationLabel, locations, SessionType, teamEventTypeLabel, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "manager" | "member";
@@ -100,6 +100,33 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
+function groupDetailByGrade<T extends { entryYear: number | null }>(
+  rows: T[]
+): { label: string; rows: T[] }[] {
+  const groups = new Map<number | null, T[]>();
+  for (const r of rows) {
+    const grade = r.entryYear != null ? currentGrade(r.entryYear) : null;
+    const list = groups.get(grade) ?? [];
+    list.push(r);
+    groups.set(grade, list);
+  }
+
+  const knownGrades = Array.from(groups.keys())
+    .filter((g): g is number => g !== null)
+    .sort((a, b) => b - a);
+
+  const result = knownGrades.map((grade) => ({
+    label: `${grade}年`,
+    rows: groups.get(grade)!,
+  }));
+
+  if (groups.has(null)) {
+    result.push({ label: "学年未設定", rows: groups.get(null)! });
+  }
+
+  return result;
+}
+
 export default function CoachAdminPage({
   profile,
   signOut,
@@ -111,6 +138,38 @@ export default function CoachAdminPage({
   const router = useRouter();
 
   const [members, setMembers] = useState<MemberRow[]>([]);
+
+  // 報告状況一覧（日報・トレ報の提出状況カレンダー）
+  const [reportCalendarCursor, setReportCalendarCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedReportDate, setSelectedReportDate] = useState<string>(() =>
+    toDateKey(new Date())
+  );
+  const [submissionCounts, setSubmissionCounts] = useState<
+    Map<string, { submitted: number; total: number }>
+  >(new Map());
+  const [submissionCountsByLoc, setSubmissionCountsByLoc] = useState<
+    Map<string, Record<Location, { submitted: number; total: number } | null>>
+  >(new Map());
+  const [loadingSubmissionCounts, setLoadingSubmissionCounts] =
+    useState(true);
+  const [daySubmissionDetail, setDaySubmissionDetail] = useState<
+    {
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+      isPending: boolean;
+      matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
+      matText: string | null;
+      selfStatus: "not_required" | "not_started" | "done" | "missing";
+      selfText: string | null;
+    }[]
+  >([]);
+  const [loadingDaySubmissionDetail, setLoadingDaySubmissionDetail] =
+    useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -172,6 +231,21 @@ export default function CoachAdminPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    loadMonthSubmissionCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportCalendarCursor, members]);
+
+  useEffect(() => {
+    if (selectedReportDate) loadDaySubmissionDetail(selectedReportDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members]);
+
+  function handleSelectReportDate(dateStr: string) {
+    setSelectedReportDate(dateStr);
+    loadDaySubmissionDetail(dateStr);
+  }
+
   async function loadInjuries() {
     setLoadingInjuries(true);
     const { data, error } = await supabase
@@ -204,6 +278,360 @@ export default function CoachAdminPage({
       setMembers((data ?? []) as MemberRow[]);
     }
     setLoadingMembers(false);
+  }
+
+  function requiredMembersForLocation(loc: Location): MemberRow[] {
+    return members.filter(
+      (m) =>
+        m.role !== "manager" &&
+        m.role !== "ob" &&
+        (m.home_location === loc || (loc === "tama" && m.home_location == null))
+    );
+  }
+
+  // カレンダー全体（表示中の月・拠点）の日ごとの提出状況（◯人／◯人）を集計する
+  async function loadMonthSubmissionCounts() {
+    setLoadingSubmissionCounts(true);
+    const year = reportCalendarCursor.getFullYear();
+    const month = reportCalendarCursor.getMonth();
+    const rangeStart = toDateKey(new Date(year, month, 1));
+    const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const realIdsByLoc: Record<Location, string[]> = {
+      tama: requiredByLoc.tama.map((m) => m.id),
+      otsuka: requiredByLoc.otsuka.map((m) => m.id),
+    };
+
+    if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
+      setSubmissionCounts(new Map());
+      setSubmissionCountsByLoc(new Map());
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    // 両拠点のスケジュール（オフ・区分・セッション種別）を取得
+    const { data: scheduleData, error: scheduleErrorAll } = await supabase
+      .from("schedule_days")
+      .select(
+        "date, location, is_off, sessions:schedule_sessions(session_type)"
+      )
+      .eq("team_id", profile.team_id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (scheduleErrorAll) {
+      setErrorMsg(scheduleErrorAll.message);
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    const scheduleByLocDate = new Map<
+      string,
+      { isOff: boolean; hasMat: boolean; hasNonMat: boolean }
+    >();
+    for (const row of (scheduleData ?? []) as unknown as {
+      date: string;
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: SessionType }[];
+    }[]) {
+      scheduleByLocDate.set(`${row.location}:${row.date}`, {
+        isOff: row.is_off,
+        hasMat: row.sessions.some((s) => s.session_type === "mat"),
+        hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
+      });
+    }
+
+    // 両拠点＋全体のマットメニュー
+    const { data: menuData, error: menuError } = await supabase
+      .from("menus")
+      .select("id, date, location, is_joint")
+      .eq("team_id", profile.team_id)
+      .eq("is_off", false)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (menuError) {
+      setErrorMsg(menuError.message);
+      setLoadingSubmissionCounts(false);
+      return;
+    }
+
+    // menu_id -> その日報が「どの拠点の必要提出」に関係するか
+    const menuLocsById = new Map<string, Location[]>();
+    const menuDateById = new Map<string, string>();
+    for (const m of (menuData ?? []) as {
+      id: string;
+      date: string;
+      location: Location;
+      is_joint: boolean;
+    }[]) {
+      menuDateById.set(m.id, m.date);
+      menuLocsById.set(m.id, m.is_joint ? ["tama", "otsuka"] : [m.location]);
+    }
+    const allMenuIds = Array.from(menuDateById.keys());
+
+    // key: `${authorId}:${loc}:${date}`
+    const submittedMatKeys = new Set<string>();
+    if (allMenuIds.length > 0) {
+      const { data: commentData, error: commentError } = await supabase
+        .from("comments")
+        .select("menu_id, author_id, kind")
+        .in("menu_id", allMenuIds)
+        .in("kind", ["report", "absent"])
+        .is("parent_id", null);
+      if (commentError) {
+        setErrorMsg(commentError.message);
+        setLoadingSubmissionCounts(false);
+        return;
+      }
+      for (const row of (commentData ?? []) as {
+        menu_id: string;
+        author_id: string | null;
+      }[]) {
+        if (!row.author_id) continue;
+        const date = menuDateById.get(row.menu_id);
+        const locs = menuLocsById.get(row.menu_id) ?? [];
+        if (!date) continue;
+        for (const loc of locs) {
+          submittedMatKeys.add(`${row.author_id}:${loc}:${date}`);
+        }
+      }
+    }
+
+    const allRealIds = [...realIdsByLoc.tama, ...realIdsByLoc.otsuka];
+    const selfLoggedKeys = new Set<string>();
+    if (allRealIds.length > 0) {
+      const { data: logData, error: logError } = await supabase
+        .from("weight_logs")
+        .select("author_id, date")
+        .in("author_id", allRealIds)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+      if (logError) {
+        setErrorMsg(logError.message);
+        setLoadingSubmissionCounts(false);
+        return;
+      }
+      for (const row of (logData ?? []) as {
+        author_id: string;
+        date: string;
+      }[]) {
+        selfLoggedKeys.add(`${row.author_id}:${row.date}`);
+      }
+    }
+
+    const counts = new Map<string, { submitted: number; total: number }>();
+    const countsByLoc = new Map<
+      string,
+      Record<Location, { submitted: number; total: number } | null>
+    >();
+    const cursor = new Date(year, month, 1);
+    while (cursor.getMonth() === month) {
+      const dateKey = toDateKey(cursor);
+      let submitted = 0;
+      let total = 0;
+      const byLoc: Record<Location, { submitted: number; total: number } | null> =
+        { tama: null, otsuka: null };
+      for (const loc of ["tama", "otsuka"] as Location[]) {
+        const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
+        if (!day || day.isOff) continue;
+        if (!day.hasMat && !day.hasNonMat) continue;
+        const locTotal = requiredByLoc[loc].length;
+        let locSubmitted = 0;
+        for (const id of realIdsByLoc[loc]) {
+          const matOk =
+            !day.hasMat || submittedMatKeys.has(`${id}:${loc}:${dateKey}`);
+          const selfOk = !day.hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
+          if (matOk && selfOk) locSubmitted++;
+        }
+        byLoc[loc] = { submitted: locSubmitted, total: locTotal };
+        total += locTotal;
+        submitted += locSubmitted;
+      }
+      if (total > 0) counts.set(dateKey, { submitted, total });
+      countsByLoc.set(dateKey, byLoc);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    setSubmissionCounts(counts);
+    setSubmissionCountsByLoc(countsByLoc);
+    setLoadingSubmissionCounts(false);
+  }
+
+  // 選択した日の、部員ごとの提出状況の詳細一覧を読み込む
+  async function loadDaySubmissionDetail(dateStr: string) {
+    setLoadingDaySubmissionDetail(true);
+
+    const { data: scheduleData } = await supabase
+      .from("schedule_days")
+      .select(
+        "location, is_off, sessions:schedule_sessions(session_type, start_time)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr);
+
+    const now = new Date();
+    const scheduleByLoc = new Map<
+      Location,
+      {
+        isOff: boolean;
+        hasMat: boolean;
+        hasNonMat: boolean;
+        matStarted: boolean;
+        selfStarted: boolean;
+      }
+    >();
+    for (const row of (scheduleData ?? []) as unknown as {
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: SessionType; start_time: string }[];
+    }[]) {
+      const matSession = row.sessions.find((s) => s.session_type === "mat");
+      const nonMatSessions = row.sessions.filter(
+        (s) => s.session_type !== "mat"
+      );
+      const earliestNonMat = nonMatSessions
+        .map((s) => s.start_time)
+        .sort()[0];
+      scheduleByLoc.set(row.location, {
+        isOff: row.is_off,
+        hasMat: !!matSession,
+        hasNonMat: nonMatSessions.length > 0,
+        matStarted: matSession
+          ? now >= new Date(`${dateStr}T${matSession.start_time}`)
+          : true,
+        selfStarted: earliestNonMat
+          ? now >= new Date(`${dateStr}T${earliestNonMat}`)
+          : true,
+      });
+    }
+
+    const { data: menuData } = await supabase
+      .from("menus")
+      .select("id, location, is_joint")
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr)
+      .eq("is_off", false);
+    const menuRows = (menuData ?? []) as {
+      id: string;
+      location: Location;
+      is_joint: boolean;
+    }[];
+    const menuIds = menuRows.map((m) => m.id);
+    const menuLocsById = new Map<string, Location[]>();
+    for (const m of menuRows) {
+      menuLocsById.set(m.id, m.is_joint ? ["tama", "otsuka"] : [m.location]);
+    }
+
+    // key: `${authorId}:${loc}`
+    const matStatusByAuthorLoc = new Map<string, { kind: string; text: string }>();
+    if (menuIds.length > 0) {
+      const { data: commentData } = await supabase
+        .from("comments")
+        .select("author_id, kind, text, menu_id")
+        .in("menu_id", menuIds)
+        .in("kind", ["report", "absent"])
+        .is("parent_id", null);
+      for (const row of (commentData ?? []) as {
+        author_id: string | null;
+        kind: string;
+        text: string;
+        menu_id: string;
+      }[]) {
+        if (!row.author_id) continue;
+        const locs = menuLocsById.get(row.menu_id) ?? [];
+        for (const loc of locs) {
+          matStatusByAuthorLoc.set(`${row.author_id}:${loc}`, {
+            kind: row.kind,
+            text: row.text,
+          });
+        }
+      }
+    }
+
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const allRealIds = [
+      ...requiredByLoc.tama.map((m) => m.id),
+      ...requiredByLoc.otsuka.map((m) => m.id),
+    ];
+    let selfLogByAuthor = new Map<string, string>();
+    if (allRealIds.length > 0) {
+      const { data: logData } = await supabase
+        .from("weight_logs")
+        .select("author_id, content")
+        .eq("date", dateStr)
+        .in("author_id", allRealIds);
+      for (const row of (logData ?? []) as {
+        author_id: string;
+        content: string;
+      }[]) {
+        selfLogByAuthor.set(row.author_id, row.content);
+      }
+    }
+
+    const detail: {
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+      isPending: boolean;
+      matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
+      matText: string | null;
+      selfStatus: "not_required" | "not_started" | "done" | "missing";
+      selfText: string | null;
+    }[] = [];
+
+    for (const loc of ["tama", "otsuka"] as Location[]) {
+      const day = scheduleByLoc.get(loc);
+      const hasMat = !!day && !day.isOff && day.hasMat;
+      const hasNonMat = !!day && !day.isOff && day.hasNonMat;
+      if (!day || day.isOff || (!hasMat && !hasNonMat)) continue;
+
+      for (const m of requiredByLoc[loc]) {
+        const matComment = matStatusByAuthorLoc.get(`${m.id}:${loc}`);
+        const selfContent = selfLogByAuthor.get(m.id);
+        detail.push({
+          memberId: m.id,
+          displayName: m.display_name,
+          location: loc,
+          entryYear: m.entry_year,
+          isPending: false,
+          matStatus: !hasMat
+            ? ("not_required" as const)
+            : !day.matStarted
+              ? ("not_started" as const)
+              : matComment
+                ? matComment.kind === "absent"
+                  ? ("absent" as const)
+                  : ("report" as const)
+                : ("missing" as const),
+          matText: matComment?.text ?? null,
+          selfStatus: !hasNonMat
+            ? ("not_required" as const)
+            : !day.selfStarted
+              ? ("not_started" as const)
+              : selfContent
+                ? ("done" as const)
+                : ("missing" as const),
+          selfText: selfContent ?? null,
+        });
+      }
+    }
+
+    detail.sort((a, b) => {
+      if (a.location !== b.location) return a.location.localeCompare(b.location);
+      return a.displayName.localeCompare(b.displayName, "ja");
+    });
+
+    setDaySubmissionDetail(detail);
+    setLoadingDaySubmissionDetail(false);
   }
 
 
@@ -615,8 +1043,238 @@ export default function CoachAdminPage({
           </p>
         )}
 
-        {/* イベントを作成する */}
+        {/* 報告状況一覧 */}
         <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            報告状況一覧
+          </h2>
+          <p className="text-[11px] text-neutral-500">
+            日報(実施報告・未実施報告)・トレ報(マット以外のセッションの自主トレ記録)の提出状況です。日付をタップすると、その日の部員ごとの提出状況が下に表示されます。
+          </p>
+
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <button
+                onClick={() =>
+                  setReportCalendarCursor(
+                    new Date(
+                      reportCalendarCursor.getFullYear(),
+                      reportCalendarCursor.getMonth() - 1,
+                      1
+                    )
+                  )
+                }
+                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+              >
+                ＜
+              </button>
+              <span className="text-sm font-semibold">
+                {reportCalendarCursor.getFullYear()}年
+                {reportCalendarCursor.getMonth() + 1}月
+              </span>
+              <button
+                onClick={() =>
+                  setReportCalendarCursor(
+                    new Date(
+                      reportCalendarCursor.getFullYear(),
+                      reportCalendarCursor.getMonth() + 1,
+                      1
+                    )
+                  )
+                }
+                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+              >
+                ＞
+              </button>
+            </div>
+            {loadingSubmissionCounts ? (
+              <p className="text-xs text-neutral-500">読み込み中…</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+                  {["日", "月", "火", "水", "木", "金", "土"].map(
+                    (w, idx) => (
+                      <div
+                        key={w}
+                        className={
+                          idx === 0
+                            ? "font-semibold text-red-400"
+                            : idx === 6
+                              ? "font-semibold text-blue-400"
+                              : "text-neutral-500"
+                        }
+                      >
+                        {w}
+                      </div>
+                    )
+                  )}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {(() => {
+                    const year = reportCalendarCursor.getFullYear();
+                    const month = reportCalendarCursor.getMonth();
+                    const firstDay = new Date(year, month, 1);
+                    const startWeekday = firstDay.getDay();
+                    const daysInMonth = new Date(
+                      year,
+                      month + 1,
+                      0
+                    ).getDate();
+                    const cells: (Date | null)[] = [];
+                    for (let i = 0; i < startWeekday; i++) cells.push(null);
+                    for (let d = 1; d <= daysInMonth; d++)
+                      cells.push(new Date(year, month, d));
+
+                    return cells.map((date, i) => {
+                      if (!date) return <div key={i} />;
+                      const key = toDateKey(date);
+                      const isHighlighted = key === selectedReportDate;
+                      const weekday = date.getDay();
+                      const count = submissionCounts.get(key);
+                      const isFullySubmitted =
+                        !!count &&
+                        count.total > 0 &&
+                        count.submitted === count.total;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => handleSelectReportDate(key)}
+                          className={`flex min-h-[52px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
+                            isFullySubmitted
+                              ? "border-emerald-700 bg-emerald-900/60"
+                              : isHighlighted
+                                ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
+                                : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
+                          }`}
+                        >
+                          <span
+                            className={`text-[11px] font-semibold ${
+                              !isHighlighted && weekday === 0
+                                ? "border-b-2 border-red-500 text-red-400"
+                                : !isHighlighted && weekday === 6
+                                  ? "border-b-2 border-blue-500 text-blue-400"
+                                  : "text-neutral-200"
+                            }`}
+                          >
+                            {date.getDate()}
+                          </span>
+                          {count && (
+                            <span
+                              className={`text-[9px] font-semibold ${
+                                isFullySubmitted
+                                  ? "text-emerald-300"
+                                  : "text-neutral-300"
+                              }`}
+                            >
+                              {count.submitted}/{count.total}人
+                            </span>
+                          )}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+                <p className="mt-2 flex items-center gap-1 text-[10px] text-neutral-500">
+                  <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
+                  全員提出済み
+                </p>
+              </>
+            )}
+          </div>
+
+          <h3 className="text-xs font-semibold text-neutral-300">
+            {formatMonthDay(selectedReportDate)}の提出状況
+          </h3>
+          {loadingDaySubmissionDetail ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : daySubmissionDetail.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {(["tama", "otsuka"] as Location[]).map((loc) => (
+                <div key={loc} className="flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-neutral-400">
+                    {locationLabel[loc]}
+                  </p>
+                  {daySubmissionDetail.filter((d) => d.location === loc)
+                    .length === 0 ? (
+                    <p className="text-[11px] text-neutral-600">該当なし</p>
+                  ) : (
+                    groupDetailByGrade(
+                      daySubmissionDetail.filter((d) => d.location === loc)
+                    ).map((group) => (
+                      <div key={group.label} className="flex flex-col gap-1">
+                        <p className="text-[10px] text-neutral-500">
+                          {group.label}
+                        </p>
+                        {group.rows.map((d) => {
+                          const resolved =
+                            d.matStatus === "missing" ||
+                            d.matStatus === "report" ||
+                            d.matStatus === "absent" ||
+                            d.selfStatus === "missing" ||
+                            d.selfStatus === "done";
+                          const notStarted =
+                            !resolved &&
+                            (d.matStatus === "not_started" ||
+                              d.selfStatus === "not_started");
+                          const allDone =
+                            !notStarted &&
+                            (d.matStatus === "not_required" ||
+                              d.matStatus !== "missing") &&
+                            (d.selfStatus === "not_required" ||
+                              d.selfStatus === "done");
+                          return (
+                            <button
+                              key={d.memberId}
+                              onClick={() =>
+                                router.push(
+                                  `/team/${d.memberId}?date=${selectedReportDate}`
+                                )
+                              }
+                              className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                                notStarted
+                                  ? "border-neutral-800 bg-neutral-900 text-neutral-400"
+                                  : allDone
+                                    ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
+                                    : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
+                              }`}
+                            >
+                              <span className="truncate">
+                                {d.displayName}
+                              </span>
+                              {notStarted ? (
+                                <span className="shrink-0 text-[10px] text-neutral-500">
+                                  未開始
+                                </span>
+                              ) : (
+                                <span
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    allDone
+                                      ? "bg-emerald-950/40 text-emerald-400"
+                                      : "bg-red-950/40 text-red-400"
+                                  }`}
+                                >
+                                  {allDone ? "済" : "未"}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* イベントを作成する */}
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             イベントを作成する
