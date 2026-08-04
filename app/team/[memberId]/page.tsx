@@ -94,9 +94,22 @@ function daysUntil(dateStr: string) {
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
+function shiftDateStr(dateStr: string, diffDays: number) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const next = new Date(y, m - 1, d + diffDays);
+  return toDateKey(next);
+}
+
+function MemberDayView({
+  memberId,
+  date: initialDate,
+}: {
+  memberId: string;
+  date: string;
+}) {
   const router = useRouter();
   const supabase = createClient();
+  const [date, setDate] = useState(initialDate);
   const [member, setMember] = useState<MemberInfo | null | undefined>(undefined);
   const [nextMatch, setNextMatch] = useState<NextMatchInfo | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
@@ -374,9 +387,23 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
               {currentGrade(member.entry_year)}年
             </span>
           )}
-          <span className="ml-auto rounded bg-neutral-800 px-2 py-1 font-semibold text-neutral-300">
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setDate(shiftDateStr(date, -1))}
+            className="rounded px-3 py-1.5 text-neutral-400 active:bg-neutral-800"
+          >
+            ◀
+          </button>
+          <span className="rounded bg-red-600 px-4 py-1.5 text-sm font-bold text-white">
             {formatMonthDay(date)}
           </span>
+          <button
+            onClick={() => setDate(shiftDateStr(date, 1))}
+            className="rounded px-3 py-1.5 text-neutral-400 active:bg-neutral-800"
+          >
+            ▶
+          </button>
         </div>
 
         {/* 次の試合 */}
@@ -515,20 +542,20 @@ function MemberDayView({ memberId, date }: { memberId: string; date: string }) {
                     </button>
                     {isOpen && (
                       <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
-                        {r.matchResult && (
-                          <p>
-                            <span className="text-neutral-500">
-                              試合結果：
-                            </span>
-                            {r.matchResult}
-                          </p>
-                        )}
                         {r.matchTitle && (
                           <p>
                             <span className="text-neutral-500">
                               試合名：
                             </span>
                             {r.matchTitle}
+                          </p>
+                        )}
+                        {r.matchResult && (
+                          <p>
+                            <span className="text-neutral-500">
+                              試合結果：
+                            </span>
+                            {r.matchResult}
                           </p>
                         )}
                         {r.matchCount != null && (

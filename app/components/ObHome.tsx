@@ -30,8 +30,26 @@ type WeightMaxEntry = {
 type InjuryEntry = {
   symptom_name: string;
   body_part: string;
+  detail: string | null;
   is_recovered: boolean;
   expected_recovery_date: string | null;
+  surgery_possibility: "yes" | "no" | "unknown";
+  next_hospital_date: string | null;
+  mat_participation: "yes" | "no" | "conditional";
+  mat_participation_detail: string | null;
+  progress_note: string | null;
+};
+
+const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
+  yes: "可",
+  no: "非",
+  conditional: "条件付きで可",
+};
+
+const surgeryLabel: Record<"yes" | "no" | "unknown", string> = {
+  yes: "あり",
+  no: "なし",
+  unknown: "未定",
 };
 
 function formatMonthDay(dateStr: string) {
@@ -55,6 +73,7 @@ export default function ObHome({
   );
   const [weightMaxes, setWeightMaxes] = useState<WeightMaxEntry[]>([]);
   const [injuries, setInjuries] = useState<InjuryEntry[]>([]);
+  const [openInjuryIdx, setOpenInjuryIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -144,7 +163,9 @@ export default function ObHome({
 
     const { data: injuryData, error: injuryError } = await supabase
       .from("injuries")
-      .select("symptom_name, body_part, is_recovered, expected_recovery_date")
+      .select(
+        "symptom_name, body_part, detail, is_recovered, expected_recovery_date, surgery_possibility, next_hospital_date, mat_participation, mat_participation_detail, progress_note"
+      )
       .eq("author_id", profile.id)
       .order("created_at", { ascending: false });
 
@@ -214,20 +235,20 @@ export default function ObHome({
                         </button>
                         {isOpen && (
                           <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
-                            {r.matchResult && (
-                              <p>
-                                <span className="text-neutral-500">
-                                  試合結果：
-                                </span>
-                                {r.matchResult}
-                              </p>
-                            )}
                             {r.matchTitle && (
                               <p>
                                 <span className="text-neutral-500">
                                   試合名：
                                 </span>
                                 {r.matchTitle}
+                              </p>
+                            )}
+                            {r.matchResult && (
+                              <p>
+                                <span className="text-neutral-500">
+                                  試合結果：
+                                </span>
+                                {r.matchResult}
                               </p>
                             )}
                             {r.matchCount != null && (
@@ -362,25 +383,77 @@ export default function ObHome({
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {injuries.map((inj, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
-                    >
-                      <span className="text-neutral-100">
-                        {inj.symptom_name}（{inj.body_part}）
-                      </span>
-                      <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                          inj.is_recovered
-                            ? "bg-emerald-950/40 text-emerald-400"
-                            : "bg-amber-950/40 text-amber-400"
-                        }`}
+                  {injuries.map((inj, idx) => {
+                    const isOpen = openInjuryIdx === idx;
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-neutral-800 bg-neutral-900"
                       >
-                        {inj.is_recovered ? "完治" : "療養中"}
-                      </span>
-                    </div>
-                  ))}
+                        <button
+                          onClick={() =>
+                            setOpenInjuryIdx(isOpen ? null : idx)
+                          }
+                          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+                        >
+                          <span className="text-neutral-100">
+                            {inj.symptom_name}（{inj.body_part}）
+                          </span>
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                              inj.is_recovered
+                                ? "bg-emerald-950/40 text-emerald-400"
+                                : "bg-amber-950/40 text-amber-400"
+                            }`}
+                          >
+                            {inj.is_recovered ? "完治" : "療養中"}
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="flex flex-col gap-1.5 border-t border-neutral-800 p-3 text-xs">
+                            {inj.detail && (
+                              <p className="whitespace-pre-wrap text-neutral-300">
+                                {inj.detail}
+                              </p>
+                            )}
+                            <p className="text-neutral-400">
+                              マット参加：
+                              {matParticipationLabel[inj.mat_participation]}
+                              {inj.mat_participation === "conditional" &&
+                                inj.mat_participation_detail &&
+                                `（${inj.mat_participation_detail}）`}
+                            </p>
+                            <p className="text-neutral-400">
+                              手術の可能性：
+                              {surgeryLabel[inj.surgery_possibility]}
+                            </p>
+                            {inj.expected_recovery_date && (
+                              <p className="text-neutral-400">
+                                完治見込み：
+                                {formatMonthDay(inj.expected_recovery_date)}
+                              </p>
+                            )}
+                            {inj.next_hospital_date && (
+                              <p className="text-neutral-400">
+                                次回通院：
+                                {formatMonthDay(inj.next_hospital_date)}
+                              </p>
+                            )}
+                            {inj.progress_note && (
+                              <div>
+                                <p className="text-[11px] text-neutral-500">
+                                  経過・理由
+                                </p>
+                                <p className="whitespace-pre-wrap text-neutral-300">
+                                  {inj.progress_note}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>

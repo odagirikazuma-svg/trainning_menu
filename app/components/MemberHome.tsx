@@ -52,6 +52,19 @@ type InjuryRow = {
   created_at: string;
 };
 
+const matchResultOptions = [
+  "優勝",
+  "準優勝",
+  "3位",
+  "4位",
+  "5位",
+  "ベスト16",
+  "ベスト32",
+  "3回戦敗退",
+  "2回戦敗退",
+  "1回戦敗退",
+];
+
 const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
   yes: "可",
   no: "非",
@@ -1683,15 +1696,6 @@ export default function MemberHome({
                   {todo.type === "match_reflection" ? (
                     <div className="flex flex-col gap-2">
                       <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                        試合結果(優勝・準優勝・3位・◯回戦敗退 など)
-                        <input
-                          type="text"
-                          value={matchResult}
-                          onChange={(e) => setMatchResult(e.target.value)}
-                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                         出場した試合名
                         <input
                           type="text"
@@ -1699,6 +1703,21 @@ export default function MemberHome({
                           onChange={(e) => setMatchTitle(e.target.value)}
                           className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                         />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        試合結果
+                        <select
+                          value={matchResult}
+                          onChange={(e) => setMatchResult(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        >
+                          <option value="">選択してください</option>
+                          {matchResultOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
@@ -2255,16 +2274,16 @@ export default function MemberHome({
                   </button>
                   {isOpen && (
                     <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
-                      {r.matchResult && (
-                        <p>
-                          <span className="text-neutral-500">試合結果：</span>
-                          {r.matchResult}
-                        </p>
-                      )}
                       {r.matchTitle && (
                         <p>
                           <span className="text-neutral-500">試合名：</span>
                           {r.matchTitle}
+                        </p>
+                      )}
+                      {r.matchResult && (
+                        <p>
+                          <span className="text-neutral-500">試合結果：</span>
+                          {r.matchResult}
                         </p>
                       )}
                       {r.matchCount != null && (
