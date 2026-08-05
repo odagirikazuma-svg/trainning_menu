@@ -6,12 +6,13 @@ import { createClient } from "../lib/supabase/client";
 import { currentGrade, Location, locationLabel, locations, SessionType, teamEventTypeLabel, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
-type RosterRoleChoice = "captain" | "vice_captain" | "coach" | "manager" | "member";
+type RosterRoleChoice = "coach" | "captain" | "vice_captain" | "leader" | "manager" | "member";
 
 const rosterRoleLabel: Record<RosterRoleChoice, string> = {
+  coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
-  coach: "管理者",
+  leader: "リーダー",
   manager: "マネージャー",
   member: "役職なし",
 };

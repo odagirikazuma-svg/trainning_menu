@@ -26,9 +26,10 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
 
 // member_rosterテーブルのroleカラムの値を表示用に変換する
 const rosterRoleDisplayLabel: Record<string, string> = {
+  coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
-  coach: "管理者",
+  leader: "リーダー",
   manager: "マネージャー",
   member: "役職なし",
 };
@@ -396,11 +397,7 @@ export default function AuthGate({
               <p>
                 区分:{" "}
                 <span className="font-medium">
-                  {rosterPreview.role === "coach"
-                    ? "管理者"
-                    : rosterPreview.role === "manager"
-                      ? "マネージャー"
-                      : "部員"}
+                  {rosterRoleDisplayLabel[rosterPreview.role] ?? "部員"}
                 </span>
               </p>
               {rosterPreview.home_location && (

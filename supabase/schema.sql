@@ -834,3 +834,10 @@ alter table team_event_submissions add column if not exists match_result text;
 -- （引退した部員が、これまでの提出記録だけを閲覧できる立場）
 -- ============================================
 alter type member_role add value if not exists 'ob';
+
+-- ============================================
+-- 追加: 事前登録（member_roster）の役職に「マネージャー」「リーダー」を追加できるようにする
+-- ============================================
+alter table member_roster drop constraint if exists member_roster_role_check;
+alter table member_roster add constraint member_roster_role_check
+  check (role in ('captain', 'vice_captain', 'coach', 'manager', 'member', 'leader'));
