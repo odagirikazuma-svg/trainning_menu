@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, Location, locationLabel, locations, SessionType, teamEventTypeLabel, TeamEventType } from "../lib/types";
+import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, locations, SessionType, teamEventTypeLabel, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type RosterRoleChoice = "coach" | "captain" | "vice_captain" | "leader" | "manager" | "member";
@@ -96,6 +96,13 @@ function toDateKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+const dayTypeFillColorDark: Record<DayType, string> = {
+  practice: "",
+  camp: "bg-pink-950/40 text-pink-400",
+  match: "bg-red-950/40 text-red-400",
+  away: "bg-purple-950/40 text-purple-400",
+};
+
 // "YYYY-MM-DD" -> "7月24日"
 function formatMonthDay(dateStr: string) {
   const [, m, d] = dateStr.split("-").map(Number);
@@ -154,6 +161,9 @@ export default function CoachAdminPage({
   >(new Map());
   const [submissionCountsByLoc, setSubmissionCountsByLoc] = useState<
     Map<string, Record<Location, { submitted: number; total: number } | null>>
+  >(new Map());
+  const [reportDayInfo, setReportDayInfo] = useState<
+    Map<string, { isFullyOff: boolean; dayType: DayType; eventName: string | null }>
   >(new Map());
   const [loadingSubmissionCounts, setLoadingSubmissionCounts] =
     useState(true);
@@ -311,6 +321,7 @@ export default function CoachAdminPage({
     if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
       setSubmissionCounts(new Map());
       setSubmissionCountsByLoc(new Map());
+      setReportDayInfo(new Map());
       setLoadingSubmissionCounts(false);
       return;
     }
@@ -319,7 +330,7 @@ export default function CoachAdminPage({
     const { data: scheduleData, error: scheduleErrorAll } = await supabase
       .from("schedule_days")
       .select(
-        "date, location, is_off, sessions:schedule_sessions(session_type)"
+        "date, location, is_off, day_type, event_name, sessions:schedule_sessions(session_type)"
       )
       .eq("team_id", profile.team_id)
       .gte("date", rangeStart)
@@ -335,10 +346,22 @@ export default function CoachAdminPage({
       string,
       { isOff: boolean; hasMat: boolean; hasNonMat: boolean }
     >();
+    const dayInfoByDate = new Map<
+      string,
+      { isFullyOff: boolean; dayType: DayType; eventName: string | null }
+    >();
+    const dayTypePriority: Record<DayType, number> = {
+      match: 3,
+      camp: 2,
+      away: 1,
+      practice: 0,
+    };
     for (const row of (scheduleData ?? []) as unknown as {
       date: string;
       location: Location;
       is_off: boolean;
+      day_type: DayType;
+      event_name: string | null;
       sessions: { session_type: SessionType }[];
     }[]) {
       scheduleByLocDate.set(`${row.location}:${row.date}`, {
@@ -346,7 +369,21 @@ export default function CoachAdminPage({
         hasMat: row.sessions.some((s) => s.session_type === "mat"),
         hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
       });
+
+      const existing = dayInfoByDate.get(row.date);
+      const isFullyOff = existing
+        ? existing.isFullyOff && row.is_off
+        : row.is_off;
+      const useThisRow =
+        !existing ||
+        dayTypePriority[row.day_type] > dayTypePriority[existing.dayType];
+      dayInfoByDate.set(row.date, {
+        isFullyOff,
+        dayType: useThisRow ? row.day_type : existing!.dayType,
+        eventName: useThisRow ? row.event_name : existing!.eventName,
+      });
     }
+    setReportDayInfo(dayInfoByDate);
 
     // 両拠点＋全体のマットメニュー
     const { data: menuData, error: menuError } = await supabase
@@ -1185,6 +1222,7 @@ export default function CoachAdminPage({
                       const isHighlighted = key === selectedReportDate;
                       const weekday = date.getDay();
                       const count = submissionCounts.get(key);
+                      const dayInfo = reportDayInfo.get(key);
                       const isFullySubmitted =
                         !!count &&
                         count.total > 0 &&
@@ -1194,11 +1232,13 @@ export default function CoachAdminPage({
                           key={i}
                           onClick={() => handleSelectReportDate(key)}
                           className={`flex min-h-[52px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
-                            isFullySubmitted
-                              ? "border-emerald-700 bg-emerald-900/60"
-                              : isHighlighted
-                                ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
-                                : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
+                            dayInfo?.isFullyOff
+                              ? "border-neutral-700 bg-neutral-900"
+                              : isFullySubmitted
+                                ? "border-emerald-700 bg-emerald-900/60"
+                                : isHighlighted
+                                  ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
+                                  : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
                           }`}
                         >
                           <span
@@ -1212,25 +1252,83 @@ export default function CoachAdminPage({
                           >
                             {date.getDate()}
                           </span>
-                          {count && (
-                            <span
-                              className={`text-[9px] font-semibold ${
-                                isFullySubmitted
-                                  ? "text-emerald-300"
-                                  : "text-neutral-300"
-                              }`}
-                            >
-                              {count.submitted}/{count.total}人
+                          {dayInfo?.isFullyOff ? (
+                            <span className="text-[9px] text-neutral-500">
+                              全体オフ
                             </span>
+                          ) : (
+                            <>
+                              {dayInfo && dayInfo.dayType !== "practice" && (
+                                <span
+                                  className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[dayInfo.dayType]}`}
+                                >
+                                  {dayInfo.eventName ||
+                                    dayTypeLabel[dayInfo.dayType]}
+                                </span>
+                              )}
+                              {count && (
+                                <span
+                                  className={`text-[9px] font-semibold ${
+                                    isFullySubmitted
+                                      ? "text-emerald-300"
+                                      : "text-neutral-300"
+                                  }`}
+                                >
+                                  {count.submitted}/{count.total}人
+                                </span>
+                              )}
+                            </>
                           )}
                         </button>
                       );
                     });
                   })()}
                 </div>
-                <p className="mt-2 flex items-center gap-1 text-[10px] text-neutral-500">
-                  <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
-                  全員提出済み
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  {(["tama", "otsuka"] as Location[]).map((loc) => {
+                    const c = submissionCountsByLoc.get(selectedReportDate)?.[loc];
+                    return (
+                      <div
+                        key={loc}
+                        className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
+                      >
+                        <span className="font-medium text-neutral-200">
+                          {locationLabel[loc]}
+                        </span>
+                        {c ? (
+                          <span
+                            className={`font-semibold ${
+                              c.total > 0 && c.submitted === c.total
+                                ? "text-emerald-400"
+                                : "text-neutral-300"
+                            }`}
+                          >
+                            {c.submitted}/{c.total}人提出
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500">該当なし</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
+                    全員提出済み
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+                    合宿
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+                    試合
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
+                    オフ
+                  </span>
                 </p>
               </>
             )}
