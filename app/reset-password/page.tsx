@@ -14,15 +14,40 @@ export default function ResetPasswordPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // メール内のリンクから開くと、Supabaseが一時的な復旧セッションを発行する
+    let settled = false;
+
+    // メール内のリンクから開くと、SupabaseがPASSWORD_RECOVERYイベントを発行し、
+    // 一時的な復旧セッションを確立する（非同期のため即時にgetSessionだけでは
+    // 間に合わないことがあるので、状態変化も監視する）
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "PASSWORD_RECOVERY" || session) {
+          settled = true;
+          setReady(true);
+          setErrorMsg(null);
+        }
+      }
+    );
+
     supabase.auth.getSession().then(({ data }) => {
-      setReady(!!data.session);
-      if (!data.session) {
+      if (data.session) {
+        settled = true;
+        setReady(true);
+      }
+    });
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
         setErrorMsg(
           "このリンクは無効か期限切れです。もう一度「パスワードをお忘れですか？」からやり直してください。"
         );
       }
-    });
+    }, 3000);
+
+    return () => {
+      listener.subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, [supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
