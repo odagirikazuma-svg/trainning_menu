@@ -17,9 +17,10 @@ const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   member: "役職なし",
 };
 
-type MemberRoleForEdit = "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
+type MemberRoleForEdit = "coach" | "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
 
 const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
+  coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
   leader: "リーダー",
@@ -271,7 +272,6 @@ export default function CoachAdminPage({
       .from("profiles")
       .select("id, display_name, home_location, entry_year, role")
       .eq("team_id", profile.team_id)
-      .neq("role", "coach")
       .order("display_name", { ascending: true });
     if (error) {
       setErrorMsg(error.message);
@@ -284,6 +284,7 @@ export default function CoachAdminPage({
   function requiredMembersForLocation(loc: Location): MemberRow[] {
     return members.filter(
       (m) =>
+        m.role !== "coach" &&
         m.role !== "manager" &&
         m.role !== "ob" &&
         (m.home_location === loc || (loc === "tama" && m.home_location == null))
@@ -677,6 +678,54 @@ export default function CoachAdminPage({
     setSavingRoleId(null);
   }
 
+  async function handleDeleteMember(memberId: string, displayName: string) {
+    if (memberId === profile.id) {
+      setErrorMsg("自分自身は削除できません。");
+      return;
+    }
+    if (
+      !window.confirm(
+        `${displayName}さんを本当に削除しますか？\nこの操作は元に戻せません。提出済みの記録も全て削除されます。`
+      )
+    )
+      return;
+    setSavingRoleId(memberId);
+    setErrorMsg(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setErrorMsg("認証情報が確認できませんでした。もう一度ログインし直してください。");
+      setSavingRoleId(null);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/delete-member", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ memberId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(json.error ?? "削除に失敗しました。");
+      } else {
+        setMembers((prev) => prev.filter((m) => m.id !== memberId));
+        setDraftEdits((prev) => {
+          const next = { ...prev };
+          delete next[memberId];
+          return next;
+        });
+      }
+    } catch {
+      setErrorMsg("削除に失敗しました。通信環境を確認してください。");
+    }
+    setSavingRoleId(null);
+  }
+
   async function loadWeightMaxEvent() {
     const { data, error } = await supabase
       .from("weight_max_events")
@@ -913,6 +962,7 @@ export default function CoachAdminPage({
         "id, display_name, email, role, home_location, entry_year, claimed_by, token"
       )
       .eq("team_id", profile.team_id)
+      .is("claimed_by", null)
       .order("display_name", { ascending: true });
     if (error) {
       setErrorMsg(error.message);
@@ -1002,7 +1052,9 @@ export default function CoachAdminPage({
   }
 
   // 新規メンバー登録欄の並び順：コーチを先頭に、その後は学年（上級生から）→拠点の順
-  const sortedRoster = [...roster].sort((a, b) => {
+  const sortedRoster = [...roster]
+    .filter((r) => !r.claimed_by)
+    .sort((a, b) => {
     if (a.role === "coach" && b.role !== "coach") return -1;
     if (b.role === "coach" && a.role !== "coach") return 1;
     const gradeA = a.entry_year != null ? currentGrade(a.entry_year) : -1;
@@ -1321,7 +1373,7 @@ export default function CoachAdminPage({
                 <p className="text-xs text-neutral-400">
                   提出済み {weightMaxSubmittedCount}人 /{" "}
                   {activeEventTargetCounts.weight_max ??
-                    members.filter((m) => m.role !== "manager" && m.role !== "ob").length}
+                    members.filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob").length}
                   人
                   {activeEventTargetCounts.weight_max != null &&
                     "（対象者を限定しています）"}
@@ -1382,7 +1434,7 @@ export default function CoachAdminPage({
               <p className="text-xs text-neutral-400">
                 提出済み {teamEventSubmittedCounts[selectedEventType]}人 /{" "}
                 {activeEventTargetCounts[selectedEventType] ??
-                  members.filter((m) => m.role !== "manager" && m.role !== "ob").length}
+                  members.filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob").length}
                 人
                 {activeEventTargetCounts[selectedEventType] != null &&
                   "（対象者を限定しています）"}
@@ -1549,7 +1601,7 @@ export default function CoachAdminPage({
           <div className="flex items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-              部員の役職・所属拠点を編集
+              メンバー情報の編集
             </h2>
             <button
               onClick={() => {
@@ -1677,6 +1729,15 @@ export default function CoachAdminPage({
                         >
                           保存する
                         </button>
+                        <button
+                          onClick={() =>
+                            handleDeleteMember(m.id, m.display_name)
+                          }
+                          disabled={savingRoleId === m.id}
+                          className="rounded border border-red-900 px-2.5 py-1 text-[11px] font-medium text-red-400 active:bg-red-950/40 disabled:opacity-40"
+                        >
+                          削除
+                        </button>
                       </div>
                     </li>
                   );
@@ -1736,15 +1797,9 @@ export default function CoachAdminPage({
                         ))}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {r.claimed_by ? (
-                        <span className="rounded bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                          連携済み
-                        </span>
-                      ) : (
-                        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
-                          未登録
-                        </span>
-                      )}
+                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                        未登録
+                      </span>
                       <button
                         onClick={() => handleDeleteRoster(r.id)}
                         className="text-red-500"
@@ -2010,7 +2065,7 @@ function EventTargetPicker({
       <div className="max-h-40 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-2">
         <div className="flex flex-col gap-1">
           {members
-            .filter((m) => m.role !== "manager" && m.role !== "ob")
+            .filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob")
             .map((m) => (
               <label
                 key={m.id}

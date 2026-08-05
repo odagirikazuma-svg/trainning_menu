@@ -723,7 +723,8 @@ export default function TrainingBoardSupabase({
   );
   // コーチ・マネージャー以外（マイページに統合された部員view）には、
   // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
-  const isMemberView = !isCoachView && profile.role !== "manager";
+  const isMemberView =
+    !isCoachView && profile.role !== "manager" && profile.role !== "ob";
   const isManager = profile.role === "manager";
   const visibleReports = isMemberView
     ? reports.filter((r) => r.author_id === profile.id)

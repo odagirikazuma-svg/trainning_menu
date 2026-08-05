@@ -298,6 +298,9 @@ export default function MemberHome({
       }
     >
   >(new Map());
+  const [otherLocationOffDates, setOtherLocationOffDates] = useState<
+    Set<string>
+  >(new Set());
   // 自分がまだ実施報告・未実施報告をしていないマットメニューの日付
   const [matPendingDates, setMatPendingDates] = useState<Set<string>>(
     new Set()
@@ -1401,6 +1404,26 @@ export default function MemberHome({
         setCalendarSchedule(map);
       }
 
+      const otherLocation: Location =
+        effectiveHomeLocation === "otsuka" ? "tama" : "otsuka";
+      const { data: otherOffData, error: otherOffError } = await supabase
+        .from("schedule_days")
+        .select("date, is_off")
+        .eq("team_id", profile.team_id)
+        .eq("location", otherLocation)
+        .eq("is_off", true)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+      if (otherOffError) {
+        setErrorMsg(otherOffError.message);
+      } else {
+        setOtherLocationOffDates(
+          new Set(
+            ((otherOffData ?? []) as { date: string }[]).map((r) => r.date)
+          )
+        );
+      }
+
       // 自分がまだ実施報告・未実施報告をしていないマットメニューの日付を集計
       const { data: ownMenus } = await supabase
         .from("menus")
@@ -2095,6 +2118,7 @@ export default function MemberHome({
           todayDate={todayStr}
           nextMatchDate={isManager ? null : (nextMatch?.date ?? null)}
           homeLocation={effectiveHomeLocation ?? "tama"}
+          otherLocationOffDates={otherLocationOffDates}
         />
       </section>
       {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
@@ -2709,6 +2733,7 @@ function UnifiedCalendar({
   todayDate,
   nextMatchDate,
   homeLocation,
+  otherLocationOffDates,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2737,6 +2762,7 @@ function UnifiedCalendar({
   todayDate?: string;
   nextMatchDate?: string | null;
   homeLocation: Location;
+  otherLocationOffDates: Set<string>;
 }) {
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
@@ -2827,6 +2853,8 @@ function UnifiedCalendar({
           let bgClass = "bg-neutral-800 text-neutral-300";
           if (isHighlighted) {
             bgClass = "bg-amber-950/40 font-bold text-amber-400";
+          } else if (schedule?.isOff) {
+            bgClass = "bg-neutral-900 text-neutral-500";
           } else if (isAway) {
             bgClass = "bg-purple-950/40 text-purple-300";
           } else if (isCamp) {
@@ -2886,6 +2914,13 @@ function UnifiedCalendar({
                     {schedule.eventName || dayTypeLabel[schedule.dayType]}
                   </span>
                 )}
+              {schedule?.isOff && (
+                <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-400">
+                  {otherLocationOffDates.has(key)
+                    ? "全体オフ"
+                    : `${locationLabel[homeLocation]}のみオフ`}
+                </span>
+              )}
               {(schedule?.sessions ?? []).length > 0 && (
                 <span className="flex flex-col items-center gap-0.5">
                   {(schedule?.sessions ?? []).map((s, idx) => (
