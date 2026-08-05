@@ -841,3 +841,8 @@ alter type member_role add value if not exists 'ob';
 alter table member_roster drop constraint if exists member_roster_role_check;
 alter table member_roster add constraint member_roster_role_check
   check (role in ('captain', 'vice_captain', 'coach', 'manager', 'member', 'leader'));
+
+-- ============================================
+-- 追加: OBが自分のマイページのタスク一覧を表示するかどうかを選べるようにする
+-- ============================================
+alter table profiles add column if not exists show_task_list boolean not null default true;

@@ -142,6 +142,26 @@ export default function MemberHome({
   const supabase = createClient();
   const logSectionRef = useRef<HTMLDivElement>(null);
   const isFirstRefresh = useRef(true);
+  const isOb = profile.role === "ob";
+  const [showTaskListPref, setShowTaskListPref] = useState(
+    profile.show_task_list !== false
+  );
+  const [savingTaskListPref, setSavingTaskListPref] = useState(false);
+
+  async function handleToggleTaskListPref() {
+    const next = !showTaskListPref;
+    setSavingTaskListPref(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ show_task_list: next })
+      .eq("id", profile.id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setShowTaskListPref(next);
+    }
+    setSavingTaskListPref(false);
+  }
   const todayStr = toDateKey(new Date());
   // マネージャーは多摩所属として扱う(他ページの拠点制限ロジックと統一)
   const effectiveHomeLocation: Location | null =
@@ -1598,10 +1618,27 @@ export default function MemberHome({
 
       {/* タスク一覧 */}
       <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          タスク一覧
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            タスク一覧
+          </h2>
+          {isOb && (
+            <button
+              onClick={handleToggleTaskListPref}
+              disabled={savingTaskListPref}
+              className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[11px] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+            >
+              {showTaskListPref ? "非表示にする" : "表示する"}
+            </button>
+          )}
+        </div>
+        {isOb && !showTaskListPref ? (
+          <p className="text-[11px] text-neutral-500">
+            タスク一覧は非表示に設定されています。
+          </p>
+        ) : (
+          <>
         <p className="text-[11px] text-neutral-500">
           提出・完了するまで一覧から消えません。期日を過ぎたタスクは赤く強調表示されます。
         </p>
@@ -2094,6 +2131,8 @@ export default function MemberHome({
               );
             })}
           </ul>
+        )}
+          </>
         )}
       </section>
         </>

@@ -12,6 +12,7 @@ export type Profile = {
   role: Role;
   home_location: Location | null;
   entry_year: number | null;
+  show_task_list: boolean;
 };
 
 type SignupCategory = "member" | "coach" | "manager";
@@ -128,7 +129,7 @@ export default function AuthGate({
     if (!session) return;
     const { data: existing, error: existingError } = await supabase
       .from("profiles")
-      .select("id, team_id, display_name, role, home_location, entry_year")
+      .select("id, team_id, display_name, role, home_location, entry_year, show_task_list")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -241,7 +242,7 @@ export default function AuthGate({
           : metaLocation,
         entry_year: rosterMatch ? rosterMatch.entry_year : metaEntryYear,
       })
-      .select("id, team_id, display_name, role, home_location, entry_year")
+      .select("id, team_id, display_name, role, home_location, entry_year, show_task_list")
       .single();
 
     if (error) {
