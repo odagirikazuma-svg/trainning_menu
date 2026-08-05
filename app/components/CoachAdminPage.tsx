@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, locations, SessionType, teamEventTypeLabel, TeamEventType } from "../lib/types";
+import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, locations, SessionType, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type RosterRoleChoice = "coach" | "captain" | "vice_captain" | "leader" | "manager" | "member";

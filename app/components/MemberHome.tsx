@@ -12,7 +12,6 @@ import {
   SessionType,
   sessionTypeDotColor,
   teamEventTypeLabel,
-  TeamEventType,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,

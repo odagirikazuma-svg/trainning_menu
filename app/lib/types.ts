@@ -84,24 +84,6 @@ export function currentGrade(entryYear: number): number {
   return academicYear - entryYear + 1;
 }
 
-export type Comment = {
-  id: string;
-  authorName: string;
-  role: Role;
-  text: string;
-  createdAt: string; // ISO string
-};
-
-export type TrainingMenu = {
-  id: string;
-  date: string; // YYYY-MM-DD
-  title: string;
-  content: string; // メニュー詳細（自由記述）
-  createdBy: string;
-  createdAt: string;
-  comments: Comment[];
-};
-
 export const roleLabel: Record<Role, string> = {
   leader: "リーダー",
   vice_leader: "副主将",
