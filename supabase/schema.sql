@@ -851,3 +851,9 @@ alter table profiles add column if not exists show_task_list boolean not null de
 -- 追加: トレ報（ラン・ウェイト・その他）に、部員が任意で開始時間を記録できるようにする
 -- ============================================
 alter table weight_logs add column if not exists start_time time;
+
+-- ============================================
+-- 追加: マット以外（ラン・ウェイト・その他）のセクションは、
+-- 時間を固定せず「各自」にできるようにする（start_timeをNULL許容に変更）
+-- ============================================
+alter table schedule_sessions alter column start_time drop not null;

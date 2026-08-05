@@ -43,7 +43,7 @@ type ScheduleSessionRow = {
   id: string;
   session_no: number;
   session_type: SessionType;
-  start_time: string;
+  start_time: string | null;
   is_joint: boolean;
   joint_location: Location | null;
   location_note: string | null;
@@ -186,6 +186,7 @@ export default function TeamPage({
     {
       type: SessionType;
       time: string;
+      isFlexibleTime: boolean;
       isJoint: boolean;
       jointLocation: Location;
       locationNote: string;
@@ -207,6 +208,7 @@ export default function TeamPage({
     {
       type: SessionType;
       time: string;
+      isFlexibleTime: boolean;
       isJoint: boolean;
       jointLocation: Location;
       locationNote: string;
@@ -215,6 +217,7 @@ export default function TeamPage({
     {
       type: "mat",
       time: "10:00",
+      isFlexibleTime: false,
       isJoint: false,
       jointLocation: "tama",
       locationNote: "",
@@ -571,7 +574,8 @@ export default function TeamPage({
       setEditSessions(
         dayDetail.sessions.map((s) => ({
           type: s.session_type,
-          time: s.start_time.slice(0, 5),
+          time: s.start_time ? s.start_time.slice(0, 5) : "",
+          isFlexibleTime: !s.start_time,
           isJoint: s.is_joint,
           jointLocation: s.joint_location ?? scheduleLocation,
           locationNote: s.location_note ?? "",
@@ -582,6 +586,7 @@ export default function TeamPage({
         {
           type: "mat",
           time: "10:00",
+          isFlexibleTime: false,
           isJoint: false,
           jointLocation: scheduleLocation,
           locationNote: "",
@@ -596,6 +601,7 @@ export default function TeamPage({
     patch: Partial<{
       type: SessionType;
       time: string;
+      isFlexibleTime: boolean;
       isJoint: boolean;
       jointLocation: Location;
       locationNote: string;
@@ -615,6 +621,7 @@ export default function TeamPage({
             {
               type: "weight",
               time: "17:00",
+              isFlexibleTime: false,
               isJoint: false,
               jointLocation: scheduleLocation,
               locationNote: "",
@@ -634,6 +641,7 @@ export default function TeamPage({
     patch: Partial<{
       type: SessionType;
       time: string;
+      isFlexibleTime: boolean;
       isJoint: boolean;
       jointLocation: Location;
       locationNote: string;
@@ -653,6 +661,7 @@ export default function TeamPage({
             {
               type: "weight",
               time: "17:00",
+              isFlexibleTime: false,
               isJoint: false,
               jointLocation: scheduleLocation,
               locationNote: "",
@@ -679,6 +688,7 @@ export default function TeamPage({
       {
         type: "mat",
         time: "10:00",
+        isFlexibleTime: false,
         isJoint: false,
         jointLocation: scheduleLocation,
         locationNote: "",
@@ -747,6 +757,7 @@ export default function TeamPage({
     sessions: {
       type: SessionType;
       time: string;
+      isFlexibleTime: boolean;
       isJoint: boolean;
       jointLocation: Location;
       locationNote: string;
@@ -808,7 +819,7 @@ export default function TeamPage({
           schedule_day_id: dayId,
           session_no: idx + 1,
           session_type: s.type,
-          start_time: s.time,
+          start_time: s.isFlexibleTime ? null : s.time,
           is_joint: isJoint,
           joint_location: isJoint ? s.jointLocation : null,
           location_note: isAwayLike ? s.locationNote.trim() || null : null,
@@ -831,6 +842,7 @@ export default function TeamPage({
             await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
               type: s.type,
               time: s.time,
+              isFlexibleTime: s.isFlexibleTime,
               locationNote: isAwayLike ? s.locationNote.trim() || null : null,
             });
           }
@@ -995,10 +1007,16 @@ export default function TeamPage({
     dateStr: string,
     editingLocation: Location,
     hostLocation: Location,
-    session: { type: SessionType; time: string; locationNote?: string | null }
+    session: {
+      type: SessionType;
+      time: string;
+      isFlexibleTime?: boolean;
+      locationNote?: string | null;
+    }
   ) {
     const otherLocation: Location =
       editingLocation === "tama" ? "otsuka" : "tama";
+    const newStartTime = session.isFlexibleTime ? null : session.time;
 
     const { data: existingDay } = await supabase
       .from("schedule_days")
@@ -1042,13 +1060,14 @@ export default function TeamPage({
 
     if (mirrored) {
       if (
-        mirrored.start_time.slice(0, 5) !== session.time ||
+        (mirrored.start_time ? mirrored.start_time.slice(0, 5) : "") !==
+          (newStartTime ?? "") ||
         mirrored.location_note !== (session.locationNote ?? null)
       ) {
         await supabase
           .from("schedule_sessions")
           .update({
-            start_time: session.time,
+            start_time: newStartTime,
             location_note: session.locationNote ?? null,
           })
           .eq("id", mirrored.id);
@@ -1064,7 +1083,7 @@ export default function TeamPage({
       schedule_day_id: dayId,
       session_no: sessionNo,
       session_type: session.type,
-      start_time: session.time,
+      start_time: newStartTime,
       is_joint: true,
       joint_location: hostLocation,
       location_note: session.locationNote ?? null,
@@ -2169,6 +2188,10 @@ export default function TeamPage({
                                   onChange={(e) =>
                                     updateEditSession(idx, {
                                       type: e.target.value as SessionType,
+                                      isFlexibleTime:
+                                        e.target.value === "mat"
+                                          ? false
+                                          : s.isFlexibleTime,
                                     })
                                   }
                                   className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
@@ -2177,13 +2200,33 @@ export default function TeamPage({
                                   <option value="running">ラン</option>
                                   <option value="weight">ウェイト</option>
                                 </select>
-                                <ScheduleTimeSelect
-                                  value={s.time}
-                                  onChange={(v) =>
-                                    updateEditSession(idx, { time: v })
-                                  }
-                                />
+                                {s.isFlexibleTime ? (
+                                  <div className="flex items-center rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-500">
+                                    時間は各自
+                                  </div>
+                                ) : (
+                                  <ScheduleTimeSelect
+                                    value={s.time}
+                                    onChange={(v) =>
+                                      updateEditSession(idx, { time: v })
+                                    }
+                                  />
+                                )}
                               </div>
+                              {s.type !== "mat" && (
+                                <label className="flex items-center gap-2 text-[11px] text-neutral-400">
+                                  <input
+                                    type="checkbox"
+                                    checked={s.isFlexibleTime}
+                                    onChange={(e) =>
+                                      updateEditSession(idx, {
+                                        isFlexibleTime: e.target.checked,
+                                      })
+                                    }
+                                  />
+                                  時間は固定せず「各自」にする（部員がそれぞれ記録時に入力）
+                                </label>
+                              )}
                               {editCategory === "camp" ||
                               editCategory === "away" ? (
                                 <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
@@ -2411,7 +2454,9 @@ export default function TeamPage({
                             />
                             第{s.session_no}セッション・
                             {sessionTypeLabel[s.session_type]}・
-                            {s.start_time.slice(0, 5)}〜
+                            {s.start_time
+                              ? `${s.start_time.slice(0, 5)}〜`
+                              : "各自"}
                           </div>
                           {s.location_note ? (
                             <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
@@ -2439,7 +2484,7 @@ export default function TeamPage({
                                 {canEditMatMenu && (
                                   <button
                                     onClick={() =>
-                                      handleGoToMatMenu(s.start_time)
+                                      handleGoToMatMenu(s.start_time ?? undefined)
                                     }
                                     className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
                                   >
@@ -3190,7 +3235,7 @@ function MonthlyCalendar({
                         />
                         <span className="break-words text-[9px] text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
-                          {s.start_time.slice(0, 5)}〜
+                          {s.start_time ? `${s.start_time.slice(0, 5)}〜` : "各自"}
                           {s.location_note
                             ? `（${s.location_note}）`
                             : s.is_joint &&
