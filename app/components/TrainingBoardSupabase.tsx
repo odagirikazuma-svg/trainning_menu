@@ -16,6 +16,8 @@ import {
   SessionType,
   sessionTypeDotColor,
   sessionTypeLabel,
+  TrainingType,
+  trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import MemberHome from "./MemberHome";
@@ -183,6 +185,19 @@ export default function TrainingBoardSupabase({
     otsuka: number;
     all: number;
   }>({ tama: 0, otsuka: 0, all: 0 });
+  const [locationRoster, setLocationRoster] = useState<
+    { id: string; display_name: string }[]
+  >([]);
+  const [dayWeightLogs, setDayWeightLogs] = useState<
+    {
+      author_id: string;
+      display_name: string;
+      content: string;
+      type: TrainingType;
+      title: string | null;
+    }[]
+  >([]);
+  const [loadingDayWeightLogs, setLoadingDayWeightLogs] = useState(false);
   const [submissionMap, setSubmissionMap] = useState<
     Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
   >({});
@@ -208,6 +223,60 @@ export default function TrainingBoardSupabase({
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isCoachView) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, display_name, role, home_location")
+        .eq("team_id", profile.team_id)
+        .eq("home_location", activeLocation)
+        .not("role", "in", "(coach,manager,ob)");
+      if (!error) {
+        setLocationRoster(
+          (data ?? []) as { id: string; display_name: string }[]
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCoachView, activeLocation]);
+
+  useEffect(() => {
+    if (!isCoachView) return;
+    (async () => {
+      setLoadingDayWeightLogs(true);
+      const { data, error } = await supabase
+        .from("weight_logs")
+        .select(
+          "author_id, content, type, title, author:profiles!weight_logs_author_id_fkey(display_name, home_location)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("date", viewDate);
+      if (!error) {
+        const rows = (data ?? []) as unknown as {
+          author_id: string;
+          content: string;
+          type: TrainingType;
+          title: string | null;
+          author: { display_name: string; home_location: Location | null } | null;
+        }[];
+        setDayWeightLogs(
+          rows
+            .filter((r) => r.author?.home_location === activeLocation)
+            .map((r) => ({
+              author_id: r.author_id,
+              display_name: r.author?.display_name ?? "不明",
+              content: r.content,
+              type: r.type,
+              title: r.title,
+            }))
+        );
+      }
+      setLoadingDayWeightLogs(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCoachView, activeLocation, viewDate]);
 
   useEffect(() => {
     setJointNoticeDate(null);
@@ -944,6 +1013,11 @@ export default function TrainingBoardSupabase({
           )}
         </div>
 
+      {isCoachView && (
+        <h3 className="text-xs font-semibold text-neutral-400">
+          {formatMonthDay(viewDate)}の練習メニュー
+        </h3>
+      )}
       {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
             <p className="mb-2">
@@ -1288,6 +1362,107 @@ export default function TrainingBoardSupabase({
               </form>
               )}
             </section>
+
+            {isCoachView && (
+              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+                <h3 className="text-xs font-semibold text-neutral-400">
+                  未提出者（{locationLabel[activeLocation]}）
+                </h3>
+                {(() => {
+                  const reportedIds = new Set(reports.map((r) => r.author_id));
+                  const absentIds = new Set(
+                    absentReports.map((c) => c.author_id)
+                  );
+                  const missing = locationRoster.filter(
+                    (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
+                  );
+                  return missing.length === 0 ? (
+                    <p className="text-xs text-neutral-500">
+                      全員提出済みです。
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {missing.map((m) => (
+                        <span
+                          key={m.id}
+                          className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                        >
+                          {m.display_name}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </section>
+            )}
+
+            {isCoachView &&
+              matSessionForViewDate &&
+              viewDateSchedule?.sessions.some(
+                (s) => s.session_type !== "mat"
+              ) && (
+                <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+                  <h3 className="text-xs font-semibold text-neutral-400">
+                    トレ報（{locationLabel[activeLocation]}）
+                  </h3>
+                  {loadingDayWeightLogs ? (
+                    <p className="text-xs text-neutral-500">読み込み中…</p>
+                  ) : dayWeightLogs.length === 0 ? (
+                    <p className="text-xs text-neutral-500">
+                      まだトレ報の提出はありません。
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {dayWeightLogs.map((log) => (
+                        <div
+                          key={log.author_id}
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm"
+                        >
+                          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
+                            {log.display_name}
+                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                              {trainingTypeLabel[log.type]}
+                              {log.title && `・${log.title}`}
+                            </span>
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {log.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-neutral-400">
+                      未提出者
+                    </p>
+                    {(() => {
+                      const loggedIds = new Set(
+                        dayWeightLogs.map((l) => l.author_id)
+                      );
+                      const missing = locationRoster.filter(
+                        (m) => !loggedIds.has(m.id)
+                      );
+                      return missing.length === 0 ? (
+                        <p className="text-xs text-neutral-500">
+                          全員提出済みです。
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {missing.map((m) => (
+                            <span
+                              key={m.id}
+                              className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                            >
+                              {m.display_name}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </section>
+              )}
               </>
             )}
           </>
@@ -1393,12 +1568,10 @@ export default function TrainingBoardSupabase({
 
         {isCoachView ? (
           <>
-            {practiceSection}
-
-            {/* すべてのメニューを見るカレンダー */}
-            <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+            {/* 練習スケジュール */}
+            <section className="flex flex-col gap-3">
               <h3 className="text-xs font-semibold text-neutral-400">
-                カレンダーからメニューを探す
+                練習スケジュール
               </h3>
               <MenuCalendar
                 menus={menus}
@@ -1417,6 +1590,8 @@ export default function TrainingBoardSupabase({
                 location={activeLocation}
               />
             </section>
+
+            {practiceSection}
           </>
         ) : (
           <MemberHome
