@@ -170,6 +170,11 @@ export default function TeamPage({
   const [loadingDayDetail, setLoadingDayDetail] = useState(false);
 
   const [editingSchedule, setEditingSchedule] = useState(false);
+  const [showCopyToDates, setShowCopyToDates] = useState(false);
+  const [copyWeekdays, setCopyWeekdays] = useState<Set<number>>(new Set());
+  const [copyRangeStart, setCopyRangeStart] = useState("");
+  const [copyRangeEnd, setCopyRangeEnd] = useState("");
+  const [savingCopyToDates, setSavingCopyToDates] = useState(false);
   const [editCategory, setEditCategory] = useState<"off" | DayType>(
     "practice"
   );
@@ -875,6 +880,62 @@ export default function TeamPage({
     }
 
     return null;
+  }
+
+  async function handleCopyScheduleToDates() {
+    if (!selectedScheduleDate) return;
+    if (copyWeekdays.size === 0) {
+      setErrorMsg("コピー先の曜日を1つ以上選んでください。");
+      return;
+    }
+    if (!copyRangeStart || !copyRangeEnd) {
+      setErrorMsg("コピー先の期間を選んでください。");
+      return;
+    }
+    if (copyRangeStart > copyRangeEnd) {
+      setErrorMsg("コピー先の期間が正しくありません。");
+      return;
+    }
+
+    setSavingCopyToDates(true);
+
+    const targetDates: string[] = [];
+    const cursor = new Date(`${copyRangeStart}T00:00:00`);
+    const end = new Date(`${copyRangeEnd}T00:00:00`);
+    while (cursor <= end) {
+      const dateStr = toDateKey(cursor);
+      if (
+        copyWeekdays.has(cursor.getDay()) &&
+        dateStr !== selectedScheduleDate
+      ) {
+        targetDates.push(dateStr);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    for (const dateStr of targetDates) {
+      const errorMessage = await saveScheduleForDate(
+        dateStr,
+        editCategory,
+        editSessions,
+        editIncludeSessions,
+        editEventName,
+        editOffBothLocations,
+        editShareBothLocations
+      );
+      if (errorMessage) {
+        setErrorMsg(`${formatMonthDay(dateStr)}の保存に失敗しました: ${errorMessage}`);
+        setSavingCopyToDates(false);
+        return;
+      }
+    }
+
+    setShowCopyToDates(false);
+    setCopyWeekdays(new Set());
+    setCopyRangeStart("");
+    setCopyRangeEnd("");
+    setSavingCopyToDates(false);
+    await loadMonthSchedule();
   }
 
   async function handleSaveSchedule() {
@@ -2185,6 +2246,78 @@ export default function TeamPage({
                           )}
                         </div>
                       )}
+
+                      <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2">
+                        <button
+                          onClick={() => setShowCopyToDates((v) => !v)}
+                          className="self-start text-xs font-medium text-neutral-300 underline"
+                        >
+                          {showCopyToDates
+                            ? "他の日へのコピーを閉じる"
+                            : "この内容を他の日にもコピーする"}
+                        </button>
+                        {showCopyToDates && (
+                          <div className="flex flex-col gap-2">
+                            <p className="text-[11px] text-neutral-500">
+                              下で選んだ曜日・期間に、今設定している内容(区分・セッション)をまとめてコピーします。保存する前に、まずこちらを実行してください。
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {["日", "月", "火", "水", "木", "金", "土"].map(
+                                (w, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() =>
+                                      setCopyWeekdays((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(idx)) next.delete(idx);
+                                        else next.add(idx);
+                                        return next;
+                                      })
+                                    }
+                                    className={`rounded px-2.5 py-1 text-xs font-medium ${
+                                      copyWeekdays.has(idx)
+                                        ? "bg-red-600 text-white"
+                                        : "bg-neutral-800 text-neutral-400"
+                                    }`}
+                                  >
+                                    {w}
+                                  </button>
+                                )
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="date"
+                                value={copyRangeStart}
+                                onChange={(e) =>
+                                  setCopyRangeStart(e.target.value)
+                                }
+                                className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                              />
+                              <span className="text-xs text-neutral-500">
+                                〜
+                              </span>
+                              <input
+                                type="date"
+                                value={copyRangeEnd}
+                                onChange={(e) =>
+                                  setCopyRangeEnd(e.target.value)
+                                }
+                                className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                              />
+                            </div>
+                            <button
+                              onClick={handleCopyScheduleToDates}
+                              disabled={savingCopyToDates}
+                              className="self-start rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+                            >
+                              {savingCopyToDates
+                                ? "コピー中…"
+                                : "選んだ日にコピーする"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="flex gap-2">
                         <button

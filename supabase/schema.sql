@@ -846,3 +846,8 @@ alter table member_roster add constraint member_roster_role_check
 -- 追加: OBが自分のマイページのタスク一覧を表示するかどうかを選べるようにする
 -- ============================================
 alter table profiles add column if not exists show_task_list boolean not null default true;
+
+-- ============================================
+-- 追加: トレ報（ラン・ウェイト・その他）に、部員が任意で開始時間を記録できるようにする
+-- ============================================
+alter table weight_logs add column if not exists start_time time;

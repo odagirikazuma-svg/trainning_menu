@@ -76,6 +76,7 @@ type WeightLogRow = {
   content: string;
   type: TrainingType;
   title: string | null;
+  start_time: string | null;
 };
 
 type RecentRecord = {
@@ -281,6 +282,7 @@ export default function MemberHome({
   const [todayLogText, setTodayLogText] = useState("");
   const [todayLogType, setTodayLogType] = useState<TrainingType | null>(null);
   const [todayLogTitle, setTodayLogTitle] = useState("");
+  const [todayLogStartTime, setTodayLogStartTime] = useState("");
   const [titleOptions, setTitleOptions] = useState<string[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
@@ -1224,7 +1226,7 @@ export default function MemberHome({
     setLogDate(date);
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("id, date, content, type, title")
+      .select("id, date, content, type, title, start_time")
       .eq("author_id", profile.id)
       .eq("date", date)
       .maybeSingle();
@@ -1237,11 +1239,13 @@ export default function MemberHome({
       setTodayLogText(row.content);
       setTodayLogType(row.type);
       setTodayLogTitle(row.title ?? "");
+      setTodayLogStartTime(row.start_time ? row.start_time.slice(0, 5) : "");
     } else {
       setTodayLog(null);
       setTodayLogText("");
       setTodayLogType(null);
       setTodayLogTitle("");
+      setTodayLogStartTime("");
     }
     setLoadingLog(false);
   }
@@ -1280,6 +1284,10 @@ export default function MemberHome({
 
   async function handleSaveLog() {
     if (!todayLogType) return;
+    if (todayLogStartTime && todayLogStartTime < "06:00") {
+      setErrorMsg("開始時間はその日の6時以降で入力してください。");
+      return;
+    }
     setSavingLog(true);
     const trimmedTitle = todayLogTitle.trim();
     const { data, error } = await supabase
@@ -1293,11 +1301,12 @@ export default function MemberHome({
           content: todayLogText,
           type: todayLogType,
           title: todayLogType === "weight" && trimmedTitle ? trimmedTitle : null,
+          start_time: todayLogStartTime || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "author_id,date" }
       )
-      .select("id, date, content, type, title")
+      .select("id, date, content, type, title, start_time")
       .single();
 
     if (error) {
@@ -2231,6 +2240,19 @@ export default function MemberHome({
                 </button>
               ))}
             </div>
+            {todayLogType && (
+              <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                開始時間（任意。その日の6時以降）
+                <input
+                  type="time"
+                  min="06:00"
+                  max="23:59"
+                  value={todayLogStartTime}
+                  onChange={(e) => setTodayLogStartTime(e.target.value)}
+                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                />
+              </label>
+            )}
             {todayLogType === "weight" && (
               <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
                 タイトル（種目名など。任意）
