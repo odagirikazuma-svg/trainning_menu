@@ -1,3 +1,13 @@
+self.addEventListener("install", function (event) {
+  // 新しいバージョンをすぐに有効化する（古いSWが居座り続けるのを防ぐ）
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", function (event) {
+  // 有効化したら、開いているタブの制御もすぐに引き継ぐ
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", function (event) {
   let data = {};
   try {

@@ -311,7 +311,7 @@ export default function MemberHome({
         hasMat: boolean;
         sessions: {
           type: SessionType;
-          time: string;
+          time: string | null;
           locationNote: string | null;
           isJoint: boolean;
           jointLocation: Location | null;
@@ -394,7 +394,11 @@ export default function MemberHome({
     setLoadingTodo(true);
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    const rangeStart = toDateKey(twoWeeksAgo);
+    const joinedDate = toDateKey(new Date(profile.created_at));
+    const rangeStart =
+      toDateKey(twoWeeksAgo) > joinedDate
+        ? toDateKey(twoWeeksAgo)
+        : joinedDate;
 
     const { data: ownMenuData, error: ownMenuError } = await supabase
       .from("menus")
@@ -476,7 +480,11 @@ export default function MemberHome({
     }
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    const rangeStart = toDateKey(twoWeeksAgo);
+    const joinedDate = toDateKey(new Date(profile.created_at));
+    const rangeStart =
+      toDateKey(twoWeeksAgo) > joinedDate
+        ? toDateKey(twoWeeksAgo)
+        : joinedDate;
 
     const { data: scheduleData, error: scheduleError } = await supabase
       .from("schedule_days")
@@ -1390,7 +1398,7 @@ export default function MemberHome({
             hasMat: boolean;
             sessions: {
               type: SessionType;
-              time: string;
+              time: string | null;
               locationNote: string | null;
               isJoint: boolean;
               jointLocation: Location | null;
@@ -1404,7 +1412,7 @@ export default function MemberHome({
           event_name: string | null;
           sessions: {
             session_type: SessionType;
-            start_time: string;
+            start_time: string | null;
             location_note: string | null;
             is_joint: boolean;
             joint_location: Location | null;
@@ -1412,7 +1420,9 @@ export default function MemberHome({
         }[]) {
           const sessions = row.sessions
             .slice()
-            .sort((a, b) => a.start_time.localeCompare(b.start_time))
+            .sort((a, b) =>
+              (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99")
+            )
             .map((s) => ({
               type: s.session_type,
               time: s.start_time,
@@ -2809,7 +2819,7 @@ function UnifiedCalendar({
       hasMat: boolean;
       sessions: {
         type: SessionType;
-        time: string;
+        time: string | null;
         locationNote: string | null;
         isJoint: boolean;
         jointLocation: Location | null;
@@ -2991,7 +3001,7 @@ function UnifiedCalendar({
                       <span
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
                       />
-                      {s.time.slice(0, 5)}
+                      {s.time ? s.time.slice(0, 5) : "各自"}
                       {schedule?.dayType === "camp" ||
                       schedule?.dayType === "away"
                         ? s.locationNote

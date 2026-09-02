@@ -146,7 +146,7 @@ export default function TrainingBoardSupabase({
     event_name: string | null;
     sessions: {
       session_type: SessionType;
-      start_time: string;
+      start_time: string | null;
       is_joint: boolean;
       joint_location: Location | null;
       location_note: string | null;
@@ -386,7 +386,7 @@ export default function TrainingBoardSupabase({
       day_type: DayType;
       sessions: {
         session_type: SessionType;
-        start_time: string;
+        start_time: string | null;
         is_joint: boolean;
         joint_location: Location | null;
       }[];
@@ -400,7 +400,7 @@ export default function TrainingBoardSupabase({
     setNewOffBothLocations(isAwayLikeDay ? !!matSession?.is_joint : false);
     setNewJointLocation(matSession?.joint_location ?? activeLocation);
     setNewDate(viewDate);
-    setNewStartTime(matSession ? matSession.start_time.slice(0, 5) : "");
+    setNewStartTime(matSession?.start_time ? matSession.start_time.slice(0, 5) : "");
 
     setShowNewForm(true);
   }
@@ -1470,7 +1470,7 @@ export default function TrainingBoardSupabase({
           <div className="rounded-lg border border-neutral-800 p-4">
             <div className="mt-2 mb-1 text-xs text-neutral-500">
               {locationLabel[activeLocation]}・{viewDate}
-              {matSessionForViewDate &&
+              {matSessionForViewDate?.start_time &&
                 `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
             </div>
             {matSessionForViewDate ? (
@@ -1899,7 +1899,7 @@ function MenuCalendar({
         event_name: string | null;
         sessions: {
           session_type: SessionType;
-          start_time: string;
+          start_time: string | null;
           is_joint: boolean;
           joint_location: Location | null;
           location_note: string | null;
@@ -1933,7 +1933,7 @@ function MenuCalendar({
         event_name: string | null;
           sessions: {
             session_type: SessionType;
-            start_time: string;
+            start_time: string | null;
             is_joint: boolean;
             joint_location: Location | null;
             location_note: string | null;
@@ -1947,7 +1947,7 @@ function MenuCalendar({
         event_name: string | null;
         sessions: {
           session_type: SessionType;
-          start_time: string;
+          start_time: string | null;
           is_joint: boolean;
           joint_location: Location | null;
           location_note: string | null;
@@ -2103,7 +2103,11 @@ function MenuCalendar({
                 schedule.sessions.length > 0 && (
                   <span className="flex flex-col items-center gap-0.5 px-0.5">
                     {[...schedule.sessions]
-                      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+                      .sort((a, b) =>
+                        (a.start_time ?? "99:99").localeCompare(
+                          b.start_time ?? "99:99"
+                        )
+                      )
                       .map((s, idx) => (
                         <span
                           key={idx}
@@ -2113,7 +2117,7 @@ function MenuCalendar({
                             className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                           />
                           {sessionTypeLabel[s.session_type]}
-                          {s.start_time.slice(0, 5)}
+                          {s.start_time ? s.start_time.slice(0, 5) : "各自"}
                           {schedule.day_type === "camp" ||
                           schedule.day_type === "away"
                             ? s.is_joint
