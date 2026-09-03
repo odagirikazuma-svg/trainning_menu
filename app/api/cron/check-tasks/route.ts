@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
   // 対象になりうる部員（コーチ・マネージャーは対象外）
   const { data: profileRows, error: profileError } = await supabase
     .from("profiles")
-    .select("id, team_id, home_location, role")
+    .select("id, team_id, home_location, role, created_at")
     .not("role", "in", "(coach,manager,ob)");
 
   if (profileError) {
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     team_id: string;
     home_location: "tama" | "otsuka" | null;
     role: string;
+    created_at: string;
   }[];
 
   if (members.length === 0) {
@@ -165,7 +166,135 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // --- 3) 怪我の経過報告 ---
+  // ウェイトMAXの対象者限定（行が無いイベントは全員が対象）
+  const weightMaxTargetsByEvent = new Map<string, Set<string>>();
+  if (activeEventIds.length > 0) {
+    const { data: wmTargetRows, error: wmTargetError } = await supabase
+      .from("weight_max_event_targets")
+      .select("event_id, member_id")
+      .in("event_id", activeEventIds);
+    if (wmTargetError) {
+      return NextResponse.json(
+        { error: wmTargetError.message },
+        { status: 500 }
+      );
+    }
+    for (const row of (wmTargetRows ?? []) as {
+      event_id: string;
+      member_id: string;
+    }[]) {
+      const set = weightMaxTargetsByEvent.get(row.event_id) ?? new Set();
+      set.add(row.member_id);
+      weightMaxTargetsByEvent.set(row.event_id, set);
+    }
+  }
+
+  // --- 2b) 試合の振り返り・体組成の提出イベント ---
+  const { data: teamEventRows, error: teamEventError } = await supabase
+    .from("team_events")
+    .select("id, team_id")
+    .in("team_id", teamIds)
+    .is("closed_at", null);
+
+  if (teamEventError) {
+    return NextResponse.json({ error: teamEventError.message }, { status: 500 });
+  }
+
+  const activeTeamEvents = (teamEventRows ?? []) as {
+    id: string;
+    team_id: string;
+  }[];
+  const activeTeamEventIds = activeTeamEvents.map((e) => e.id);
+
+  const submittedTeamEventKeys = new Set<string>();
+  const teamEventTargets = new Map<string, Set<string>>();
+  if (activeTeamEventIds.length > 0) {
+    const { data: teamSubRows, error: teamSubError } = await supabase
+      .from("team_event_submissions")
+      .select("author_id, event_id")
+      .in("event_id", activeTeamEventIds);
+    if (teamSubError) {
+      return NextResponse.json(
+        { error: teamSubError.message },
+        { status: 500 }
+      );
+    }
+    for (const row of (teamSubRows ?? []) as {
+      author_id: string;
+      event_id: string;
+    }[]) {
+      submittedTeamEventKeys.add(`${row.author_id}:${row.event_id}`);
+    }
+
+    const { data: teamTargetRows, error: teamTargetError } = await supabase
+      .from("team_event_targets")
+      .select("event_id, member_id")
+      .in("event_id", activeTeamEventIds);
+    if (teamTargetError) {
+      return NextResponse.json(
+        { error: teamTargetError.message },
+        { status: 500 }
+      );
+    }
+    for (const row of (teamTargetRows ?? []) as {
+      event_id: string;
+      member_id: string;
+    }[]) {
+      const set = teamEventTargets.get(row.event_id) ?? new Set();
+      set.add(row.member_id);
+      teamEventTargets.set(row.event_id, set);
+    }
+  }
+
+  // --- 3) トレ報（マット以外のセッションがある日の自主トレ記録） ---
+  const { data: scheduleRows, error: scheduleError } = await supabase
+    .from("schedule_days")
+    .select(
+      "date, location, team_id, is_off, sessions:schedule_sessions(session_type)"
+    )
+    .in("team_id", teamIds)
+    .eq("is_off", false)
+    .gte("date", rangeStart)
+    .lte("date", todayStr);
+
+  if (scheduleError) {
+    return NextResponse.json({ error: scheduleError.message }, { status: 500 });
+  }
+
+  // team_id:location:date -> マット以外のセッションがあるか
+  const nonMatDatesByTeamLocation = new Set<string>();
+  for (const row of (scheduleRows ?? []) as {
+    date: string;
+    location: "tama" | "otsuka";
+    team_id: string;
+    is_off: boolean;
+    sessions: { session_type: string }[];
+  }[]) {
+    if (row.sessions.some((s) => s.session_type !== "mat")) {
+      nonMatDatesByTeamLocation.add(
+        `${row.team_id}:${row.location}:${row.date}`
+      );
+    }
+  }
+
+  const { data: logRows, error: logError } = await supabase
+    .from("weight_logs")
+    .select("author_id, date")
+    .in("author_id", memberIds)
+    .gte("date", rangeStart)
+    .lte("date", todayStr);
+
+  if (logError) {
+    return NextResponse.json({ error: logError.message }, { status: 500 });
+  }
+
+  const loggedKeys = new Set(
+    ((logRows ?? []) as { author_id: string; date: string }[]).map(
+      (r) => `${r.author_id}:${r.date}`
+    )
+  );
+
+  // --- 4) 怪我の経過報告 ---
   const { data: injuryRows, error: injuryError } = await supabase
     .from("injuries")
     .select(
@@ -215,10 +344,12 @@ export async function GET(request: NextRequest) {
     let hasIncomplete = false;
 
     if (m.home_location) {
+      const joinedDate = toDateKey(new Date(m.created_at));
       const applicableMenus = menus.filter(
         (menu) =>
           menu.team_id === m.team_id &&
           (menu.location === m.home_location || menu.is_joint) &&
+          menu.date >= joinedDate &&
           isReportOpen(menu.date, menu.start_time)
       );
       const hasUnrespondedMenu = applicableMenus.some(
@@ -227,13 +358,47 @@ export async function GET(request: NextRequest) {
       if (hasUnrespondedMenu) hasIncomplete = true;
     }
 
+    if (!hasIncomplete && m.home_location) {
+      const joinedDate = toDateKey(new Date(m.created_at));
+      const memberRangeStart = joinedDate > rangeStart ? joinedDate : rangeStart;
+      const cursor = new Date(`${memberRangeStart}T00:00:00`);
+      const end = new Date(`${todayStr}T00:00:00`);
+      while (cursor <= end && !hasIncomplete) {
+        const dateStr = toDateKey(cursor);
+        const key = `${m.team_id}:${m.home_location}:${dateStr}`;
+        if (
+          nonMatDatesByTeamLocation.has(key) &&
+          !loggedKeys.has(`${m.id}:${dateStr}`)
+        ) {
+          hasIncomplete = true;
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
     if (!hasIncomplete) {
       const activeEvent = activeEventByTeam.get(m.team_id);
-      if (
-        activeEvent &&
-        !submittedMaxKeys.has(`${m.id}:${activeEvent.id}`)
-      ) {
-        hasIncomplete = true;
+      if (activeEvent) {
+        const targets = weightMaxTargetsByEvent.get(activeEvent.id);
+        const isTargeted = !targets || targets.size === 0 || targets.has(m.id);
+        if (isTargeted && !submittedMaxKeys.has(`${m.id}:${activeEvent.id}`)) {
+          hasIncomplete = true;
+        }
+      }
+    }
+
+    if (!hasIncomplete) {
+      for (const event of activeTeamEvents) {
+        if (event.team_id !== m.team_id) continue;
+        const targets = teamEventTargets.get(event.id);
+        const isTargeted = !targets || targets.size === 0 || targets.has(m.id);
+        if (
+          isTargeted &&
+          !submittedTeamEventKeys.has(`${m.id}:${event.id}`)
+        ) {
+          hasIncomplete = true;
+          break;
+        }
       }
     }
 
