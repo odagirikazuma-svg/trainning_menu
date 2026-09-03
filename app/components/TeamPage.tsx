@@ -630,9 +630,7 @@ export default function TeamPage({
   }
 
   function removeEditSession(idx: number) {
-    setEditSessions((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
-    );
+    setEditSessions((prev) => prev.filter((_, i) => i !== idx));
   }
 
   function updateBulkSession(
@@ -838,12 +836,18 @@ export default function TeamPage({
         for (const s of sessions) {
           const isJoint = isAwayLike ? shareBothLocations : s.isJoint;
           if (isJoint) {
-            await propagateJointSession(dateStr, scheduleLocation, s.jointLocation, {
-              type: s.type,
-              time: s.time,
-              isFlexibleTime: s.isFlexibleTime,
-              locationNote: isAwayLike ? s.locationNote.trim() || null : null,
-            });
+            const propagateError = await propagateJointSession(
+              dateStr,
+              scheduleLocation,
+              s.jointLocation,
+              {
+                type: s.type,
+                time: s.time,
+                isFlexibleTime: s.isFlexibleTime,
+                locationNote: isAwayLike ? s.locationNote.trim() || null : null,
+              }
+            );
+            if (propagateError) return propagateError;
           }
         }
       }
@@ -1005,7 +1009,7 @@ export default function TeamPage({
       isFlexibleTime?: boolean;
       locationNote?: string | null;
     }
-  ) {
+  ): Promise<string | null> {
     const otherLocation: Location =
       editingLocation === "tama" ? "otsuka" : "tama";
     const newStartTime = session.isFlexibleTime ? null : session.time;
@@ -1036,40 +1040,48 @@ export default function TeamPage({
       .select("id")
       .single();
 
-    if (dayError || !dayRow) return;
+    if (dayError || !dayRow) {
+      return dayError?.message ?? `${locationLabel[otherLocation]}の予定作成に失敗しました。`;
+    }
 
     const dayId = (dayRow as { id: string }).id;
     const existingSessions =
       ((existingDay as unknown as { sessions: ScheduleSessionRow[] } | null)
         ?.sessions ?? []);
 
-    const mirrored = existingSessions.find(
-      (s) =>
-        s.is_joint &&
-        s.joint_location === hostLocation &&
-        s.session_type === session.type
+    // 既に同じ種別のセッションがあれば、joint化された内容に上書きする
+    // （相手拠点が独自にそのセッションを組んでいた場合も、こちらの内容を優先する）
+    const existingSameType = existingSessions.find(
+      (s) => s.session_type === session.type
     );
 
-    if (mirrored) {
-      if (
-        (mirrored.start_time ? mirrored.start_time.slice(0, 5) : "") !==
-          (newStartTime ?? "") ||
-        mirrored.location_note !== (session.locationNote ?? null)
-      ) {
+    if (existingSameType) {
+      const needsUpdate =
+        !existingSameType.is_joint ||
+        existingSameType.joint_location !== hostLocation ||
+        (existingSameType.start_time
+          ? existingSameType.start_time.slice(0, 5)
+          : "") !== (newStartTime ?? "") ||
+        existingSameType.location_note !== (session.locationNote ?? null);
+      if (needsUpdate) {
         await supabase
           .from("schedule_sessions")
           .update({
             start_time: newStartTime,
+            is_joint: true,
+            joint_location: hostLocation,
             location_note: session.locationNote ?? null,
           })
-          .eq("id", mirrored.id);
+          .eq("id", existingSameType.id);
       }
-      return;
+      return null;
     }
 
     const usedNos = new Set(existingSessions.map((s) => s.session_no));
     const sessionNo = !usedNos.has(1) ? 1 : !usedNos.has(2) ? 2 : null;
-    if (sessionNo === null) return; // 既に2セッション分埋まっている場合は反映できない
+    if (sessionNo === null) {
+      return `${locationLabel[otherLocation]}は既に2セッション分の予定が入っているため、全体練習として反映できませんでした。`;
+    }
 
     await supabase.from("schedule_sessions").insert({
       schedule_day_id: dayId,
@@ -1080,6 +1092,7 @@ export default function TeamPage({
       joint_location: hostLocation,
       location_note: session.locationNote ?? null,
     });
+    return null;
   }
 
   async function loadWeightMaxes() {
@@ -2165,14 +2178,12 @@ export default function TeamPage({
                                 <span className="text-[11px] font-semibold text-neutral-400">
                                   第{idx + 1}セッション
                                 </span>
-                                {editSessions.length > 1 && (
-                                  <button
-                                    onClick={() => removeEditSession(idx)}
-                                    className="text-[11px] text-red-500"
-                                  >
-                                    削除
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => removeEditSession(idx)}
+                                  className="text-[11px] text-red-500"
+                                >
+                                  削除
+                                </button>
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                 <select
