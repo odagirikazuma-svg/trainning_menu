@@ -63,10 +63,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   {children}
                 </main>
-                <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col">
-                  {subNav}
-                  <Footer profile={profile} />
-                </div>
+                {subNav && (
+                  <div
+                    className="fixed inset-x-0 z-20"
+                    style={{ bottom: "calc(88px + env(safe-area-inset-bottom))" }}
+                  >
+                    {subNav}
+                  </div>
+                )}
+                <Footer profile={profile} />
               </div>
             </SubNavContext.Provider>
           </ProfileContext.Provider>
