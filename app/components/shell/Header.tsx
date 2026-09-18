@@ -238,7 +238,7 @@ export default function Header({ profile }: { profile: Profile }) {
   return (
     <header
       className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-border-color bg-surface/95 px-4 py-2.5 backdrop-blur"
-      style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top))" }}
+      style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
       <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-red-600" />
       {profile.role === "coach" ? (

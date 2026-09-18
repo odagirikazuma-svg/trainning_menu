@@ -30,7 +30,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <main
                 className="flex-1"
                 style={{
-                  paddingTop: "calc(56px + env(safe-area-inset-top))",
+                  paddingTop: "calc(72px + env(safe-area-inset-top))",
                   paddingBottom: "calc(88px + env(safe-area-inset-bottom))",
                 }}
               >
