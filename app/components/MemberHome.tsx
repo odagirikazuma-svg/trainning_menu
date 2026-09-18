@@ -118,6 +118,11 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
+const homeSubTabItems: { value: "training" | "injury"; label: string }[] = [
+  { value: "training", label: "トレーニング" },
+  { value: "injury", label: "怪我の記録" },
+];
+
 export default function MemberHome({
   profile,
   refreshSignal,
@@ -1445,18 +1450,21 @@ export default function MemberHome({
   );
 
   // フッター上のサブナビ（トレーニング／怪我の記録の切り替え）を登録
-  useSubNav(
-    !isManager ? (
-      <SubTabBar
-        items={[
-          { value: "training", label: "トレーニング" },
-          { value: "injury", label: "怪我の記録" },
-        ]}
-        active={homeSubTab}
-        onChange={setHomeSubTab}
-      />
-    ) : null
+  // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
+  //   useSubNav内のuseEffectが依存配列[node]の変化を検知して毎回発火し、
+  //   AppShell側の再レンダーとの間で無限ループになりうる。
+  const homeSubNav = useMemo(
+    () =>
+      !isManager ? (
+        <SubTabBar
+          items={homeSubTabItems}
+          active={homeSubTab}
+          onChange={setHomeSubTab}
+        />
+      ) : null,
+    [isManager, homeSubTab]
   );
+  useSubNav(homeSubNav);
 
   return (
     <>

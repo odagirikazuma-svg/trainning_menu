@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useProfile, useSubNav } from "../../components/shell/AppShell";
 import SubTabBar from "../../components/shell/SubTabBar";
 import { createClient } from "../../lib/supabase/client";
@@ -663,9 +663,12 @@ export default function EventsPage() {
   const { profile } = useProfile();
   const [tab, setTab] = useState<EventTab>("weight_max");
 
-  useSubNav(
-    <SubTabBar items={eventSubTabItems} active={tab} onChange={setTab} />
+  // node は useMemo で安定させる（毎レンダー新しいJSXを渡すと無限ループの原因になる）
+  const eventsSubNav = useMemo(
+    () => <SubTabBar items={eventSubTabItems} active={tab} onChange={setTab} />,
+    [tab]
   );
+  useSubNav(eventsSubNav);
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
