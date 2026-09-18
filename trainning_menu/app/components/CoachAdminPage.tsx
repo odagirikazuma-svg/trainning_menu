@@ -1104,7 +1104,28 @@ export default function CoachAdminPage({
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          管理ページ
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+          <button
+            onClick={() => router.push("/")}
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+          >
+            掲示板に戻る
+          </button>
+          <button
+            onClick={() => router.push("/team")}
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+          >
+            チームページ
+          </button>
+        </div>
+      </header>
+
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
@@ -2014,6 +2035,15 @@ export default function CoachAdminPage({
             </button>
           </form>
         </section>
+
+        <div className="border-t border-neutral-800 pt-4">
+          <button
+            onClick={signOut}
+            className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -512,7 +512,7 @@ export default function TeamPage({
     } catch {
       // sessionStorageが使えない環境では何もしない
     }
-    router.push("/board");
+    router.push("/");
   }
 
   // 出稽古・合宿の予定を削除する（コーチのみ・この拠点の予定のみ削除）
@@ -1740,7 +1740,44 @@ export default function TeamPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          チームページ
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+          {profile.role === "coach" && (
+            <button
+              onClick={() => router.push("/mypage")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              管理ページ
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/")}
+            className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+          >
+            掲示板に戻る
+          </button>
+        </div>
+      </header>
+
+      {!isCoach && (
+        <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
+          <button
+            onClick={() => router.push("/")}
+            className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
+          >
+            マイページ
+          </button>
+          <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
+            チームページ
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">

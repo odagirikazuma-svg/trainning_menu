@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
@@ -19,6 +20,7 @@ import {
   trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import MemberHome from "./MemberHome";
 
 // ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
 const dayTypeFillColorDark: Record<DayType, string> = {
@@ -90,10 +92,13 @@ function isReportOpen(menu: MenuRow): boolean {
 
 export default function TrainingBoardSupabase({
   profile,
+  signOut,
 }: {
   profile: Profile;
+  signOut: () => void;
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [{ initialLocation, initialDate, initialStartTime }] = useState<{
     initialLocation: Location;
     initialDate: string | null;
@@ -1493,22 +1498,64 @@ export default function TrainingBoardSupabase({
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-neutral-950 text-neutral-200">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
+        <h1 className="flex items-center gap-2 text-base font-bold text-white sm:text-lg">
+          <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
+          中央大学レスリング部
+        </h1>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+          <span className="hidden sm:inline">
+            {profile.display_name}（{roleLabel[profile.role]}）
+          </span>
+          {profile.role === "coach" && (
+            <button
+              onClick={() => router.push("/mypage")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              管理ページ
+            </button>
+          )}
+          {isCoachView && (
+            <button
+              onClick={() => router.push("/team")}
+              className="rounded border border-neutral-700 px-2.5 py-1.5 active:bg-neutral-800"
+            >
+              チームページ
+            </button>
+          )}
+        </div>
+      </header>
+
       {/* 拠点タブ */}
-      <div className="sticky top-0 z-10 flex border-b border-neutral-800 bg-neutral-900">
-        {locations.map((loc) => (
-          <button
-            key={loc}
-            onClick={() => setActiveLocation(loc)}
-            className={`flex-1 py-3 text-sm font-medium transition ${
-              activeLocation === loc
-                ? "border-b-2 border-red-600 text-red-400"
-                : "text-neutral-500"
-            }`}
-          >
-            {locationLabel[loc]}
-          </button>
-        ))}
+      <div className="sticky top-[49px] z-10 flex border-b border-neutral-800 bg-neutral-900">
+        {isCoachView ? (
+          locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setActiveLocation(loc)}
+              className={`flex-1 py-3 text-sm font-medium transition ${
+                activeLocation === loc
+                  ? "border-b-2 border-red-600 text-red-400"
+                  : "text-neutral-500"
+              }`}
+            >
+              {locationLabel[loc]}
+            </button>
+          ))
+        ) : (
+          <>
+            <span className="flex-1 py-3 text-center text-sm font-medium border-b-2 border-red-600 text-red-400">
+              マイページ
+            </span>
+            <button
+              onClick={() => router.push("/team")}
+              className="flex-1 py-3 text-sm font-medium text-neutral-500 transition"
+            >
+              チームページ
+            </button>
+          </>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 p-4 sm:p-5">
@@ -1518,30 +1565,54 @@ export default function TrainingBoardSupabase({
           </p>
         )}
 
-        {/* 練習スケジュール */}
-        <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold text-neutral-400">
-            練習スケジュール
-          </h3>
-          <MenuCalendar
-            menus={menus}
-            viewDate={viewDate}
-            onSelect={selectMenu}
-            submissionMap={submissionMap}
-            memberCounts={memberCounts}
-            jointElsewhere={jointElsewhere}
-            onSelectJoint={(date) =>
-              applySelectionForDate(date, menus, jointElsewhere)
-            }
-            onSelectEmpty={(date) =>
-              applySelectionForDate(date, menus, jointElsewhere)
-            }
-            teamId={profile.team_id}
-            location={activeLocation}
-          />
-        </section>
 
-        {practiceSection}
+        {isCoachView ? (
+          <>
+            {/* 練習スケジュール */}
+            <section className="flex flex-col gap-3">
+              <h3 className="text-xs font-semibold text-neutral-400">
+                練習スケジュール
+              </h3>
+              <MenuCalendar
+                menus={menus}
+                viewDate={viewDate}
+                onSelect={selectMenu}
+                submissionMap={submissionMap}
+                memberCounts={memberCounts}
+                jointElsewhere={jointElsewhere}
+                onSelectJoint={(date) =>
+                  applySelectionForDate(date, menus, jointElsewhere)
+                }
+                onSelectEmpty={(date) =>
+                  applySelectionForDate(date, menus, jointElsewhere)
+                }
+                teamId={profile.team_id}
+                location={activeLocation}
+              />
+            </section>
+
+            {practiceSection}
+          </>
+        ) : (
+          <MemberHome
+            profile={profile}
+            signOut={signOut}
+            practiceMenuSlot={practiceSection}
+            refreshSignal={taskRefreshSignal}
+            isManager={profile.role === "manager"}
+            onGoToMenu={async (_loc, date) => {
+              await applySelectionForDate(date, menus, jointElsewhere);
+              setShowReportForm(true);
+              practiceSectionRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
+            onCalendarDateSelect={(date) =>
+              applySelectionForDate(date, menus, jointElsewhere)
+            }
+          />
+        )}
       </div>
     </div>
   );
@@ -2015,11 +2086,6 @@ function MenuCalendar({
               )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
-              )}
-              {schedule && schedule.is_off && (
-                <span className="text-[8px] font-medium text-neutral-500">
-                  オフ
-                </span>
               )}
               {schedule &&
                 !schedule.is_off &&

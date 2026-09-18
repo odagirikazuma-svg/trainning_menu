@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
@@ -12,13 +11,12 @@ import {
   locationLabel,
   SessionType,
   sessionTypeDotColor,
+  teamEventTypeLabel,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
-import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
-import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
 
 type TodoMenuRow = {
   id: string;
@@ -126,15 +124,22 @@ function daysUntil(dateStr: string) {
 
 export default function MemberHome({
   profile,
+  signOut,
+  practiceMenuSlot,
+  onGoToMenu,
+  onCalendarDateSelect,
   refreshSignal,
   isManager,
 }: {
   profile: Profile;
+  signOut: () => void;
+  practiceMenuSlot: React.ReactNode;
+  onGoToMenu: (location: Location, date: string) => void;
+  onCalendarDateSelect?: (date: string) => void;
   refreshSignal?: number;
   isManager?: boolean;
 }) {
   const supabase = createClient();
-  const router = useRouter();
   const logSectionRef = useRef<HTMLDivElement>(null);
   const isFirstRefresh = useRef(true);
   const isOb = profile.role === "ob";
@@ -1509,13 +1514,15 @@ export default function MemberHome({
 
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
+    onCalendarDateSelect?.(dateStr);
     loadLogForDate(dateStr);
   }
 
+  function goToMenu(m: TodoMenuRow) {
+    onGoToMenu(m.location, m.date);
+  }
+
   const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
-  const [homeSubTab, setHomeSubTab] = useState<"training" | "injury">(
-    "training"
-  );
 
   return (
     <>
@@ -1627,128 +1634,98 @@ export default function MemberHome({
         )}
       </section>
 
-      {/* タスク一覧（練習タスク・怪我タスク） */}
-      {isOb && (
-        <div className="flex items-center justify-end border-t border-neutral-800 pt-4">
-          <button
-            onClick={handleToggleTaskListPref}
-            disabled={savingTaskListPref}
-            className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[11px] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
-          >
-            {showTaskListPref
-              ? "タスクのポップアップを非表示にする"
-              : "タスクのポップアップを表示する"}
-          </button>
+      {/* タスク一覧 */}
+      <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            タスク一覧
+          </h2>
+          {isOb && (
+            <button
+              onClick={handleToggleTaskListPref}
+              disabled={savingTaskListPref}
+              className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[11px] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+            >
+              {showTaskListPref ? "非表示にする" : "表示する"}
+            </button>
+          )}
         </div>
-      )}
-      {(() => {
-        if (isOb && !showTaskListPref) return null;
-        const queueTasks: QueueTask[] = [];
+        {isOb && !showTaskListPref ? (
+          <p className="text-[11px] text-neutral-500">
+            タスク一覧は非表示に設定されています。
+          </p>
+        ) : (
+          <>
+        <p className="text-[11px] text-neutral-500">
+          提出・完了するまで一覧から消えません。期日を過ぎたタスクは赤く強調表示されます。
+        </p>
 
-        for (const inj of injuries.filter(injuryNeedsProgressUpdate)) {
-          const isOpen = progressInjuryId === inj.id;
-          queueTasks.push({
-            key: `injury-${inj.id}`,
-            badgeLabel: "怪我タスク：経過報告",
-            title: `「${inj.symptom_name}」の経過を報告する`,
-            urgent: true,
-            content: (
-              <div className="flex flex-col gap-2">
-                {!isOpen && (
-                  <button
-                    onClick={() => handleStartProgress(inj)}
-                    className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
+        {weightMaxTodo &&
+          (() => {
+            const isOverdue = todayStr > weightMaxTodo.deadline;
+            return (
+              <div
+                className={`flex flex-col rounded-lg border p-3 text-sm ${
+                  isOverdue
+                    ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                    : "border-amber-900/60 bg-amber-950/40 text-left"
+                }`}
+              >
+                <button
+                  onClick={() => setWeightMaxTodoOpen((v) => !v)}
+                  className="flex w-full flex-col text-left"
+                >
+                  <span
+                    className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
                   >
-                    経過を入力する
-                  </button>
-                )}
-                {isOpen && (
-                  <div className="flex flex-col gap-2 rounded-lg bg-neutral-800 p-3">
-                    <div className="flex gap-2 rounded-lg bg-neutral-900 p-1 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setProgressIsRecovered(true)}
-                        className={`flex-1 rounded-md py-2 font-medium ${
-                          progressIsRecovered
-                            ? "bg-red-600 text-white shadow"
-                            : "text-neutral-400"
-                        }`}
-                      >
-                        完治した
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProgressIsRecovered(false)}
-                        className={`flex-1 rounded-md py-2 font-medium ${
-                          !progressIsRecovered
-                            ? "bg-red-600 text-white shadow"
-                            : "text-neutral-400"
-                        }`}
-                      >
-                        まだ完治していない
-                      </button>
+                    {isOverdue
+                      ? `期限切れ！(${weightMaxTodo.deadline}まで)`
+                      : `${weightMaxTodo.deadline}までに提出`}
+                  </span>
+                  <span
+                    className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                  >
+                    ウェイトMAX(BIG3)を提出する
+                  </span>
+                </button>
+                {weightMaxTodoOpen && (
+                  <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        ベンチプレス(kg)
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={weightMaxBench}
+                          onChange={(e) => setWeightMaxBench(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        スクワット(kg)
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={weightMaxSquat}
+                          onChange={(e) => setWeightMaxSquat(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        デッドリフト(kg)
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={weightMaxDeadlift}
+                          onChange={(e) => setWeightMaxDeadlift(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
                     </div>
-                    {!progressIsRecovered && (
-                      <>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                          新しい完治見込み日
-                          <input
-                            type="date"
-                            value={progressRecoveryDate}
-                            onChange={(e) =>
-                              setProgressRecoveryDate(e.target.value)
-                            }
-                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                          マット参加の可否
-                          <select
-                            value={progressMatParticipation}
-                            onChange={(e) =>
-                              setProgressMatParticipation(
-                                e.target.value as "yes" | "no" | "conditional"
-                              )
-                            }
-                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                          >
-                            <option value="no">非</option>
-                            <option value="yes">可</option>
-                            <option value="conditional">条件付きで可</option>
-                          </select>
-                        </label>
-                        {progressMatParticipation === "conditional" && (
-                          <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                            条件の詳細
-                            <textarea
-                              value={progressMatDetail}
-                              onChange={(e) =>
-                                setProgressMatDetail(e.target.value)
-                              }
-                              rows={2}
-                              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                            />
-                          </label>
-                        )}
-                      </>
-                    )}
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                      理由・経過（自由記述）
-                      <textarea
-                        value={progressNote}
-                        onChange={(e) => setProgressNote(e.target.value)}
-                        rows={3}
-                        placeholder={
-                          progressIsRecovered
-                            ? "任意で記入できます"
-                            : "完治していない理由や現在の状態など"
-                        }
-                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                      />
-                    </label>
                     <button
-                      onClick={handleSubmitProgress}
-                      disabled={savingProgress}
+                      onClick={handleSaveWeightMaxTodo}
+                      disabled={savingWeightMaxTodo}
                       className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
                     >
                       提出する
@@ -1756,58 +1733,426 @@ export default function MemberHome({
                   </div>
                 )}
               </div>
-            ),
-          });
-        }
+            );
+          })()}
 
-        for (const m of todoMenus) {
-          const isOverdue = m.date < todayStr;
-          queueTasks.push({
-            key: `mat-${m.id}`,
-            badgeLabel: `練習タスク：実施報告 未提出${isOverdue ? "（期限切れ）" : ""}`,
-            title: m.title || formatShortDateTime(m.date, m.start_time),
-            urgent: isOverdue,
-            content: (
-              <MatReportInlineForm
-                menu={m}
-                onSubmitted={async () => {
-                  await loadTodo();
-                }}
-                onError={setErrorMsg}
-                profileId={profile.id}
-                supabase={supabase}
-              />
-            ),
-          });
-        }
+        {teamEventTodos.map((todo) => {
+          const isOverdue = todayStr > todo.deadline;
+          const isOpen = openTeamEventTodoId === todo.eventId;
+          return (
+            <div
+              key={todo.eventId}
+              className={`flex flex-col rounded-lg border p-3 text-sm ${
+                isOverdue
+                  ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                  : "border-amber-900/60 bg-amber-950/40 text-left"
+              }`}
+            >
+              <button
+                onClick={() =>
+                  setOpenTeamEventTodoId(isOpen ? null : todo.eventId)
+                }
+                className="flex w-full flex-col text-left"
+              >
+                <span
+                  className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                >
+                  {isOverdue
+                    ? `期限切れ！(${todo.deadline}まで)`
+                    : `${todo.deadline}までに提出`}
+                </span>
+                <span
+                  className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                >
+                  {teamEventTypeLabel[todo.type]}
+                  {todo.title && `：${todo.title}`}
+                  を提出する
+                </span>
+              </button>
+              {isOpen && (
+                <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
+                  {todo.type === "match_reflection" ? (
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        出場した試合名
+                        <input
+                          type="text"
+                          value={matchTitle}
+                          onChange={(e) => setMatchTitle(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        試合結果
+                        <select
+                          value={matchResult}
+                          onChange={(e) => setMatchResult(e.target.value)}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        >
+                          <option value="">選択してください</option>
+                          {matchResultOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          試合数
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchCount}
+                            onChange={(e) => setMatchCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          勝ち
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchWinCount}
+                            onChange={(e) => setMatchWinCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          負け
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={matchLossCount}
+                            onChange={(e) => setMatchLossCount(e.target.value)}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                      </div>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        試合の反省
+                        <textarea
+                          value={matchReflection}
+                          onChange={(e) => setMatchReflection(e.target.value)}
+                          rows={3}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        良かった点
+                        <textarea
+                          value={matchGoodPoints}
+                          onChange={(e) => setMatchGoodPoints(e.target.value)}
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        課題に感じた点
+                        <textarea
+                          value={matchChallenges}
+                          onChange={(e) => setMatchChallenges(e.target.value)}
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        改善方法と必要だと考えるトレーニング
+                        <textarea
+                          value={matchImprovementPlan}
+                          onChange={(e) =>
+                            setMatchImprovementPlan(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        当部の課題
+                        <textarea
+                          value={matchTeamChallenges}
+                          onChange={(e) =>
+                            setMatchTeamChallenges(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        測定日
+                        <input
+                          type="date"
+                          value={teamEventMeasurementDate}
+                          onChange={(e) =>
+                            setTeamEventMeasurementDate(e.target.value)
+                          }
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          体重(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventWeightKg}
+                            onChange={(e) =>
+                              setTeamEventWeightKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          体脂肪率(%)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventBodyFatPct}
+                            onChange={(e) =>
+                              setTeamEventBodyFatPct(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          骨格筋量(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventMuscleMassKg}
+                            onChange={(e) =>
+                              setTeamEventMuscleMassKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          除脂肪体重(kg)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={teamEventLeanBodyMassKg}
+                            onChange={(e) =>
+                              setTeamEventLeanBodyMassKg(e.target.value)
+                            }
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => handleSaveTeamEventTodo(todo)}
+                    disabled={savingTeamEventTodo}
+                    className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                  >
+                    提出する
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-        for (const date of selfTrainingPending) {
-          const isOverdue = date < todayStr;
-          queueTasks.push({
-            key: `self-${date}`,
-            badgeLabel: `練習タスク：トレ報 未提出${isOverdue ? "（期限切れ）" : ""}`,
-            title: `${formatMonthDay(date)}の自主トレを記録する`,
-            urgent: isOverdue,
-            content: (
-              <SelfTrainingInlineForm
-                date={date}
-                profile={profile}
-                supabase={supabase}
-                titleOptions={titleOptions}
-                onSubmitted={async () => {
-                  await loadSelfTrainingTodo();
-                  await loadTitleOptions();
-                  await loadCalendarData();
-                  if (logDate === date) await loadLogForDate(date);
-                }}
-                onError={setErrorMsg}
-              />
-            ),
-          });
-        }
+        {injuries.filter(injuryNeedsProgressUpdate).map((inj) => {
+          const isOpen = progressInjuryId === inj.id;
+          return (
+            <div
+              key={inj.id}
+              className="flex flex-col rounded-lg border border-red-600 bg-red-600 p-3 text-sm text-white shadow-lg ring-2 ring-red-400"
+            >
+              <button
+                onClick={() =>
+                  isOpen ? setProgressInjuryId(null) : handleStartProgress(inj)
+                }
+                className="flex w-full flex-col text-left"
+              >
+                <span className="text-[11px] text-white">
+                  完治見込み日・通院日が到来しています
+                </span>
+                <span className="font-medium text-white">
+                  「{inj.symptom_name}」の経過を報告する
+                </span>
+              </button>
+              {isOpen && (
+                <div className="mt-3 flex flex-col gap-2 rounded-lg bg-neutral-900 p-3 text-neutral-100">
+                  <div className="flex gap-2 rounded-lg bg-neutral-800 p-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setProgressIsRecovered(true)}
+                      className={`flex-1 rounded-md py-2 font-medium ${
+                        progressIsRecovered
+                          ? "bg-red-600 text-white shadow"
+                          : "text-neutral-400"
+                      }`}
+                    >
+                      完治した
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProgressIsRecovered(false)}
+                      className={`flex-1 rounded-md py-2 font-medium ${
+                        !progressIsRecovered
+                          ? "bg-red-600 text-white shadow"
+                          : "text-neutral-400"
+                      }`}
+                    >
+                      まだ完治していない
+                    </button>
+                  </div>
 
-        return <TaskQueuePopup tasks={queueTasks} />;
-      })()}
+                  {!progressIsRecovered && (
+                    <>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        新しい完治見込み日
+                        <input
+                          type="date"
+                          value={progressRecoveryDate}
+                          onChange={(e) =>
+                            setProgressRecoveryDate(e.target.value)
+                          }
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                        マット参加の可否
+                        <select
+                          value={progressMatParticipation}
+                          onChange={(e) =>
+                            setProgressMatParticipation(
+                              e.target.value as "yes" | "no" | "conditional"
+                            )
+                          }
+                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        >
+                          <option value="no">非</option>
+                          <option value="yes">可</option>
+                          <option value="conditional">条件付きで可</option>
+                        </select>
+                      </label>
+                      {progressMatParticipation === "conditional" && (
+                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                          条件の詳細
+                          <textarea
+                            value={progressMatDetail}
+                            onChange={(e) =>
+                              setProgressMatDetail(e.target.value)
+                            }
+                            rows={2}
+                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                          />
+                        </label>
+                      )}
+                    </>
+                  )}
+                  <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                    理由・経過（自由記述）
+                    <textarea
+                      value={progressNote}
+                      onChange={(e) => setProgressNote(e.target.value)}
+                      rows={3}
+                      placeholder={
+                        progressIsRecovered
+                          ? "任意で記入できます"
+                          : "完治していない理由や現在の状態など"
+                      }
+                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                    />
+                  </label>
+                  <button
+                    onClick={handleSubmitProgress}
+                    disabled={savingProgress}
+                    className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+                  >
+                    提出する
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {!effectiveHomeLocation ? (
+          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            所属拠点(多摩/大塚)がまだ設定されていません。設定されると、未報告の練習メニューがここに表示されます。
+          </p>
+        ) : loadingTodo ? (
+          <p className="text-xs text-neutral-500">読み込み中…</p>
+        ) : todoMenus.length === 0 && selfTrainingPending.length === 0 ? (
+          !weightMaxTodo &&
+          injuries.filter(injuryNeedsProgressUpdate).length === 0 && (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              未報告の練習メニューはありません。
+            </p>
+          )
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {todoMenus.map((m) => {
+              const isOverdue = m.date < todayStr;
+              return (
+                <li key={m.id}>
+                  <button
+                    onClick={() => goToMenu(m)}
+                    className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
+                      isOverdue
+                        ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                        : "border-amber-900/60 bg-amber-950/40 active:bg-amber-100"
+                    }`}
+                  >
+                    <span
+                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                    >
+                      実施報告 未提出{isOverdue && "（期限切れ）"}
+                    </span>
+                    <span
+                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                    >
+                      {m.title || formatShortDateTime(m.date, m.start_time)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {selfTrainingPending.map((date) => {
+              const isOverdue = date < todayStr;
+              return (
+                <li key={`self-${date}`}>
+                  <button
+                    onClick={() => {
+                      loadLogForDate(date);
+                      logSectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }}
+                    className={`flex w-full flex-col rounded-lg border p-3 text-left text-sm ${
+                      isOverdue
+                        ? "border-red-600 bg-red-600 text-white shadow-lg ring-2 ring-red-400"
+                        : "border-amber-900/60 bg-amber-950/40 active:bg-amber-100"
+                    }`}
+                  >
+                    <span
+                      className={`text-[11px] ${isOverdue ? "text-white" : "text-amber-400"}`}
+                    >
+                      自主トレ（ラン・ウェイトなど） 未提出{isOverdue && "（期限切れ）"}
+                    </span>
+                    <span
+                      className={`font-medium ${isOverdue ? "text-white" : "text-neutral-100"}`}
+                    >
+                      {formatMonthDay(date)}・タップして記録する
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+          </>
+        )}
+      </section>
         </>
       )}
 
@@ -1833,58 +2178,16 @@ export default function MemberHome({
           otherLocationOffDates={otherLocationOffDates}
         />
       </section>
-      <button
-        onClick={() => {
-          try {
-            sessionStorage.setItem(
-              "jumpTo",
-              JSON.stringify({
-                location: effectiveHomeLocation ?? "tama",
-                date: selectedCalendarDate ?? todayStr,
-              })
-            );
-          } catch {
-            // sessionStorageが使えなくても遷移自体は行う
-          }
-          router.push("/board");
-        }}
-        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left text-sm text-neutral-200 active:bg-neutral-800"
-      >
-        <span>
-          {formatMonthDay(selectedCalendarDate ?? todayStr)}のメニューをマット掲示板で見る
-        </span>
-        <span className="text-neutral-500">›</span>
-      </button>
+      {/* 練習メニュー・意見コメント・実施報告(マット掲示板本体) */}
+      <p className="text-sm font-semibold text-neutral-300">
+        {formatMonthDay(selectedCalendarDate ?? todayStr)}のメニュー
+      </p>
+      {practiceMenuSlot}
+
 
       {!isManager && (
         <>
-      {/* サブタブ：トレーニング／怪我の記録 */}
-      <div className="flex gap-1 rounded-lg bg-neutral-900 p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => setHomeSubTab("training")}
-          className={`flex-1 rounded-md py-2.5 font-medium ${
-            homeSubTab === "training"
-              ? "bg-red-600 text-white shadow"
-              : "text-neutral-400"
-          }`}
-        >
-          トレーニング
-        </button>
-        <button
-          type="button"
-          onClick={() => setHomeSubTab("injury")}
-          className={`flex-1 rounded-md py-2.5 font-medium ${
-            homeSubTab === "injury"
-              ? "bg-red-600 text-white shadow"
-              : "text-neutral-400"
-          }`}
-        >
-          怪我の記録
-        </button>
-      </div>
-
-      {homeSubTab === "training" && (
+      {/* トレーニングメニュー記入欄 */}
       <section
         ref={logSectionRef}
         className="flex flex-col gap-2 border-t border-neutral-800 pt-4"
@@ -2028,9 +2331,124 @@ export default function MemberHome({
           </div>
         )}
       </section>
-      )}
 
-      {homeSubTab === "injury" && (
+      {/* 試合の振り返り */}
+      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+          試合の振り返り
+        </h2>
+        {loadingMatchReflections ? (
+          <p className="text-xs text-neutral-500">読み込み中…</p>
+        ) : matchReflections.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            まだ振り返りの提出はありません。
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {matchReflections.map((r) => {
+              const isOpen = openMatchReflectionId === r.eventId;
+              return (
+                <div
+                  key={r.eventId}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900"
+                >
+                  <button
+                    onClick={() =>
+                      setOpenMatchReflectionId(isOpen ? null : r.eventId)
+                    }
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+                  >
+                    <span className="font-medium text-neutral-100">
+                      {r.eventTitle}の振り返り
+                    </span>
+                    <span className="shrink-0 text-[11px] text-neutral-500">
+                      提出日{formatMonthDay(r.submittedAt.slice(0, 10))}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col gap-2 border-t border-neutral-800 p-3 text-sm">
+                      {r.matchTitle && (
+                        <p>
+                          <span className="text-neutral-500">試合名：</span>
+                          {r.matchTitle}
+                        </p>
+                      )}
+                      {r.matchResult && (
+                        <p>
+                          <span className="text-neutral-500">試合結果：</span>
+                          {r.matchResult}
+                        </p>
+                      )}
+                      {r.matchCount != null && (
+                        <p>
+                          <span className="text-neutral-500">
+                            試合数：
+                          </span>
+                          {r.matchCount}試合（{r.winCount ?? 0}勝{" "}
+                          {r.lossCount ?? 0}敗）
+                        </p>
+                      )}
+                      {r.reflection && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            試合の反省
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.reflection}
+                          </p>
+                        </div>
+                      )}
+                      {r.goodPoints && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            良かった点
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.goodPoints}
+                          </p>
+                        </div>
+                      )}
+                      {r.challenges && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            課題に感じた点
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.challenges}
+                          </p>
+                        </div>
+                      )}
+                      {r.improvementPlan && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            改善方法と必要だと考えるトレーニング
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.improvementPlan}
+                          </p>
+                        </div>
+                      )}
+                      {r.teamChallenges && (
+                        <div>
+                          <p className="text-[11px] text-neutral-500">
+                            当部の課題
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {r.teamChallenges}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 怪我の記録・復帰計画 */}
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
@@ -2254,9 +2672,52 @@ export default function MemberHome({
           </div>
         )}
       </section>
-      )}
         </>
       )}
+
+      {/* 通知設定 */}
+      {pushSupported && (
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            通知設定
+          </h2>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs">
+            <span className="text-neutral-300">
+              {pushSubscribed
+                ? "未完了のタスクがある日、夜に通知が届きます。"
+                : "通知はオフになっています。"}
+            </span>
+            {pushSubscribed ? (
+              <button
+                onClick={handleDisablePush}
+                disabled={pushLoading}
+                className="shrink-0 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+              >
+                {pushLoading ? "処理中…" : "通知をオフにする"}
+              </button>
+            ) : (
+              <button
+                onClick={handleEnablePush}
+                disabled={pushLoading}
+                className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+              >
+                {pushLoading ? "設定中…" : "通知を有効にする"}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ログアウト */}
+      <div className="border-t border-neutral-800 pt-4">
+        <button
+          onClick={signOut}
+          className="w-full rounded-lg border border-neutral-700 py-3 text-sm font-medium text-neutral-300 active:bg-neutral-800"
+        >
+          ログアウト
+        </button>
+      </div>
     </>
   );
 }
