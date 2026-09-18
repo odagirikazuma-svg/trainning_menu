@@ -19,6 +19,8 @@ import {
 import type { Profile } from "./AuthGate";
 import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
 import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
+import { useSubNav } from "./shell/AppShell";
+import SubTabBar from "./shell/SubTabBar";
 
 type TodoMenuRow = {
   id: string;
@@ -114,14 +116,6 @@ function formatShortDateTime(dateStr: string, startTime: string | null) {
 function formatMonthDay(dateStr: string) {
   const [, m, d] = dateStr.split("-");
   return `${Number(m)}月${Number(d)}日`;
-}
-
-function daysUntil(dateStr: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(`${dateStr}T00:00:00`);
-  const diffMs = target.getTime() - today.getTime();
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 export default function MemberHome({
@@ -264,13 +258,9 @@ export default function MemberHome({
   const [progressMatDetail, setProgressMatDetail] = useState("");
   const [savingProgress, setSavingProgress] = useState(false);
 
+  // 次の試合の登録・編集は設定ページに移設。マイページ側は表示用（カレンダーのハイライト等）に読み取りだけ行う。
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
-  const [showMatchForm, setShowMatchForm] = useState(false);
-  const [newMatchName, setNewMatchName] = useState("");
-  const [newMatchDate, setNewMatchDate] = useState("");
-  const [editingMatch, setEditingMatch] = useState(false);
-  const [editMatchDate, setEditMatchDate] = useState("");
 
   const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
   const [logDate, setLogDate] = useState<string>(todayStr);
@@ -551,68 +541,6 @@ export default function MemberHome({
       setNextMatch((data as MatchRow | null) ?? null);
     }
     setLoadingMatch(false);
-  }
-
-  async function handleAddMatch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newMatchName.trim() || !newMatchDate) return;
-    const { error } = await supabase.from("matches").insert({
-      team_id: profile.team_id,
-      name: newMatchName.trim(),
-      date: newMatchDate,
-      created_by: profile.id,
-      member_id: profile.id,
-    });
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    setNewMatchName("");
-    setNewMatchDate("");
-    setShowMatchForm(false);
-    await loadNextMatch();
-  }
-
-  function startEditingMatch() {
-    if (!nextMatch) return;
-    setEditMatchDate(nextMatch.date);
-    setEditingMatch(true);
-  }
-
-  async function handleUpdateMatchDate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!nextMatch || !editMatchDate) return;
-    const { data, error } = await supabase
-      .from("matches")
-      .update({ date: editMatchDate })
-      .eq("id", nextMatch.id)
-      .select("id");
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    if (!data || data.length === 0) {
-      setErrorMsg(
-        "試合日を更新できませんでした。データベース側の権限設定（matches_update_selfポリシー）が未反映の可能性があります。"
-      );
-      return;
-    }
-    setEditingMatch(false);
-    await loadNextMatch();
-  }
-
-  async function handleDeleteMatch() {
-    if (!nextMatch) return;
-    const { error } = await supabase
-      .from("matches")
-      .delete()
-      .eq("id", nextMatch.id);
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    setEditingMatch(false);
-    await loadNextMatch();
   }
 
   async function loadWeightMaxTodo() {
@@ -1512,9 +1440,22 @@ export default function MemberHome({
     loadLogForDate(dateStr);
   }
 
-  const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
   const [homeSubTab, setHomeSubTab] = useState<"training" | "injury">(
     "training"
+  );
+
+  // フッター上のサブナビ（トレーニング／怪我の記録の切り替え）を登録
+  useSubNav(
+    !isManager ? (
+      <SubTabBar
+        items={[
+          { value: "training", label: "トレーニング" },
+          { value: "injury", label: "怪我の記録" },
+        ]}
+        active={homeSubTab}
+        onChange={setHomeSubTab}
+      />
+    ) : null
   );
 
   return (
@@ -1527,106 +1468,6 @@ export default function MemberHome({
 
       {!isManager && (
         <>
-      {/* 次の試合まで */}
-      <section className="flex flex-col gap-2">
-        {loadingMatch ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : nextMatch ? (
-          <div className="relative rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-center">
-            <p className="text-xs text-red-400">
-              次の試合【{nextMatch.name}】まで
-            </p>
-            <p className="text-3xl font-bold text-red-500">あと{matchDays}日</p>
-            <p className="text-[11px] text-red-500">
-              {formatMonthDay(nextMatch.date)}
-            </p>
-
-            {editingMatch ? (
-              <form
-                onSubmit={handleUpdateMatchDate}
-                className="mt-3 flex flex-col items-center gap-2"
-              >
-                <input
-                  type="date"
-                  value={editMatchDate}
-                  onChange={(e) => setEditMatchDate(e.target.value)}
-                  className="rounded-lg border border-red-800 bg-neutral-900 px-3 py-2 text-sm"
-                  required
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
-                  >
-                    日付を更新
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteMatch}
-                    className="rounded-lg border border-red-800 px-3 py-1.5 text-xs text-red-400 active:bg-red-900/40"
-                  >
-                    削除する
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingMatch(false)}
-                    className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
-                  >
-                    閉じる
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button
-                onClick={startEditingMatch}
-                className="absolute bottom-2 right-2 rounded border border-red-900/60 bg-neutral-900 px-2 py-1 text-[10px] text-red-500 active:bg-red-900/40"
-              >
-                編集
-              </button>
-            )}
-          </div>
-        ) : (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-center text-xs text-neutral-500">
-            次の試合はまだ登録されていません。
-          </p>
-        )}
-
-        <button
-          onClick={() => setShowMatchForm((v) => !v)}
-          className="self-start text-[11px] font-medium text-red-400 active:text-red-900"
-        >
-          {showMatchForm ? "キャンセル" : "＋ 試合を登録する"}
-        </button>
-        {showMatchForm && (
-          <form
-            onSubmit={handleAddMatch}
-            className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-          >
-            <input
-              type="text"
-              placeholder="試合名（例：全日本学生選手権）"
-              value={newMatchName}
-              onChange={(e) => setNewMatchName(e.target.value)}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-              required
-            />
-            <input
-              type="date"
-              value={newMatchDate}
-              onChange={(e) => setNewMatchDate(e.target.value)}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-              required
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-red-600 py-2 text-sm font-medium text-white active:bg-red-700"
-            >
-              登録する
-            </button>
-          </form>
-        )}
-      </section>
-
       {/* タスク一覧（練習タスク・怪我タスク） */}
       {isOb && (
         <div className="flex items-center justify-end border-t border-neutral-800 pt-4">
@@ -1858,32 +1699,6 @@ export default function MemberHome({
 
       {!isManager && (
         <>
-      {/* サブタブ：トレーニング／怪我の記録 */}
-      <div className="flex gap-1 rounded-lg bg-neutral-900 p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => setHomeSubTab("training")}
-          className={`flex-1 rounded-md py-2.5 font-medium ${
-            homeSubTab === "training"
-              ? "bg-red-600 text-white shadow"
-              : "text-neutral-400"
-          }`}
-        >
-          トレーニング
-        </button>
-        <button
-          type="button"
-          onClick={() => setHomeSubTab("injury")}
-          className={`flex-1 rounded-md py-2.5 font-medium ${
-            homeSubTab === "injury"
-              ? "bg-red-600 text-white shadow"
-              : "text-neutral-400"
-          }`}
-        >
-          怪我の記録
-        </button>
-      </div>
-
       {homeSubTab === "training" && (
       <section
         ref={logSectionRef}

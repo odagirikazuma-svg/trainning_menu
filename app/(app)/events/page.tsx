@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useProfile } from "../../components/shell/AppShell";
+import { useProfile, useSubNav } from "../../components/shell/AppShell";
+import SubTabBar from "../../components/shell/SubTabBar";
 import { createClient } from "../../lib/supabase/client";
 import { teamEventTypeLabel } from "../../lib/types";
 
@@ -653,26 +654,21 @@ function TeamEventTab({
   );
 }
 
+const eventSubTabItems = (Object.keys(tabLabel) as EventTab[]).map((t) => ({
+  value: t,
+  label: tabLabel[t],
+}));
+
 export default function EventsPage() {
   const { profile } = useProfile();
   const [tab, setTab] = useState<EventTab>("weight_max");
 
+  useSubNav(
+    <SubTabBar items={eventSubTabItems} active={tab} onChange={setTab} />
+  );
+
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
-      <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-xs">
-        {(Object.keys(tabLabel) as EventTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 rounded-md py-2.5 font-medium ${
-              tab === t ? "bg-red-600 text-white shadow" : "text-neutral-500 dark:text-neutral-400"
-            }`}
-          >
-            {tabLabel[t]}
-          </button>
-        ))}
-      </div>
-
       {tab === "weight_max" && <WeightMaxTab profile={profile} />}
       {tab === "body_composition" && (
         <TeamEventTab type="body_composition" profile={profile} />
