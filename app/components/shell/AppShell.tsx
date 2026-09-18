@@ -28,8 +28,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-background text-foreground">
               <Header profile={profile} />
               <main
-                className="flex-1 pt-14"
-                style={{ paddingBottom: "calc(88px + env(safe-area-inset-bottom))" }}
+                className="flex-1"
+                style={{
+                  paddingTop: "calc(56px + env(safe-area-inset-top))",
+                  paddingBottom: "calc(88px + env(safe-area-inset-bottom))",
+                }}
               >
                 {children}
               </main>
