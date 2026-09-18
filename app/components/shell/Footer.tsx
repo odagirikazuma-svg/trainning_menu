@@ -17,16 +17,16 @@ function TabLink({ item, active }: { item: TabItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium ${
+      className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium ${
         active ? "text-red-500" : "text-neutral-500 dark:text-neutral-400"
       }`}
     >
-      <span className="relative flex h-6 w-6 items-center justify-center">
+      <span className="relative flex h-7 w-7 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={item.icon}
           alt={item.label}
-          className={`h-6 w-6 object-cover ${
+          className={`h-7 w-7 object-cover ${
             item.isPhotoIcon ? "rounded-full" : ""
           } ${active ? "opacity-100" : "opacity-70"}`}
         />
@@ -68,7 +68,10 @@ export default function Footer({ profile }: { profile: Profile }) {
       ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border-color bg-surface/95 backdrop-blur">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border-color bg-surface/95 backdrop-blur"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 10px)" }}
+    >
       {items.map((item) => (
         <TabLink
           key={item.href}

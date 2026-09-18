@@ -27,7 +27,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <ProfileContext.Provider value={{ profile, signOut }}>
             <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-background text-foreground">
               <Header profile={profile} />
-              <main className="flex-1 pb-20 pt-14">{children}</main>
+              <main
+                className="flex-1 pt-14"
+                style={{ paddingBottom: "calc(88px + env(safe-area-inset-bottom))" }}
+              >
+                {children}
+              </main>
               <Footer profile={profile} />
             </div>
           </ProfileContext.Provider>

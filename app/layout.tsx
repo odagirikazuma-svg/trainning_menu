@@ -10,6 +10,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
 };
 
 // 初回描画より前に、保存されたテーマ設定（ライト/ダーク/端末設定に合わせる）を
