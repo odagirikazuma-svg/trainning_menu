@@ -275,7 +275,10 @@ export default function MemberHome({
   const [todayLogType, setTodayLogType] = useState<TrainingType | null>(null);
   const [todayLogTitle, setTodayLogTitle] = useState("");
   const [todayLogStartTime, setTodayLogStartTime] = useState("");
-  const [titleOptions, setTitleOptions] = useState<string[]>([]);
+  // 種目（ラン/ウェイト/その他）ごとに、過去に入力したタイトルの候補一覧
+  const [titleOptionsByType, setTitleOptionsByType] = useState<
+    Record<TrainingType, string[]>
+  >({ running: [], weight: [], other: [] });
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
   const [todayAbsentRecords, setTodayAbsentRecords] = useState<RecentRecord[]>(
@@ -287,9 +290,10 @@ export default function MemberHome({
   const [todayMemoText, setTodayMemoText] = useState("");
   const [loadingMemo, setLoadingMemo] = useState(true);
   const [savingMemo, setSavingMemo] = useState(false);
-  const [calendarMemoDates, setCalendarMemoDates] = useState<Set<string>>(
-    new Set()
-  );
+  // 日付 → メモ内容（カレンダーのマス目にプレビュー表示するため、有無だけでなく内容も持つ）
+  const [calendarMemoPreviews, setCalendarMemoPreviews] = useState<
+    Map<string, string>
+  >(new Map());
 
   // カレンダー用
   const [calendarCursor, setCalendarCursor] = useState(() => {
@@ -1150,23 +1154,30 @@ export default function MemberHome({
   async function loadTitleOptions() {
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("title")
+      .select("type, title")
       .eq("author_id", profile.id)
-      .eq("type", "weight")
       .not("title", "is", null);
 
     if (error) {
       setErrorMsg(error.message);
       return;
     }
-    const titles = Array.from(
-      new Set(
-        ((data ?? []) as { title: string | null }[])
-          .map((r) => r.title)
-          .filter((t): t is string => !!t && t.trim() !== "")
-      )
-    ).sort((a, b) => a.localeCompare(b, "ja"));
-    setTitleOptions(titles);
+    const byType: Record<TrainingType, Set<string>> = {
+      running: new Set(),
+      weight: new Set(),
+      other: new Set(),
+    };
+    for (const r of (data ?? []) as {
+      type: TrainingType;
+      title: string | null;
+    }[]) {
+      if (r.title && r.title.trim() !== "") byType[r.type].add(r.title);
+    }
+    setTitleOptionsByType({
+      running: Array.from(byType.running).sort((a, b) => a.localeCompare(b, "ja")),
+      weight: Array.from(byType.weight).sort((a, b) => a.localeCompare(b, "ja")),
+      other: Array.from(byType.other).sort((a, b) => a.localeCompare(b, "ja")),
+    });
   }
 
   async function loadLogForDate(date: string) {
@@ -1300,7 +1311,7 @@ export default function MemberHome({
           date: logDate,
           content: todayLogText,
           type: todayLogType,
-          title: todayLogType === "weight" && trimmedTitle ? trimmedTitle : null,
+          title: trimmedTitle ? trimmedTitle : null,
           start_time: todayLogStartTime || null,
           updated_at: new Date().toISOString(),
         },
@@ -1355,13 +1366,15 @@ export default function MemberHome({
     if (memoError) {
       setErrorMsg(memoError.message);
     } else {
-      setCalendarMemoDates(
-        new Set(
-          ((memoData ?? []) as { date: string; content: string }[])
-            .filter((r) => r.content.trim().length > 0)
-            .map((r) => r.date)
-        )
-      );
+      const map = new Map<string, string>();
+      for (const r of (memoData ?? []) as {
+        date: string;
+        content: string;
+      }[]) {
+        const trimmed = r.content.trim();
+        if (trimmed.length > 0) map.set(r.date, trimmed);
+      }
+      setCalendarMemoPreviews(map);
     }
 
     const { data: absentData, error: absentError } = await supabase
@@ -1726,7 +1739,7 @@ export default function MemberHome({
                 date={date}
                 profile={profile}
                 supabase={supabase}
-                titleOptions={titleOptions}
+                titleOptions={titleOptionsByType}
                 onSubmitted={async () => {
                   await loadSelfTrainingTodo();
                   await loadTitleOptions();
@@ -1765,7 +1778,7 @@ export default function MemberHome({
           nextMatchDate={isManager ? null : (nextMatch?.date ?? null)}
           homeLocation={effectiveHomeLocation ?? "tama"}
           otherLocationOffDates={otherLocationOffDates}
-          memoDates={calendarMemoDates}
+          memoPreviews={calendarMemoPreviews}
         />
       </section>
       )}
@@ -1879,19 +1892,19 @@ export default function MemberHome({
                 />
               </label>
             )}
-            {todayLogType === "weight" && (
+            {todayLogType && (
               <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                タイトル（種目名など。任意）
+                タイトル（メニュー名など。任意。カレンダーにも表示できます）
                 <input
                   type="text"
-                  list="weight-title-options"
+                  list={`${todayLogType}-title-options`}
                   value={todayLogTitle}
                   onChange={(e) => setTodayLogTitle(e.target.value)}
-                  placeholder="例：BIG3、上半身の日 など"
+                  placeholder="例：BIG3、上半身の日、インターバル走 など"
                   className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                 />
-                <datalist id="weight-title-options">
-                  {titleOptions.map((t) => (
+                <datalist id={`${todayLogType}-title-options`}>
+                  {titleOptionsByType[todayLogType].map((t) => (
                     <option key={t} value={t} />
                   ))}
                 </datalist>
@@ -1907,7 +1920,7 @@ export default function MemberHome({
               className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
                 !todayLog
                   ? "border-neutral-700 bg-neutral-900"
-                  : todayLogType === "weight" && todayLogTitle.trim()
+                  : todayLogTitle.trim()
                     ? `${getTitleColor(todayLogTitle.trim()).border} ${getTitleColor(todayLogTitle.trim()).fill}`
                     : "border-emerald-800 bg-emerald-950/40"
               }`}
@@ -1925,7 +1938,7 @@ export default function MemberHome({
               </p>
             )}
 
-            {todayLogType === "running" && (
+            {todayLogType === "running" && !todayLogTitle.trim() && (
               <RecentTypeLogs
                 supabase={supabase}
                 authorId={profile.id}
@@ -1934,12 +1947,12 @@ export default function MemberHome({
                 label="直近のランメニュー"
               />
             )}
-            {todayLogType === "weight" && todayLogTitle.trim() && (
+            {todayLogType && todayLogTitle.trim() && (
               <RecentTypeLogs
                 supabase={supabase}
                 authorId={profile.id}
                 excludeDate={logDate}
-                type="weight"
+                type={todayLogType}
                 title={todayLogTitle.trim()}
                 label={`直近の${todayLogTitle.trim()}のトレーニングメニュー`}
               />
@@ -2262,7 +2275,7 @@ function UnifiedCalendar({
   nextMatchDate,
   homeLocation,
   otherLocationOffDates,
-  memoDates,
+  memoPreviews,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2292,7 +2305,7 @@ function UnifiedCalendar({
   nextMatchDate?: string | null;
   homeLocation: Location;
   otherLocationOffDates: Set<string>;
-  memoDates?: Set<string>;
+  memoPreviews?: Map<string, string>;
 }) {
   const { defaultCalendarView } = useCalendarViewPref();
   const { pref } = useCalendarDisplayPref();
@@ -2449,6 +2462,24 @@ function UnifiedCalendar({
         </span>
       );
     }
+    if (slot === "actual_type") {
+      // その日に実際に記録された種目（ラン/ウェイト/その他）を表示する。
+      // 予定（スケジュール）ではなく、本人が実際にログした内容が元になる。
+      const types = dotsByDate.get(key);
+      const t = types?.[0];
+      if (!t) return null;
+      return (
+        <span
+          key={slotId}
+          className="flex items-center gap-0.5 max-w-full truncate"
+        >
+          <span
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${trainingTypeDotColor[t]}`}
+          />
+          {trainingTypeLabel[t]}
+        </span>
+      );
+    }
     if (slot === "training_content") {
       if (!title) return null;
       const truncated = title.length > 6 ? `${title.slice(0, 6)}…` : title;
@@ -2459,14 +2490,16 @@ function UnifiedCalendar({
       );
     }
     if (slot === "memo_mark") {
-      if (!memoDates?.has(key)) return null;
+      const memo = memoPreviews?.get(key);
+      if (!memo) return null;
+      const truncated = memo.length > 5 ? `${memo.slice(0, 5)}…` : memo;
       return (
         <span
           key={slotId}
           className="flex items-center gap-0.5 max-w-full truncate"
         >
           <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-          メモ
+          {truncated}
         </span>
       );
     }
@@ -2535,7 +2568,6 @@ function UnifiedCalendar({
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
-          const dots = dotsByDate.get(key) ?? [];
           const title = titleByDate.get(key);
           const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
@@ -2609,20 +2641,6 @@ function UnifiedCalendar({
               >
                 {date.getDate()}
               </span>
-              {dots.length > 0 && (
-                <span className="flex flex-wrap justify-center gap-0.5">
-                  {dots.map((t, idx) => (
-                    <span
-                      key={idx}
-                      className={`inline-block rounded-full ${trainingTypeDotColor[t]} ${
-                        isHighlighted
-                          ? "h-2.5 w-2.5 ring-2 ring-amber-300 ring-offset-1"
-                          : "h-1.5 w-1.5"
-                      }`}
-                    />
-                  ))}
-                </span>
-              )}
               {schedule &&
                 !schedule.isOff &&
                 (schedule.dayType === "camp" || schedule.dayType === "away") && (

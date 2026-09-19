@@ -8,21 +8,24 @@ export type CalendarSlotOption =
   | "none"
   | "mat_time"
   | "training_time"
+  | "actual_type"
   | "training_content"
   | "memo_mark";
 
 export const calendarSlotOptionLabel: Record<CalendarSlotOption, string> = {
   none: "表示しない",
-  mat_time: "マット開始時刻",
-  training_time: "トレーニング開始時刻",
-  training_content: "行った種目の内容",
-  memo_mark: "一言メモの有無",
+  mat_time: "マット開始時刻（予定）",
+  training_time: "トレーニング開始時刻（予定）",
+  actual_type: "実際に行った種目（ラン/ウェイト/その他）",
+  training_content: "メニューのタイトル",
+  memo_mark: "一言メモの内容（先頭数文字）",
 };
 
 export const calendarSlotOptions: CalendarSlotOption[] = [
   "none",
   "mat_time",
   "training_time",
+  "actual_type",
   "training_content",
   "memo_mark",
 ];
@@ -36,7 +39,8 @@ export type CalendarDisplayPref = {
 
 const DEFAULT_PREF: CalendarDisplayPref = {
   slot1: "mat_time",
-  slot2: "training_time",
+  // 「予定」ではなく「実際に何をやったか」が分かるようにデフォルトはactual_typeにする
+  slot2: "actual_type",
   highlightMatch: true,
 };
 

@@ -204,7 +204,7 @@ export function SelfTrainingInlineForm({
   date: string;
   profile: Profile;
   supabase: ReturnType<typeof createClient>;
-  titleOptions: string[];
+  titleOptions: Record<TrainingType, string[]>;
   onSubmitted: () => void | Promise<void>;
   onError: (msg: string) => void;
 }) {
@@ -229,7 +229,7 @@ export function SelfTrainingInlineForm({
         date,
         content: text,
         type,
-        title: type === "weight" && trimmedTitle ? trimmedTitle : null,
+        title: trimmedTitle ? trimmedTitle : null,
         start_time: startTime || null,
         updated_at: new Date().toISOString(),
       },
@@ -272,19 +272,19 @@ export function SelfTrainingInlineForm({
           />
         </label>
       )}
-      {type === "weight" && (
+      {type && (
         <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-          タイトル（種目名など。任意）
+          タイトル（メニュー名など。任意。カレンダーにも表示できます）
           <input
             type="text"
-            list="popup-weight-title-options"
+            list={`popup-${type}-title-options`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="例：BIG3、上半身の日 など"
+            placeholder="例：BIG3、上半身の日、インターバル走 など"
             className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
           />
-          <datalist id="popup-weight-title-options">
-            {titleOptions.map((t) => (
+          <datalist id={`popup-${type}-title-options`}>
+            {titleOptions[type].map((t) => (
               <option key={t} value={t} />
             ))}
           </datalist>
