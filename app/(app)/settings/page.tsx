@@ -594,44 +594,32 @@ function SectionRegistrationSection({
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
         カレンダーの日付をタップすると、その日を単日で編集できます。日付を選ばず「期間でまとめて設定」から、オフ・合宿・試合・出稽古をまとめて登録することもできます。
       </p>
-      <div className="grid grid-cols-2 gap-2">
-        <ScheduleOverviewCalendar
-          key={`tama-${calendarRefreshKey}`}
-          teamId={profile.team_id}
-          location="tama"
-          cursor={cursor}
-          onCursorChange={setCursor}
-          selectedDate={location === "tama" ? selectedDate : null}
-          onSelectDate={(d) => handleSelectDate("tama", d)}
-        />
-        <ScheduleOverviewCalendar
-          key={`otsuka-${calendarRefreshKey}`}
-          teamId={profile.team_id}
-          location="otsuka"
-          cursor={cursor}
-          onCursorChange={setCursor}
-          selectedDate={location === "otsuka" ? selectedDate : null}
-          onSelectDate={(d) => handleSelectDate("otsuka", d)}
-        />
+
+      <div className="flex gap-2">
+        {locations.map((loc) => (
+          <button
+            key={loc}
+            onClick={() => setLocation(loc)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
+              location === loc
+                ? "border-red-600 bg-red-600 text-white"
+                : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+            }`}
+          >
+            {locationLabel[loc]}
+          </button>
+        ))}
       </div>
 
-      {!selectedDate && (
-        <div className="flex gap-2">
-          {locations.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => setLocation(loc)}
-              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-                location === loc
-                  ? "border-red-600 bg-red-600 text-white"
-                  : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
-              }`}
-            >
-              {locationLabel[loc]}
-            </button>
-          ))}
-        </div>
-      )}
+      <ScheduleOverviewCalendar
+        key={`${location}-${calendarRefreshKey}`}
+        teamId={profile.team_id}
+        location={location}
+        cursor={cursor}
+        onCursorChange={setCursor}
+        selectedDate={selectedDate}
+        onSelectDate={(d) => handleSelectDate(location, d)}
+      />
 
       {selectedDate && (
         <div className="flex items-center justify-between gap-2">

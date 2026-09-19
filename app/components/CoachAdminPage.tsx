@@ -918,9 +918,6 @@ export default function CoachAdminPage({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             報告状況一覧
           </h2>
-          <p className="text-[11px] text-neutral-500">
-            日報(実施報告・未実施報告)・トレ報(マット以外のセッションの自主トレ記録)の提出状況です。日付をタップすると、その日の部員ごとの提出状況が下に表示されます。
-          </p>
 
           <ReportCalendar
             cursor={reportCalendarCursor}
