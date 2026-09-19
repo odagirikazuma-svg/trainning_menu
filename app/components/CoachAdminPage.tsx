@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, locations, SessionType, TeamEventType } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
 type RosterRoleChoice = "coach" | "captain" | "vice_captain" | "leader" | "manager" | "member";
 
@@ -96,11 +97,12 @@ function toDateKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+// 合宿/試合/出稽古バッジ配色（ライト/ダーク両対応）
 const dayTypeFillColorDark: Record<DayType, string> = {
   practice: "",
-  camp: "bg-pink-950/40 text-pink-400",
-  match: "bg-red-950/40 text-red-400",
-  away: "bg-purple-950/40 text-purple-400",
+  camp: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400",
+  match: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  away: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
 };
 
 // "YYYY-MM-DD" -> "7月24日"
@@ -134,6 +136,254 @@ function groupDetailByGrade<T extends { entryYear: number | null }>(
   }
 
   return result;
+}
+
+function ReportCalendar({
+  cursor,
+  onCursorChange,
+  loading,
+  submissionCounts,
+  reportDayInfo,
+  selectedReportDate,
+  onSelectDate,
+}: {
+  cursor: Date;
+  onCursorChange: (d: Date) => void;
+  loading: boolean;
+  submissionCounts: Map<string, { submitted: number; total: number }>;
+  reportDayInfo: Map<
+    string,
+    { isFullyOff: boolean; dayType: DayType; eventName: string | null }
+  >;
+  selectedReportDate: string;
+  onSelectDate: (dateStr: string) => void;
+}) {
+  const { defaultCalendarView } = useCalendarViewPref();
+  const [viewMode, setViewMode] = useState<"month" | "week">(
+    defaultCalendarView
+  );
+  // 設定で初期表示（月/週）が変更された場合に反映する
+  useEffect(() => {
+    setViewMode(defaultCalendarView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCalendarView]);
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+
+  let cells: (Date | null)[];
+  let headerLabel: string;
+  if (viewMode === "month") {
+    const firstDay = new Date(year, month, 1);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    headerLabel = `${year}年${month + 1}月`;
+  } else {
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    cells = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+    const weekEnd = cells[6] as Date;
+    headerLabel =
+      weekStart.getMonth() === weekEnd.getMonth()
+        ? `${weekStart.getFullYear()}年${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getDate()}日`
+        : `${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  }
+
+  // 週表示に切り替わったタイミングで、選択中の日付（なければ今日）を含む週が
+  // まだ表示されていなければ、その週にジャンプする
+  // （月表示→週表示の切り替え・初期表示が週表示の場合の両方で効く）
+  useEffect(() => {
+    if (viewMode !== "week") return;
+    const targetKey = selectedReportDate || toDateKey(new Date());
+    const [ty, tm, td] = targetKey.split("-").map(Number);
+    const target = new Date(ty, tm - 1, td);
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    if (target >= weekStart && target <= weekEnd) return;
+    onCursorChange(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
+
+  function handlePrev() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() - 7);
+      onCursorChange(d);
+    }
+  }
+
+  function handleNext() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() + 7);
+      onCursorChange(d);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border-color bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <button
+          onClick={handlePrev}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
+        >
+          ＜
+        </button>
+        <span className="text-sm font-semibold text-foreground">
+          {headerLabel}
+        </span>
+        <button
+          onClick={handleNext}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
+        >
+          ＞
+        </button>
+      </div>
+      <div className="mb-2 flex justify-center">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+          {(
+            [
+              { v: "month", label: "月表示" },
+              { v: "week", label: "週表示" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => setViewMode(opt.v)}
+              className={`rounded-md px-3 py-1 font-medium ${
+                viewMode === opt.v
+                  ? "bg-red-600 text-white shadow"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading ? (
+        <p className="text-xs text-neutral-500 dark:text-neutral-500">読み込み中…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+            {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
+              <div
+                key={w}
+                className={
+                  idx === 0
+                    ? "font-semibold text-red-500 dark:text-red-400"
+                    : idx === 6
+                      ? "font-semibold text-blue-500 dark:text-blue-400"
+                      : "text-neutral-500 dark:text-neutral-500"
+                }
+              >
+                {w}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((date, i) => {
+              if (!date) return <div key={i} />;
+              const key = toDateKey(date);
+              const isHighlighted = key === selectedReportDate;
+              const weekday = date.getDay();
+              const count = submissionCounts.get(key);
+              const dayInfo = reportDayInfo.get(key);
+              const isFullySubmitted =
+                !!count && count.total > 0 && count.submitted === count.total;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onSelectDate(key)}
+                  className={`flex ${
+                    viewMode === "week" ? "min-h-[88px]" : "min-h-[52px]"
+                  } flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
+                    dayInfo?.isFullyOff
+                      ? "border-border-color bg-neutral-100 dark:bg-neutral-900"
+                      : isFullySubmitted
+                        ? "border-emerald-300 bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/60"
+                        : isHighlighted
+                          ? "border-amber-400 bg-amber-100 ring-1 ring-amber-400 dark:bg-amber-950/40"
+                          : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
+                  }`}
+                >
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      !isHighlighted && weekday === 0
+                        ? "border-b-2 border-red-500 text-red-500 dark:text-red-400"
+                        : !isHighlighted && weekday === 6
+                          ? "border-b-2 border-blue-500 text-blue-500 dark:text-blue-400"
+                          : "text-foreground"
+                    }`}
+                  >
+                    {date.getDate()}
+                  </span>
+                  {dayInfo?.isFullyOff ? (
+                    <span className="text-[9px] text-neutral-500 dark:text-neutral-500">
+                      全体オフ
+                    </span>
+                  ) : (
+                    <>
+                      {dayInfo && dayInfo.dayType !== "practice" && (
+                        <span
+                          className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[dayInfo.dayType]}`}
+                        >
+                          {dayInfo.eventName || dayTypeLabel[dayInfo.dayType]}
+                        </span>
+                      )}
+                      {count && (
+                        <span
+                          className={`text-[9px] font-semibold ${
+                            isFullySubmitted
+                              ? "text-emerald-600 dark:text-emerald-300"
+                              : "text-neutral-600 dark:text-neutral-300"
+                          }`}
+                        >
+                          {count.submitted}/{count.total}人
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-400 dark:bg-emerald-900/60 dark:ring-emerald-700" />
+              全員提出済み
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
+              合宿
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-red-100 dark:bg-red-950/40" />
+              試合
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />
+              オフ
+            </span>
+          </p>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function CoachAdminPage({
@@ -1122,196 +1372,47 @@ export default function CoachAdminPage({
             日報(実施報告・未実施報告)・トレ報(マット以外のセッションの自主トレ記録)の提出状況です。日付をタップすると、その日の部員ごとの提出状況が下に表示されます。
           </p>
 
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                onClick={() =>
-                  setReportCalendarCursor(
-                    new Date(
-                      reportCalendarCursor.getFullYear(),
-                      reportCalendarCursor.getMonth() - 1,
-                      1
-                    )
-                  )
-                }
-                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
-              >
-                ＜
-              </button>
-              <span className="text-sm font-semibold">
-                {reportCalendarCursor.getFullYear()}年
-                {reportCalendarCursor.getMonth() + 1}月
-              </span>
-              <button
-                onClick={() =>
-                  setReportCalendarCursor(
-                    new Date(
-                      reportCalendarCursor.getFullYear(),
-                      reportCalendarCursor.getMonth() + 1,
-                      1
-                    )
-                  )
-                }
-                className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
-              >
-                ＞
-              </button>
+          <ReportCalendar
+            cursor={reportCalendarCursor}
+            onCursorChange={setReportCalendarCursor}
+            loading={loadingSubmissionCounts}
+            submissionCounts={submissionCounts}
+            reportDayInfo={reportDayInfo}
+            selectedReportDate={selectedReportDate}
+            onSelectDate={handleSelectReportDate}
+          />
+          {!loadingSubmissionCounts && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {(["tama", "otsuka"] as Location[]).map((loc) => {
+                const c = submissionCountsByLoc.get(selectedReportDate)?.[loc];
+                return (
+                  <div
+                    key={loc}
+                    className="flex items-center justify-between rounded-lg border border-border-color bg-surface px-3 py-2"
+                  >
+                    <span className="font-medium text-foreground">
+                      {locationLabel[loc]}
+                    </span>
+                    {c ? (
+                      <span
+                        className={`font-semibold ${
+                          c.total > 0 && c.submitted === c.total
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-neutral-600 dark:text-neutral-300"
+                        }`}
+                      >
+                        {c.submitted}/{c.total}人提出
+                      </span>
+                    ) : (
+                      <span className="text-neutral-500 dark:text-neutral-500">
+                        該当なし
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            {loadingSubmissionCounts ? (
-              <p className="text-xs text-neutral-500">読み込み中…</p>
-            ) : (
-              <>
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
-                  {["日", "月", "火", "水", "木", "金", "土"].map(
-                    (w, idx) => (
-                      <div
-                        key={w}
-                        className={
-                          idx === 0
-                            ? "font-semibold text-red-400"
-                            : idx === 6
-                              ? "font-semibold text-blue-400"
-                              : "text-neutral-500"
-                        }
-                      >
-                        {w}
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {(() => {
-                    const year = reportCalendarCursor.getFullYear();
-                    const month = reportCalendarCursor.getMonth();
-                    const firstDay = new Date(year, month, 1);
-                    const startWeekday = firstDay.getDay();
-                    const daysInMonth = new Date(
-                      year,
-                      month + 1,
-                      0
-                    ).getDate();
-                    const cells: (Date | null)[] = [];
-                    for (let i = 0; i < startWeekday; i++) cells.push(null);
-                    for (let d = 1; d <= daysInMonth; d++)
-                      cells.push(new Date(year, month, d));
-
-                    return cells.map((date, i) => {
-                      if (!date) return <div key={i} />;
-                      const key = toDateKey(date);
-                      const isHighlighted = key === selectedReportDate;
-                      const weekday = date.getDay();
-                      const count = submissionCounts.get(key);
-                      const dayInfo = reportDayInfo.get(key);
-                      const isFullySubmitted =
-                        !!count &&
-                        count.total > 0 &&
-                        count.submitted === count.total;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => handleSelectReportDate(key)}
-                          className={`flex min-h-[52px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
-                            dayInfo?.isFullyOff
-                              ? "border-neutral-700 bg-neutral-900"
-                              : isFullySubmitted
-                                ? "border-emerald-700 bg-emerald-900/60"
-                                : isHighlighted
-                                  ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
-                                  : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
-                          }`}
-                        >
-                          <span
-                            className={`text-[11px] font-semibold ${
-                              !isHighlighted && weekday === 0
-                                ? "border-b-2 border-red-500 text-red-400"
-                                : !isHighlighted && weekday === 6
-                                  ? "border-b-2 border-blue-500 text-blue-400"
-                                  : "text-neutral-200"
-                            }`}
-                          >
-                            {date.getDate()}
-                          </span>
-                          {dayInfo?.isFullyOff ? (
-                            <span className="text-[9px] text-neutral-500">
-                              全体オフ
-                            </span>
-                          ) : (
-                            <>
-                              {dayInfo && dayInfo.dayType !== "practice" && (
-                                <span
-                                  className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[dayInfo.dayType]}`}
-                                >
-                                  {dayInfo.eventName ||
-                                    dayTypeLabel[dayInfo.dayType]}
-                                </span>
-                              )}
-                              {count && (
-                                <span
-                                  className={`text-[9px] font-semibold ${
-                                    isFullySubmitted
-                                      ? "text-emerald-300"
-                                      : "text-neutral-300"
-                                  }`}
-                                >
-                                  {count.submitted}/{count.total}人
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </button>
-                      );
-                    });
-                  })()}
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  {(["tama", "otsuka"] as Location[]).map((loc) => {
-                    const c = submissionCountsByLoc.get(selectedReportDate)?.[loc];
-                    return (
-                      <div
-                        key={loc}
-                        className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
-                      >
-                        <span className="font-medium text-neutral-200">
-                          {locationLabel[loc]}
-                        </span>
-                        {c ? (
-                          <span
-                            className={`font-semibold ${
-                              c.total > 0 && c.submitted === c.total
-                                ? "text-emerald-400"
-                                : "text-neutral-300"
-                            }`}
-                          >
-                            {c.submitted}/{c.total}人提出
-                          </span>
-                        ) : (
-                          <span className="text-neutral-500">該当なし</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
-                    全員提出済み
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
-                    合宿
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
-                    試合
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
-                    オフ
-                  </span>
-                </p>
-              </>
-            )}
-          </div>
+          )}
 
           <h3 className="text-xs font-semibold text-neutral-300">
             {formatMonthDay(selectedReportDate)}の提出状況
