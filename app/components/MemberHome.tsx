@@ -1662,7 +1662,7 @@ export default function MemberHome({
       {/* カレンダー（トレーニングの記録） */}
       {homeSubTab === "training" && (
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
           トレーニングの記録
         </h2>
@@ -1692,7 +1692,7 @@ export default function MemberHome({
         className="flex flex-col gap-2 border-t border-neutral-800 pt-4"
       >
         <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             {logDate === todayStr
               ? "本日のトレーニングメニュー"
@@ -1834,7 +1834,7 @@ export default function MemberHome({
 
       {homeSubTab === "injury" && (
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
           怪我の記録・復帰計画
         </h2>
@@ -2185,6 +2185,23 @@ function UnifiedCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultCalendarView]);
 
+  // 週表示になったタイミング（トグル操作・初期表示が週表示の場合のいずれも）で、
+  // 選択中の日付（なければ今日）を含む週がまだ表示されていなければ、その週にジャンプする
+  useEffect(() => {
+    if (viewMode !== "week") return;
+    const targetKey = highlightDate ?? todayDate;
+    if (!targetKey) return;
+    const [ty, tm, td] = targetKey.split("-").map(Number);
+    const target = new Date(ty, tm - 1, td);
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    if (target >= weekStart && target <= weekEnd) return;
+    onCursorChange(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
+
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
   const selfLoggedDates = new Set<string>();
@@ -2278,17 +2295,7 @@ function UnifiedCalendar({
             <button
               key={opt.v}
               type="button"
-              onClick={() => {
-                if (opt.v === "week" && viewMode !== "week") {
-                  // 週表示に切り替えたときは、選択中の日付（なければ今日）を含む週を表示する
-                  const targetKey = highlightDate ?? todayDate;
-                  if (targetKey) {
-                    const [ty, tm, td] = targetKey.split("-").map(Number);
-                    onCursorChange(new Date(ty, tm - 1, td));
-                  }
-                }
-                setViewMode(opt.v);
-              }}
+              onClick={() => setViewMode(opt.v)}
               className={`rounded-md px-3 py-1 font-medium ${
                 viewMode === opt.v
                   ? "bg-red-600 text-white shadow"
