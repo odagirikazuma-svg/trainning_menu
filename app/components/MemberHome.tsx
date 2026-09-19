@@ -2291,7 +2291,17 @@ function UnifiedCalendar({
             <button
               key={opt.v}
               type="button"
-              onClick={() => setViewMode(opt.v)}
+              onClick={() => {
+                if (opt.v === "week" && viewMode !== "week") {
+                  // 週表示に切り替えたときは、選択中の日付（なければ今日）を含む週を表示する
+                  const targetKey = highlightDate ?? todayDate;
+                  if (targetKey) {
+                    const [ty, tm, td] = targetKey.split("-").map(Number);
+                    onCursorChange(new Date(ty, tm - 1, td));
+                  }
+                }
+                setViewMode(opt.v);
+              }}
               className={`rounded-md px-3 py-1 font-medium ${
                 viewMode === opt.v
                   ? "bg-red-600 text-white shadow"

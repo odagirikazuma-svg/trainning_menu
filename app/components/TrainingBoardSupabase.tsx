@@ -28,12 +28,12 @@ const locationSubTabItems = locations.map((loc) => ({
   label: locationLabel[loc],
 }));
 
-// ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
+// 合宿/試合/出稽古バッジ配色（ライト/ダーク両対応）
 const dayTypeFillColorDark: Record<DayType, string> = {
   practice: "",
-  camp: "bg-pink-950/40 text-pink-400",
-  match: "bg-red-950/40 text-red-400",
-  away: "bg-purple-950/40 text-purple-400",
+  camp: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400",
+  match: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  away: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
 };
 
 type MenuRow = {
@@ -1893,19 +1893,23 @@ function MenuCalendar({
   location: Location;
 }) {
   const supabase = createClient();
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  // 上部の◀▶で日付を移動して月をまたいだ場合、下のカレンダーの表示月も追従させる
+  // 上部の◀▶で日付を移動して月・週をまたいだ場合や表示モード切替時、下のカレンダーの表示も追従させる
+  // （週表示に切り替えたときは、選択中の日付（viewDate）を含む週を表示する）
   useEffect(() => {
-    const [y, m] = viewDate.split("-").map(Number);
-    if (y !== cursor.getFullYear() || m - 1 !== cursor.getMonth()) {
+    const [y, m, d] = viewDate.split("-").map(Number);
+    if (viewMode === "week") {
+      setCursor(new Date(y, m - 1, d));
+    } else if (y !== cursor.getFullYear() || m - 1 !== cursor.getMonth()) {
       setCursor(new Date(y, m - 1, 1));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewDate]);
+  }, [viewDate, viewMode]);
 
   const [scheduleByDate, setScheduleByDate] = useState<
     Map<
@@ -1925,13 +1929,42 @@ function MenuCalendar({
     >
   >(new Map());
 
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+
+  let cells: (Date | null)[];
+  let headerLabel: string;
+  let rangeStart: string;
+  let rangeEnd: string;
+  if (viewMode === "month") {
+    const firstDay = new Date(year, month, 1);
+    const startWeekday = firstDay.getDay(); // 0=日
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    headerLabel = `${year}年${month + 1}月`;
+    rangeStart = toDateKey(new Date(year, month, 1));
+    rangeEnd = toDateKey(new Date(year, month + 1, 0));
+  } else {
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    cells = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+    const weekEnd = cells[6] as Date;
+    headerLabel =
+      weekStart.getMonth() === weekEnd.getMonth()
+        ? `${weekStart.getFullYear()}年${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getDate()}日`
+        : `${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+    rangeStart = toDateKey(weekStart);
+    rangeEnd = toDateKey(weekEnd);
+  }
+
   useEffect(() => {
     (async () => {
-      const year = cursor.getFullYear();
-      const month = cursor.getMonth();
-      const rangeStart = toDateKey(new Date(year, month, 1));
-      const rangeEnd = toDateKey(new Date(year, month + 1, 0));
-
       const { data } = await supabase
         .from("schedule_days")
         .select(
@@ -1947,7 +1980,7 @@ function MenuCalendar({
         {
           is_off: boolean;
           day_type: DayType;
-        event_name: string | null;
+          event_name: string | null;
           sessions: {
             session_type: SessionType;
             start_time: string | null;
@@ -1980,7 +2013,7 @@ function MenuCalendar({
       setScheduleByDate(map);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, location]);
+  }, [rangeStart, rangeEnd, location]);
 
   const menusByDate = new Map<string, MenuRow[]>();
   for (const m of menus) {
@@ -1988,16 +2021,6 @@ function MenuCalendar({
     list.push(m);
     menusByDate.set(m.date, list);
   }
-
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay(); // 0=日
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const cells: (Date | null)[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
 
   const todayKey = toDateKey(new Date());
 
@@ -2012,24 +2035,67 @@ function MenuCalendar({
     });
   }
 
+  function handlePrev() {
+    if (viewMode === "month") {
+      setCursor(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() - 7);
+      setCursor(d);
+    }
+  }
+
+  function handleNext() {
+    if (viewMode === "month") {
+      setCursor(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() + 7);
+      setCursor(d);
+    }
+  }
+
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+    <div className="rounded-lg border border-border-color bg-surface p-3">
       <div className="mb-2 flex items-center justify-between">
         <button
-          onClick={() => setCursor(new Date(year, month - 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handlePrev}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＜
         </button>
-        <span className="text-sm font-semibold">
-          {year}年{month + 1}月
+        <span className="text-sm font-semibold text-foreground">
+          {headerLabel}
         </span>
         <button
-          onClick={() => setCursor(new Date(year, month + 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handleNext}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＞
         </button>
+      </div>
+      <div className="mb-2 flex justify-center">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+          {(
+            [
+              { v: "month", label: "月表示" },
+              { v: "week", label: "週表示" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => setViewMode(opt.v)}
+              className={`rounded-md px-3 py-1 font-medium ${
+                viewMode === opt.v
+                  ? "bg-red-600 text-white shadow"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
@@ -2037,10 +2103,10 @@ function MenuCalendar({
             key={w}
             className={
               idx === 0
-                ? "font-semibold text-red-400"
+                ? "font-semibold text-red-500 dark:text-red-400"
                 : idx === 6
-                  ? "font-semibold text-blue-400"
-                  : "text-neutral-500"
+                  ? "font-semibold text-blue-500 dark:text-blue-400"
+                  : "text-neutral-500 dark:text-neutral-500"
             }
           >
             {w}
@@ -2069,29 +2135,31 @@ function MenuCalendar({
                 else if (jointInfo) onSelectJoint(key);
                 else onSelectEmpty(key);
               }}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border border-neutral-700 pt-1 text-xs ${
+              className={`relative flex ${
+                viewMode === "week" ? "min-h-[88px]" : "min-h-[56px]"
+              } flex-col items-center justify-start gap-0.5 rounded-lg border border-border-color pt-1 text-xs ${
                 isViewDate && hasMenu
                   ? "bg-blue-600 font-semibold text-white"
                   : isOff || schedule?.is_off
-                    ? "bg-neutral-800 font-medium text-neutral-400 active:bg-neutral-700"
+                    ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
                     : schedule?.day_type === "camp"
-                      ? "bg-pink-950/40 font-medium text-pink-400 active:bg-pink-900/40"
+                      ? "bg-pink-100 font-medium text-pink-700 active:bg-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:active:bg-pink-900/40"
                       : schedule?.day_type === "match"
-                        ? "bg-red-950/40 font-medium text-red-400 active:bg-red-900/40"
+                        ? "bg-red-100 font-medium text-red-700 active:bg-red-200 dark:bg-red-950/40 dark:text-red-400 dark:active:bg-red-900/40"
                         : hasMenu
-                          ? "bg-blue-950/40 font-medium text-blue-400 active:bg-blue-900/40"
+                          ? "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40"
                           : jointInfo
-                            ? "bg-purple-950/40 font-medium text-purple-400 active:bg-purple-900/40"
-                            : "bg-neutral-800 text-neutral-300 active:bg-neutral-700"
+                            ? "bg-purple-100 font-medium text-purple-700 active:bg-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:active:bg-purple-900/40"
+                            : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
               } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               <span
                 className={
                   !isViewDate && !hasMenu && !isOff && !schedule?.is_off
                     ? weekday === 0
-                      ? "border-b-2 border-red-500 px-1 text-red-400"
+                      ? "border-b-2 border-red-500 px-1 text-red-500 dark:text-red-400"
                       : weekday === 6
-                        ? "border-b-2 border-blue-500 px-1 text-blue-400"
+                        ? "border-b-2 border-blue-500 px-1 text-blue-500 dark:text-blue-400"
                         : ""
                     : ""
                 }
@@ -2099,13 +2167,13 @@ function MenuCalendar({
                 {date.getDate()}
               </span>
               {isToday && (
-                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white" />
+                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900 dark:bg-white" />
               )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
               {schedule && schedule.is_off && (
-                <span className="text-[8px] font-medium text-neutral-500">
+                <span className="text-[8px] font-medium text-neutral-500 dark:text-neutral-500">
                   オフ
                 </span>
               )}
@@ -2133,7 +2201,7 @@ function MenuCalendar({
                       .map((s, idx) => (
                         <span
                           key={idx}
-                          className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-400"
+                          className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500 dark:text-neutral-400"
                         >
                           <span
                             className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
@@ -2160,9 +2228,9 @@ function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-white" />
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900 dark:bg-white" />
           今日
         </span>
         <span className="flex items-center gap-1">
@@ -2174,11 +2242,11 @@ function MenuCalendar({
           未提出の部員がいる日
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-purple-950/40" />
+          <span className="inline-block h-2 w-2 rounded bg-purple-100 dark:bg-purple-950/40" />
           全体練習（別拠点）
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-neutral-800" />
+          <span className="inline-block h-2 w-2 rounded bg-neutral-200 dark:bg-neutral-800" />
           オフ
         </span>
       </p>

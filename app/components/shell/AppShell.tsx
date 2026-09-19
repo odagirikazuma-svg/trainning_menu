@@ -81,7 +81,7 @@ function AppShellInner({
           >
             {children}
           </main>
-          <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col">
+          <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col shadow-[0_-4px_10px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.5)]">
             {subNav}
             <Footer profile={profile} />
           </div>
