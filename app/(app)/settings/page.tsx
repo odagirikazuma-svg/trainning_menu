@@ -14,7 +14,10 @@ import {
   NewMemberRegistrationSection,
 } from "../../components/MemberManagementSection";
 import CollapsibleSection from "../../components/shell/CollapsibleSection";
-import ScheduleEditForm from "../../components/ScheduleEditForm";
+import ScheduleEditForm, {
+  type ScheduleDayPrefill,
+} from "../../components/ScheduleEditForm";
+import ScheduleOverviewCalendar from "../../components/ScheduleOverviewCalendar";
 import { Location, locationLabel, locations } from "../../lib/types";
 
 const themeOptions: { value: ThemePref; label: string }[] = [
@@ -524,13 +527,28 @@ function IconSection() {
 
 // 拠点タブを選んでから、その期間の時間割をまとめて登録できる管理者向けの欄
 // （旧・マット掲示板の「期間でまとめて設定する」をこちらに集約した）
+function formatMonthDaySettings(dateStr: string) {
+  const [, m, d] = dateStr.split("-");
+  return `${Number(m)}月${Number(d)}日`;
+}
+
 function SectionRegistrationSection({
   profile,
 }: {
   profile: { team_id: string; id: string };
 }) {
+  const supabase = createClient();
+  const [cursor, setCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
   const [location, setLocation] = useState<Location>("tama");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [existingDay, setExistingDay] = useState<
+    ScheduleDayPrefill | null | undefined
+  >(undefined);
   const [resetKey, setResetKey] = useState(0);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const todayStr = (() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -539,37 +557,118 @@ function SectionRegistrationSection({
     return `${y}-${m}-${day}`;
   })();
 
+  useEffect(() => {
+    if (!selectedDate) {
+      setExistingDay(undefined);
+      return;
+    }
+    let cancelled = false;
+    setExistingDay(undefined);
+    (async () => {
+      const { data } = await supabase
+        .from("schedule_days")
+        .select(
+          "is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location, location_note)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("location", location)
+        .eq("date", selectedDate)
+        .maybeSingle();
+      if (!cancelled) {
+        setExistingDay((data as ScheduleDayPrefill | null) ?? null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, location, profile.team_id]);
+
+  function handleSelectDate(loc: Location, dateStr: string) {
+    setLocation(loc);
+    setSelectedDate((prev) => (prev === dateStr && location === loc ? null : dateStr));
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-        練習・オフ・合宿・試合・出稽古などの時間割を、単日または期間でまとめて登録できます。
+        カレンダーの日付をタップすると、その日を単日で編集できます。日付を選ばず「期間でまとめて設定」から、オフ・合宿・試合・出稽古をまとめて登録することもできます。
       </p>
-      <div className="flex gap-2">
-        {locations.map((loc) => (
-          <button
-            key={loc}
-            onClick={() => setLocation(loc)}
-            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-              location === loc
-                ? "border-red-600 bg-red-600 text-white"
-                : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
-            }`}
-          >
-            {locationLabel[loc]}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2">
+        <ScheduleOverviewCalendar
+          key={`tama-${calendarRefreshKey}`}
+          teamId={profile.team_id}
+          location="tama"
+          cursor={cursor}
+          onCursorChange={setCursor}
+          selectedDate={location === "tama" ? selectedDate : null}
+          onSelectDate={(d) => handleSelectDate("tama", d)}
+        />
+        <ScheduleOverviewCalendar
+          key={`otsuka-${calendarRefreshKey}`}
+          teamId={profile.team_id}
+          location="otsuka"
+          cursor={cursor}
+          onCursorChange={setCursor}
+          selectedDate={location === "otsuka" ? selectedDate : null}
+          onSelectDate={(d) => handleSelectDate("otsuka", d)}
+        />
       </div>
-      <ScheduleEditForm
-        key={`${location}-${resetKey}`}
-        teamId={profile.team_id}
-        authorId={profile.id}
-        location={location}
-        mode="range"
-        allowModeToggle
-        date={todayStr}
-        onCancel={() => setResetKey((k) => k + 1)}
-        onSaved={() => {}}
-      />
+
+      {!selectedDate && (
+        <div className="flex gap-2">
+          {locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setLocation(loc)}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
+                location === loc
+                  ? "border-red-600 bg-red-600 text-white"
+                  : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+              }`}
+            >
+              {locationLabel[loc]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedDate && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-foreground">
+            {locationLabel[location]}・{formatMonthDaySettings(selectedDate)}を編集
+          </p>
+          <button
+            onClick={() => setSelectedDate(null)}
+            className="shrink-0 text-[11px] font-medium text-neutral-400 underline"
+          >
+            日付選択を解除
+          </button>
+        </div>
+      )}
+
+      {selectedDate && existingDay === undefined ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : (
+        <ScheduleEditForm
+          key={`${location}-${selectedDate ?? "range"}-${resetKey}`}
+          teamId={profile.team_id}
+          authorId={profile.id}
+          location={location}
+          mode={selectedDate ? "single" : "range"}
+          allowModeToggle
+          date={selectedDate ?? todayStr}
+          existingDay={selectedDate ? existingDay ?? null : null}
+          onCancel={() => {
+            setSelectedDate(null);
+            setResetKey((k) => k + 1);
+          }}
+          onSaved={() => {
+            setResetKey((k) => k + 1);
+            setCalendarRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

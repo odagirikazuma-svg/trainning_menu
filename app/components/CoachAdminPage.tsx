@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, SessionType } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
+import { useSubNav } from "./shell/AppShell";
+import SubTabBar from "./shell/SubTabBar";
+
+const adminSubTabItems: { value: "submissions" | "injuries"; label: string }[] = [
+  { value: "submissions", label: "提出状況の管理" },
+  { value: "injuries", label: "怪我の管理" },
+];
 
 type MemberRoleForEdit = "coach" | "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
 
@@ -874,6 +881,26 @@ export default function CoachAdminPage({
   );
   const [showPastInjuries, setShowPastInjuries] = useState(false);
 
+  const [adminSubTab, setAdminSubTab] = useState<"submissions" | "injuries">(
+    "submissions"
+  );
+
+  // フッター上のサブナビ（提出状況／怪我の報告の切り替え）を登録
+  // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
+  //   useSubNav内のuseEffectが依存配列[node]の変化を検知して毎回発火し、
+  //   AppShell側の再レンダーとの間で無限ループになりうる。
+  const adminSubNav = useMemo(
+    () => (
+      <SubTabBar
+        items={adminSubTabItems}
+        active={adminSubTab}
+        onChange={setAdminSubTab}
+      />
+    ),
+    [adminSubTab]
+  );
+  useSubNav(adminSubNav);
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
       <div className="flex flex-col gap-5 p-4 sm:p-5">
@@ -883,6 +910,8 @@ export default function CoachAdminPage({
           </p>
         )}
 
+        {adminSubTab === "submissions" && (
+        <>
         {/* 報告状況一覧 */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -1059,9 +1088,13 @@ export default function CoachAdminPage({
             </div>
           )}
         </section>
+        </>
+        )}
 
+        {adminSubTab === "injuries" && (
+        <>
         {/* 怪我人一覧 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我人一覧
@@ -1162,6 +1195,8 @@ export default function CoachAdminPage({
               )}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
