@@ -137,24 +137,24 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
   }, [profile.team_id, profile.id]);
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="text-sm font-semibold text-foreground">
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
       {nextMatch ? (
-        <div className="flex min-w-0 items-center gap-2 rounded-lg bg-red-600 px-2.5 py-1.5 shadow-sm">
-          <span className="shrink-0 text-[10px] font-semibold leading-none text-red-100">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="shrink-0 text-[10px] font-semibold leading-none text-indigo-200">
             次の試合まで
           </span>
           <span className="shrink-0 text-2xl font-extrabold leading-none text-white">
             あと{daysUntil(nextMatch.date)}日
           </span>
-          <span className="min-w-0 truncate text-xs font-semibold leading-none text-red-100">
+          <span className="min-w-0 truncate text-xs font-semibold leading-none text-indigo-100">
             【{nextMatch.name}】
           </span>
         </div>
       ) : (
-        <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        <span className="text-[11px] text-indigo-200">
           次の試合の予定はまだありません
         </span>
       )}
@@ -259,10 +259,10 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
 
   return (
     <div className="flex min-w-0 flex-col">
-      <span className="text-sm font-semibold text-foreground">
+      <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
-      <span className="text-[10px] leading-tight text-neutral-500 dark:text-neutral-400">
+      <span className="text-[10px] leading-tight text-indigo-100">
         {line("昨日の提出状況", yesterdayStr, stats)}
         {line("今日の提出状況", todayStr, stats)}
       </span>
@@ -273,11 +273,14 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
 export default function Header({
   profile,
   onHeightChange,
+  extra,
 }: {
   profile: Profile;
   // ヘッダーの実際の高さをAppShellに伝える（内容量に応じてヘッダーの高さが
   // 変わっても、本文側のpaddingTopがズレて内容が隠れないようにするため）
   onHeightChange?: (height: number) => void;
+  // ヘッダー右端の小さいバッジ枠（未提出タスク数など。useHeaderExtraで登録される）
+  extra?: React.ReactNode;
 }) {
   const headerRef = useRef<HTMLElement>(null);
 
@@ -294,15 +297,18 @@ export default function Header({
   return (
     <header
       ref={headerRef}
-      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-border-color bg-surface/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.12)] backdrop-blur dark:shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+      // 試合カウントダウンなどを目立たせつつ、ボタン類で多用している赤とは
+      // 被らないよう、ヘッダー全体をインディゴで統一する
+      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-indigo-900/40 bg-indigo-700/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.25)] backdrop-blur dark:border-indigo-950/60 dark:bg-indigo-900/95"
       style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
-      <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-red-600" />
+      <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-white/50" />
       {profile.role === "coach" ? (
         <CoachHeaderInfo profile={profile} />
       ) : (
         <MemberHeaderInfo profile={profile} />
       )}
+      {extra && <div className="ml-auto shrink-0">{extra}</div>}
     </header>
   );
 }

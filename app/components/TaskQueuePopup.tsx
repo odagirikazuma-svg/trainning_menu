@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useHeaderExtra } from "./shell/AppShell";
 
 export type QueueTask = {
   key: string;
@@ -13,10 +14,10 @@ export type QueueTask = {
 };
 
 /**
- * マイページの「練習タスク・怪我タスク」を1件ずつポップアップで提出させる仕組み。
+ * マイページ・イベントページの「未提出タスク」を1件ずつポップアップで提出させる仕組み。
  * - タスクがあれば自動でポップアップが開く
  * - 「キャンセル」を押すと、残りタスクの有無に関わらずポップアップを閉じる
- * - 閉じている間は下に赤いバナー（未提出タスク件数つき）が常に表示され、
+ * - 閉じている間はヘッダー右上に件数バッジが表示され、
  *   タップすると最初のタスクから再度ポップアップする
  * - タスクを提出する（tasks配列からそのkeyが消える）と、自動で次のタスクに進む
  */
@@ -41,9 +42,25 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks.length]);
 
-  if (tasks.length === 0) return null;
-
   const current = pending[0] ?? null;
+
+  // ポップアップを閉じている間、ヘッダー右上に件数バッジを表示する
+  // （下部固定バナーは、フッターと重なって隠れる・邪魔に感じるという声があったため廃止）
+  useHeaderExtra(
+    !open && tasks.length > 0 ? (
+      <button
+        onClick={handleReopen}
+        className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow active:bg-red-700"
+      >
+        未提出
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-red-600">
+          {tasks.length > 9 ? "9+" : tasks.length}
+        </span>
+      </button>
+    ) : null
+  );
+
+  if (tasks.length === 0) return null;
 
   function handleCancel() {
     if (!current) return;
@@ -51,7 +68,7 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
     // キャンセルしたら残りタスクの有無に関わらず必ず閉じる。
     // 次のタスクへ自動で進めてしまうと、複数件残っているときに
     // キャンセルのたびにポップアップへ付き合わされることになるため、
-    // 1回キャンセルしたら常時表示のバナー（下記）からいつでも再開できる形にする。
+    // 1回キャンセルしたらヘッダー右上のバッジ（上記）からいつでも再開できる形にする。
     setOpen(false);
   }
 
@@ -106,20 +123,6 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
             </button>
           </div>
         </div>
-      )}
-
-      {!open && (
-        <button
-          onClick={handleReopen}
-          // フッター（サブナビ＋フッターナビの2段、最大136px相当）より下に隠れないよう、
-          // それより高い位置にオフセットしつつ、フッターと同じz-30より上のz-40に置く。
-          style={{ bottom: "calc(136px + env(safe-area-inset-bottom) + 10px)" }}
-          className="fixed inset-x-0 z-40 mx-auto w-[92%] max-w-md rounded-lg bg-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg active:bg-red-700"
-        >
-          {tasks.length > 1
-            ? `未提出のタスクが${tasks.length}件あります`
-            : "未提出のタスクがあります"}
-        </button>
       )}
     </>
   );

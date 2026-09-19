@@ -42,6 +42,27 @@ export function useSubNav(node: React.ReactNode | null) {
   }, [node]);
 }
 
+// ページ側が「ヘッダーの右上に小さいバッジ」を出したいときに使うコンテキスト。
+// 未提出タスクの件数バッジなど、邪魔にならない位置に常時表示したいものに使う。
+const HeaderExtraContext = createContext<{
+  setHeaderExtra: (node: React.ReactNode | null) => void;
+} | null>(null);
+
+/**
+ * ヘッダー右上のバッジを登録するフック。
+ * node が null 以外の間、ヘッダーの右端に表示され続ける。
+ * 不要になったら null を渡すこと。
+ */
+export function useHeaderExtra(node: React.ReactNode | null) {
+  const ctx = useContext(HeaderExtraContext);
+  useEffect(() => {
+    if (!ctx) return;
+    ctx.setHeaderExtra(node);
+    return () => ctx.setHeaderExtra(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node]);
+}
+
 function AppShellInner({
   profile,
   signOut,
@@ -56,6 +77,7 @@ function AppShellInner({
   // ヘッダーの実際の高さ（試合カウントダウンの有無などで変わりうるため、
   // 決め打ちの数値ではなくHeaderからの実測値を使う。初期値は旧来の72px相当）
   const [headerHeight, setHeaderHeight] = useState(72);
+  const [headerExtra, setHeaderExtra] = useState<React.ReactNode | null>(null);
 
   // value をメモ化しないと、AppShellInner が再レンダーするたびに
   // ProfileContext / SubNavContext の value が新しいオブジェクトになり、
@@ -69,12 +91,18 @@ function AppShellInner({
     [profile, signOut]
   );
   const subNavValue = useMemo(() => ({ setSubNav }), []);
+  const headerExtraValue = useMemo(() => ({ setHeaderExtra }), []);
 
   return (
     <ProfileContext.Provider value={profileValue}>
       <SubNavContext.Provider value={subNavValue}>
+        <HeaderExtraContext.Provider value={headerExtraValue}>
         <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-background text-foreground">
-          <Header profile={profile} onHeightChange={setHeaderHeight} />
+          <Header
+            profile={profile}
+            onHeightChange={setHeaderHeight}
+            extra={headerExtra}
+          />
           <main
             className="flex-1"
             style={{
@@ -91,6 +119,7 @@ function AppShellInner({
             <Footer profile={profile} />
           </div>
         </div>
+        </HeaderExtraContext.Provider>
       </SubNavContext.Provider>
     </ProfileContext.Provider>
   );
