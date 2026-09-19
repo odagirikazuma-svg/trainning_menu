@@ -9,7 +9,13 @@ import {
 } from "../../components/shell/CalendarViewPrefProvider";
 import { createClient } from "../../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../../lib/push";
-import MemberManagementSection from "../../components/MemberManagementSection";
+import {
+  MemberRoleEditSection,
+  NewMemberRegistrationSection,
+} from "../../components/MemberManagementSection";
+import CollapsibleSection from "../../components/shell/CollapsibleSection";
+import ScheduleEditForm from "../../components/ScheduleEditForm";
+import { Location, locationLabel, locations } from "../../lib/types";
 
 const themeOptions: { value: ThemePref; label: string }[] = [
   { value: "system", label: "端末設定に合わせる" },
@@ -25,11 +31,7 @@ const calendarViewOptions: { value: CalendarViewPref; label: string }[] = [
 function CalendarViewSection() {
   const { defaultCalendarView, setDefaultCalendarView } = useCalendarViewPref();
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        カレンダーの初期表示
-      </h2>
+    <>
       <div className="flex flex-col gap-1.5 rounded-lg border border-border-color bg-surface-2 p-1">
         {calendarViewOptions.map((opt) => (
           <button
@@ -48,34 +50,28 @@ function CalendarViewSection() {
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
         マイページ・チームページ・マット掲示板のカレンダーを開いたときに、月表示と週表示のどちらを最初に表示するか選べます。
       </p>
-    </section>
+    </>
   );
 }
 
 function ThemeSection() {
   const { theme, setTheme } = useTheme();
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        表示モード
-      </h2>
-      <div className="flex flex-col gap-1.5 rounded-lg border border-border-color bg-surface-2 p-1">
-        {themeOptions.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setTheme(opt.value)}
-            className={`rounded-md px-3 py-2.5 text-left text-sm font-medium ${
-              theme === opt.value
-                ? "bg-red-600 text-white shadow"
-                : "text-neutral-500 dark:text-neutral-400"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </section>
+    <div className="flex flex-col gap-1.5 rounded-lg border border-border-color bg-surface-2 p-1">
+      {themeOptions.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => setTheme(opt.value)}
+          className={`rounded-md px-3 py-2.5 text-left text-sm font-medium ${
+            theme === opt.value
+              ? "bg-red-600 text-white shadow"
+              : "text-neutral-500 dark:text-neutral-400"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -203,12 +199,7 @@ function NextMatchSection() {
   const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        次の試合
-      </h2>
-
+    <>
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : nextMatch ? (
@@ -305,7 +296,7 @@ function NextMatchSection() {
       {errorMsg && (
         <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">{errorMsg}</p>
       )}
-    </section>
+    </>
   );
 }
 
@@ -409,11 +400,7 @@ function NotificationSection() {
   if (!supported) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        通知設定
-      </h2>
+    <>
       <div className="flex items-center justify-between gap-2 rounded-lg border border-border-color bg-surface-2 p-3 text-xs">
         <span className="text-neutral-600 dark:text-neutral-300">
           {!checked
@@ -445,7 +432,7 @@ function NotificationSection() {
           {errorMsg}
         </p>
       )}
-    </section>
+    </>
   );
 }
 
@@ -498,11 +485,7 @@ function IconSection() {
   }
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        プロフィールアイコン
-      </h2>
+    <>
       <div className="flex items-center gap-3 rounded-lg border border-border-color bg-surface-2 p-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -535,27 +518,119 @@ function IconSection() {
           {errorMsg}
         </p>
       )}
-    </section>
+    </>
+  );
+}
+
+// 拠点タブを選んでから、その期間の時間割をまとめて登録できる管理者向けの欄
+// （旧・マット掲示板の「期間でまとめて設定する」をこちらに集約した）
+function SectionRegistrationSection({
+  profile,
+}: {
+  profile: { team_id: string; id: string };
+}) {
+  const [location, setLocation] = useState<Location>("tama");
+  const [resetKey, setResetKey] = useState(0);
+  const todayStr = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  })();
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        練習・オフ・合宿・試合・出稽古などの時間割を、単日または期間でまとめて登録できます。
+      </p>
+      <div className="flex gap-2">
+        {locations.map((loc) => (
+          <button
+            key={loc}
+            onClick={() => setLocation(loc)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
+              location === loc
+                ? "border-red-600 bg-red-600 text-white"
+                : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+            }`}
+          >
+            {locationLabel[loc]}
+          </button>
+        ))}
+      </div>
+      <ScheduleEditForm
+        key={`${location}-${resetKey}`}
+        teamId={profile.team_id}
+        authorId={profile.id}
+        location={location}
+        mode="range"
+        allowModeToggle
+        date={todayStr}
+        onCancel={() => setResetKey((k) => k + 1)}
+        onSaved={() => {}}
+      />
+    </div>
   );
 }
 
 export default function SettingsPage() {
   const { profile, signOut } = useProfile();
+  const isCoach = profile.role === "coach";
+  const pushSupported = isPushSupported();
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-6 p-4 sm:p-5">
-      <ThemeSection />
-      <CalendarViewSection />
-      <IconSection />
-      {profile.role !== "coach" && <NextMatchSection />}
-      <NotificationSection />
-      {profile.role === "coach" && (
-        <div className="border-t border-border-color pt-4">
-          <MemberManagementSection profile={profile} />
+    <div className="mx-auto flex w-full flex-col divide-y divide-border-color p-4 sm:p-5">
+      <div className="pb-3">
+        <CollapsibleSection title="表示モード">
+          <ThemeSection />
+        </CollapsibleSection>
+      </div>
+      <div className="py-3">
+        <CollapsibleSection title="カレンダーの初期表示">
+          <CalendarViewSection />
+        </CollapsibleSection>
+      </div>
+      <div className="py-3">
+        <CollapsibleSection title="プロフィールアイコン">
+          <IconSection />
+        </CollapsibleSection>
+      </div>
+      {!isCoach && (
+        <div className="py-3">
+          <CollapsibleSection title="次の試合">
+            <NextMatchSection />
+          </CollapsibleSection>
         </div>
       )}
+      {pushSupported && (
+        <div className="py-3">
+          <CollapsibleSection title="通知設定">
+            <NotificationSection />
+          </CollapsibleSection>
+        </div>
+      )}
+      {isCoach && (
+        <>
+          <div className="py-3">
+            <CollapsibleSection title="メンバー情報の編集">
+              <MemberRoleEditSection profile={profile} />
+            </CollapsibleSection>
+          </div>
+          <div className="py-3">
+            <CollapsibleSection title="新規メンバー登録">
+              <NewMemberRegistrationSection profile={profile} />
+            </CollapsibleSection>
+          </div>
+          <div className="py-3">
+            <CollapsibleSection title="セクション登録">
+              <SectionRegistrationSection profile={profile} />
+            </CollapsibleSection>
+          </div>
+        </>
+      )}
 
-      <div className="border-t border-border-color pt-4">
+      <div className="pt-4">
         <button
           onClick={signOut}
           className="w-full rounded-lg border border-neutral-400 py-3 text-sm font-medium text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"

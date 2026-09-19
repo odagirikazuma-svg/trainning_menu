@@ -62,11 +62,10 @@ type RosterRow = {
   token: string;
 };
 
-export default function MemberManagementSection({
-  profile,
-}: {
-  profile: Profile;
-}) {
+// 「メンバー情報の編集」「新規メンバー登録」の両方で使うデータ読み込み・保存ロジックをまとめたフック。
+// 設定ページ側で2つの独立した折りたたみセクションとして表示できるよう、
+// コンポーネントを分けた上でそれぞれこのフックを呼び出す構成にしている。
+function useMemberManagement(profile: Profile) {
   const supabase = createClient();
 
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -312,334 +311,377 @@ export default function MemberManagementSection({
       return a.display_name.localeCompare(b.display_name, "ja");
     });
 
+  return {
+    errorMsg,
+    members,
+    loadingMembers,
+    showRoleLocationEdit,
+    setShowRoleLocationEdit,
+    savingRoleId,
+    draftEdits,
+    setDraftEdits,
+    handleSaveMemberEdit,
+    handleDeleteMember,
+    roster,
+    loadingRoster,
+    sortedRoster,
+    rosterName,
+    setRosterName,
+    rosterEmail,
+    setRosterEmail,
+    rosterLocation,
+    setRosterLocation,
+    rosterEntryYear,
+    setRosterEntryYear,
+    rosterRole,
+    setRosterRole,
+    rosterEntryYearOptions,
+    savingRoster,
+    handleAddRoster,
+    editingEmailId,
+    setEditingEmailId,
+    editingEmailValue,
+    setEditingEmailValue,
+    savingEmail,
+    handleStartEditEmail,
+    handleSaveEmail,
+    copiedTokenId,
+    handleCopyInviteLink,
+    handleDeleteRoster,
+  };
+}
+
+/** 部員の役職・拠点を編集する一覧（設定ページの「メンバー情報の編集」欄の中身） */
+export function MemberRoleEditSection({ profile }: { profile: Profile }) {
+  const s = useMemberManagement(profile);
+
   return (
-    <div className="flex flex-col gap-5">
-      {errorMsg && (
+    <div className="flex flex-col gap-2">
+      {s.errorMsg && (
         <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
-          {errorMsg}
+          {s.errorMsg}
         </p>
       )}
-
-      {/* 部員の役職・拠点を編集 */}
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            メンバー情報の編集
-          </h2>
-          <button
-            onClick={() => {
-              setShowRoleLocationEdit((v) => !v);
-              setDraftEdits({});
-            }}
-            className="shrink-0 rounded border border-neutral-400 px-2.5 py-1 text-[11px] text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
-          >
-            {showRoleLocationEdit ? "閉じる" : "編集する"}
-          </button>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+          {s.showRoleLocationEdit
+            ? "役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。"
+            : "部員の役職・所属拠点を確認・編集できます。"}
+        </p>
+        <button
+          onClick={() => {
+            s.setShowRoleLocationEdit((v) => !v);
+            s.setDraftEdits({});
+          }}
+          className="shrink-0 rounded border border-neutral-400 px-2.5 py-1 text-[11px] text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
+        >
+          {s.showRoleLocationEdit ? "閉じる" : "編集する"}
+        </button>
+      </div>
+      {s.loadingMembers ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : s.members.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-neutral-400 p-4 text-xs text-neutral-500 dark:border-neutral-700">
+          部員が登録されていません。
+        </p>
+      ) : !s.showRoleLocationEdit ? (
+        <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-border-color">
+          <ul className="divide-y divide-border-color">
+            {s.members.map((m) => (
+              <li
+                key={m.id}
+                className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs"
+              >
+                <span className="font-medium text-foreground">
+                  {m.display_name}
+                </span>
+                <div className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400">
+                  <span className="rounded bg-surface-2 px-2 py-1">
+                    {m.home_location
+                      ? locationLabel[m.home_location]
+                      : "拠点未設定"}
+                  </span>
+                  <span className="rounded bg-surface-2 px-2 py-1">
+                    {memberRoleEditLabel[m.role]}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-        {showRoleLocationEdit && (
-          <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-            役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。
-          </p>
-        )}
-        {loadingMembers ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : members.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-400 p-4 text-xs text-neutral-500 dark:border-neutral-700">
-            部員が登録されていません。
-          </p>
-        ) : !showRoleLocationEdit ? (
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-border-color">
-            <ul className="divide-y divide-border-color">
-              {members.map((m) => (
+      ) : (
+        <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-border-color">
+          <ul className="divide-y divide-border-color">
+            {s.members.map((m) => {
+              const draft = s.draftEdits[m.id];
+              const currentRole = draft?.role ?? m.role;
+              const currentLocation =
+                draft?.home_location ?? m.home_location ?? "tama";
+              const isDirty = !!draft;
+              return (
                 <li
                   key={m.id}
-                  className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs"
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
                 >
                   <span className="font-medium text-foreground">
                     {m.display_name}
                   </span>
-                  <div className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400">
-                    <span className="rounded bg-surface-2 px-2 py-1">
-                      {m.home_location
-                        ? locationLabel[m.home_location]
-                        : "拠点未設定"}
-                    </span>
-                    <span className="rounded bg-surface-2 px-2 py-1">
-                      {memberRoleEditLabel[m.role]}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-border-color">
-            <ul className="divide-y divide-border-color">
-              {members.map((m) => {
-                const draft = draftEdits[m.id];
-                const currentRole = draft?.role ?? m.role;
-                const currentLocation =
-                  draft?.home_location ?? m.home_location ?? "tama";
-                const isDirty = !!draft;
-                return (
-                  <li
-                    key={m.id}
-                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
-                  >
-                    <span className="font-medium text-foreground">
-                      {m.display_name}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={currentLocation}
-                        disabled={savingRoleId === m.id}
-                        onChange={(e) =>
-                          setDraftEdits((prev) => ({
-                            ...prev,
-                            [m.id]: {
-                              role: prev[m.id]?.role ?? m.role,
-                              home_location: e.target.value as Location,
-                            },
-                          }))
-                        }
-                        className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
-                      >
-                        {locations.map((loc) => (
-                          <option key={loc} value={loc}>
-                            {locationLabel[loc]}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={currentRole}
-                        disabled={savingRoleId === m.id}
-                        onChange={(e) =>
-                          setDraftEdits((prev) => ({
-                            ...prev,
-                            [m.id]: {
-                              role: e.target.value as MemberRoleForEdit,
-                              home_location:
-                                prev[m.id]?.home_location ??
-                                m.home_location ??
-                                "tama",
-                            },
-                          }))
-                        }
-                        className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
-                      >
-                        {(
-                          Object.keys(memberRoleEditLabel) as MemberRoleForEdit[]
-                        ).map((r) => (
-                          <option key={r} value={r}>
-                            {memberRoleEditLabel[r]}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleSaveMemberEdit(m.id)}
-                        disabled={!isDirty || savingRoleId === m.id}
-                        className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white active:bg-red-700 disabled:opacity-40"
-                      >
-                        保存する
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMember(m.id, m.display_name)}
-                        disabled={savingRoleId === m.id}
-                        className="rounded border border-red-700 px-2.5 py-1 text-[11px] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      {/* 新規メンバー登録 */}
-      <section className="flex flex-col gap-2 border-t border-border-color pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          新規メンバー登録
-        </h2>
-        <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-          部員だけでなく、管理者・マネージャーもここから事前登録できます。氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
-        </p>
-
-        {loadingRoster ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : roster.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-400 p-4 text-xs text-neutral-500 dark:border-neutral-700">
-            まだ事前登録がありません。
-          </p>
-        ) : (
-          <ul className="divide-y divide-border-color rounded-lg border border-border-color">
-            {sortedRoster.map((r) => (
-              <li key={r.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-medium text-foreground">
-                        {r.display_name}
-                      </span>
-                      <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
-                        {rosterRoleLabel[r.role]}
-                      </span>
-                      {r.home_location && (
-                        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
-                          {locationLabel[r.home_location]}
-                        </span>
-                      )}
-                    </span>
-                    {editingEmailId !== r.id &&
-                      (r.email ? (
-                        <span className="truncate text-neutral-500 dark:text-neutral-500">
-                          {r.email}
-                        </span>
-                      ) : (
-                        <span className="text-amber-600 dark:text-amber-400">
-                          メール未設定
-                        </span>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={currentLocation}
+                      disabled={s.savingRoleId === m.id}
+                      onChange={(e) =>
+                        s.setDraftEdits((prev) => ({
+                          ...prev,
+                          [m.id]: {
+                            role: prev[m.id]?.role ?? m.role,
+                            home_location: e.target.value as Location,
+                          },
+                        }))
+                      }
+                      className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      {locations.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {locationLabel[loc]}
+                        </option>
                       ))}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:text-neutral-400">
-                      未登録
-                    </span>
+                    </select>
+                    <select
+                      value={currentRole}
+                      disabled={s.savingRoleId === m.id}
+                      onChange={(e) =>
+                        s.setDraftEdits((prev) => ({
+                          ...prev,
+                          [m.id]: {
+                            role: e.target.value as MemberRoleForEdit,
+                            home_location:
+                              prev[m.id]?.home_location ??
+                              m.home_location ??
+                              "tama",
+                          },
+                        }))
+                      }
+                      className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      {(
+                        Object.keys(memberRoleEditLabel) as MemberRoleForEdit[]
+                      ).map((r) => (
+                        <option key={r} value={r}>
+                          {memberRoleEditLabel[r]}
+                        </option>
+                      ))}
+                    </select>
                     <button
-                      onClick={() => handleDeleteRoster(r.id)}
-                      className="text-red-600 dark:text-red-500"
+                      onClick={() => s.handleSaveMemberEdit(m.id)}
+                      disabled={!isDirty || s.savingRoleId === m.id}
+                      className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white active:bg-red-700 disabled:opacity-40"
+                    >
+                      保存する
+                    </button>
+                    <button
+                      onClick={() => s.handleDeleteMember(m.id, m.display_name)}
+                      disabled={s.savingRoleId === m.id}
+                      className="rounded border border-red-700 px-2.5 py-1 text-[11px] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
                     >
                       削除
                     </button>
                   </div>
-                </div>
-
-                {editingEmailId === r.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="email"
-                      autoFocus
-                      placeholder="メールアドレス"
-                      value={editingEmailValue}
-                      onChange={(e) => setEditingEmailValue(e.target.value)}
-                      className="flex-1 rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
-                    />
-                    <button
-                      onClick={() => handleSaveEmail(r.id)}
-                      disabled={savingEmail}
-                      className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-                    >
-                      保存
-                    </button>
-                    <button
-                      onClick={() => setEditingEmailId(null)}
-                      className="rounded border border-border-color px-2.5 py-1 text-[11px] text-neutral-600 dark:text-neutral-300"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleStartEditEmail(r)}
-                      className="text-[11px] font-medium text-neutral-600 underline dark:text-neutral-400"
-                    >
-                      {r.email ? "メールを編集" : "メールを追加"}
-                    </button>
-                    {!r.claimed_by && (
-                      <button
-                        onClick={() => handleCopyInviteLink(r)}
-                        className="text-[11px] font-medium text-blue-600 underline dark:text-blue-400"
-                      >
-                        {copiedTokenId === r.id
-                          ? "コピーしました！"
-                          : "招待リンクをコピー"}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
 
-        <form
-          onSubmit={handleAddRoster}
-          className="flex flex-col gap-2 rounded-lg border border-border-color p-3"
-        >
-          <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-            1件ずつ登録
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              required
-              placeholder="氏名"
-              value={rosterName}
-              onChange={(e) => setRosterName(e.target.value)}
-              className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
-            />
-            <input
-              type="email"
-              placeholder="メールアドレス（あとで追加可）"
-              value={rosterEmail}
-              onChange={(e) => setRosterEmail(e.target.value)}
-              className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
+/** 新規メンバーの事前登録（設定ページの「新規メンバー登録」欄の中身） */
+export function NewMemberRegistrationSection({ profile }: { profile: Profile }) {
+  const s = useMemberManagement(profile);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {s.errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+          {s.errorMsg}
+        </p>
+      )}
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        部員だけでなく、管理者・マネージャーもここから事前登録できます。氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
+      </p>
+
+      {s.loadingRoster ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : s.roster.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-neutral-400 p-4 text-xs text-neutral-500 dark:border-neutral-700">
+          まだ事前登録がありません。
+        </p>
+      ) : (
+        <ul className="divide-y divide-border-color rounded-lg border border-border-color">
+          {s.sortedRoster.map((r) => (
+            <li key={r.id} className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-medium text-foreground">
+                      {r.display_name}
+                    </span>
+                    <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
+                      {rosterRoleLabel[r.role]}
+                    </span>
+                    {r.home_location && (
+                      <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
+                        {locationLabel[r.home_location]}
+                      </span>
+                    )}
+                  </span>
+                  {s.editingEmailId !== r.id &&
+                    (r.email ? (
+                      <span className="truncate text-neutral-500 dark:text-neutral-500">
+                        {r.email}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        メール未設定
+                      </span>
+                    ))}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:text-neutral-400">
+                    未登録
+                  </span>
+                  <button
+                    onClick={() => s.handleDeleteRoster(r.id)}
+                    className="text-red-600 dark:text-red-500"
+                  >
+                    削除
+                  </button>
+                </div>
+              </div>
+
+              {s.editingEmailId === r.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    autoFocus
+                    placeholder="メールアドレス"
+                    value={s.editingEmailValue}
+                    onChange={(e) => s.setEditingEmailValue(e.target.value)}
+                    className="flex-1 rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
+                  />
+                  <button
+                    onClick={() => s.handleSaveEmail(r.id)}
+                    disabled={s.savingEmail}
+                    className="rounded bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => s.setEditingEmailId(null)}
+                    className="rounded border border-border-color px-2.5 py-1 text-[11px] text-neutral-600 dark:text-neutral-300"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => s.handleStartEditEmail(r)}
+                    className="text-[11px] font-medium text-neutral-600 underline dark:text-neutral-400"
+                  >
+                    {r.email ? "メールを編集" : "メールを追加"}
+                  </button>
+                  {!r.claimed_by && (
+                    <button
+                      onClick={() => s.handleCopyInviteLink(r)}
+                      className="text-[11px] font-medium text-blue-600 underline dark:text-blue-400"
+                    >
+                      {s.copiedTokenId === r.id
+                        ? "コピーしました！"
+                        : "招待リンクをコピー"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        onSubmit={s.handleAddRoster}
+        className="flex flex-col gap-2 rounded-lg border border-border-color p-3"
+      >
+        <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+          1件ずつ登録
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            required
+            placeholder="氏名"
+            value={s.rosterName}
+            onChange={(e) => s.setRosterName(e.target.value)}
+            className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+          />
+          <input
+            type="email"
+            placeholder="メールアドレス（あとで追加可）"
+            value={s.rosterEmail}
+            onChange={(e) => s.setRosterEmail(e.target.value)}
+            className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={s.rosterRole}
+            onChange={(e) => s.setRosterRole(e.target.value as RosterRoleChoice)}
+            className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+          >
+            {(Object.keys(rosterRoleLabel) as RosterRoleChoice[]).map((r) => (
+              <option key={r} value={r}>
+                {rosterRoleLabel[r]}
+              </option>
+            ))}
+          </select>
+          {s.rosterRole !== "coach" && s.rosterRole !== "manager" && (
             <select
-              value={rosterRole}
-              onChange={(e) => setRosterRole(e.target.value as RosterRoleChoice)}
+              value={s.rosterLocation}
+              onChange={(e) => s.setRosterLocation(e.target.value as Location)}
               className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
             >
-              {(Object.keys(rosterRoleLabel) as RosterRoleChoice[]).map((r) => (
-                <option key={r} value={r}>
-                  {rosterRoleLabel[r]}
-                </option>
-              ))}
-            </select>
-            {rosterRole !== "coach" && rosterRole !== "manager" && (
-              <select
-                value={rosterLocation}
-                onChange={(e) => setRosterLocation(e.target.value as Location)}
-                className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
-              >
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {locationLabel[loc]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          {rosterRole !== "coach" && rosterRole !== "manager" && (
-            <select
-              value={rosterEntryYear}
-              onChange={(e) => setRosterEntryYear(e.target.value)}
-              className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
-            >
-              <option value="">入学年を選択</option>
-              {rosterEntryYearOptions.map((y) => (
-                <option key={y} value={y}>
-                  {y}年入学（現在{currentGrade(y)}年）
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {locationLabel[loc]}
                 </option>
               ))}
             </select>
           )}
-          <button
-            type="submit"
-            disabled={savingRoster}
-            className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        </div>
+        {s.rosterRole !== "coach" && s.rosterRole !== "manager" && (
+          <select
+            value={s.rosterEntryYear}
+            onChange={(e) => s.setRosterEntryYear(e.target.value)}
+            className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
           >
-            追加する
-          </button>
-        </form>
-      </section>
+            <option value="">入学年を選択</option>
+            {s.rosterEntryYearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}年入学（現在{currentGrade(y)}年）
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          type="submit"
+          disabled={s.savingRoster}
+          className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          追加する
+        </button>
+      </form>
     </div>
   );
 }

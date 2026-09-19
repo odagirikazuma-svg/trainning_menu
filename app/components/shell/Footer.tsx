@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "../AuthGate";
 import { useMyTaskCount } from "./useMyTaskCount";
+import { useMyEventTaskCount } from "./useMyEventTaskCount";
 
 type TabItem = {
   href: string;
@@ -17,18 +18,27 @@ function TabLink({ item, active }: { item: TabItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium ${
-        active ? "text-red-500" : "text-neutral-500 dark:text-neutral-400"
+      className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[10px] transition-colors ${
+        active
+          ? "font-semibold text-red-600 dark:text-red-400"
+          : "font-medium text-neutral-500 dark:text-neutral-400"
       }`}
     >
-      <span className="relative flex h-7 w-7 items-center justify-center">
+      {active && (
+        <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-red-600 dark:bg-red-400" />
+      )}
+      <span
+        className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+          active ? "bg-red-600/10 dark:bg-red-400/15" : ""
+        }`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={item.icon}
           alt={item.label}
-          className={`h-7 w-7 object-cover ${
+          className={`h-6 w-6 object-cover ${
             item.isPhotoIcon ? "rounded-full" : ""
-          } ${active ? "opacity-100" : "opacity-70"}`}
+          } ${active ? "opacity-100" : "opacity-60"}`}
         />
         {!!item.badge && item.badge > 0 && (
           <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">
@@ -44,6 +54,7 @@ function TabLink({ item, active }: { item: TabItem; active: boolean }) {
 export default function Footer({ profile }: { profile: Profile }) {
   const pathname = usePathname();
   const taskCount = useMyTaskCount(profile);
+  const eventTaskCount = useMyEventTaskCount(profile);
   const isCoach = profile.role === "coach";
 
   const items: TabItem[] = isCoach
@@ -63,7 +74,12 @@ export default function Footer({ profile }: { profile: Profile }) {
         },
         { href: "/team", label: "チーム", icon: "/icons/nav-team.png" },
         { href: "/board", label: "マット掲示板", icon: "/icons/nav-board.png" },
-        { href: "/events", label: "イベント", icon: "/icons/nav-events.png" },
+        {
+          href: "/events",
+          label: "イベント",
+          icon: "/icons/nav-events.png",
+          badge: eventTaskCount,
+        },
         { href: "/settings", label: "設定", icon: "/icons/nav-settings.png" },
       ];
 
