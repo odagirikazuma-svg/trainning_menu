@@ -2196,6 +2196,8 @@ function UnifiedCalendar({
   homeLocation: Location;
   otherLocationOffDates: Set<string>;
 }) {
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
   const selfLoggedDates = new Set<string>();
@@ -2213,32 +2215,93 @@ function UnifiedCalendar({
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const cells: (Date | null)[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  let cells: (Date | null)[];
+  let headerLabel: string;
+  if (viewMode === "month") {
+    const firstDay = new Date(year, month, 1);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    headerLabel = `${year}年${month + 1}月`;
+  } else {
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    cells = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+    const weekEnd = cells[6] as Date;
+    headerLabel =
+      weekStart.getMonth() === weekEnd.getMonth()
+        ? `${weekStart.getFullYear()}年${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getDate()}日`
+        : `${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  }
+
+  function handlePrev() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() - 7);
+      onCursorChange(d);
+    }
+  }
+
+  function handleNext() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() + 7);
+      onCursorChange(d);
+    }
+  }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="rounded-lg border border-border-color bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <button
-          onClick={() => onCursorChange(new Date(year, month - 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handlePrev}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＜
         </button>
-        <span className="text-sm font-semibold">
-          {year}年{month + 1}月
+        <span className="text-sm font-semibold text-foreground">
+          {headerLabel}
         </span>
         <button
-          onClick={() => onCursorChange(new Date(year, month + 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handleNext}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＞
         </button>
+      </div>
+      <div className="mb-2 flex justify-center">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+          {(
+            [
+              { v: "month", label: "月表示" },
+              { v: "week", label: "週表示" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => setViewMode(opt.v)}
+              className={`rounded-md px-3 py-1 font-medium ${
+                viewMode === opt.v
+                  ? "bg-red-600 text-white shadow"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
@@ -2246,10 +2309,10 @@ function UnifiedCalendar({
             key={w}
             className={
               idx === 0
-                ? "font-semibold text-red-400"
+                ? "font-semibold text-red-500 dark:text-red-400"
                 : idx === 6
-                  ? "font-semibold text-blue-400"
-                  : "text-neutral-500"
+                  ? "font-semibold text-blue-500 dark:text-blue-400"
+                  : "text-neutral-500 dark:text-neutral-500"
             }
           >
             {w}
@@ -2282,25 +2345,33 @@ function UnifiedCalendar({
               (needsSelfLog && !selfLoggedDates.has(key)));
           const weekday = date.getDay();
 
-          let bgClass = "bg-neutral-800 text-neutral-300";
+          let bgClass = "bg-surface-2 text-foreground";
           if (isHighlighted) {
-            bgClass = "bg-amber-950/40 font-bold text-amber-400";
+            bgClass =
+              "bg-amber-100 dark:bg-amber-950/40 font-bold text-amber-700 dark:text-amber-400";
           } else if (schedule?.isOff) {
-            bgClass = "bg-neutral-900 text-neutral-500";
+            bgClass =
+              "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-500";
           } else if (isAway) {
-            bgClass = "bg-purple-950/40 text-purple-300";
+            bgClass =
+              "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300";
           } else if (isCamp) {
-            bgClass = "bg-pink-950/40 text-pink-300";
+            bgClass =
+              "bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300";
           } else if (titleColor) {
-            bgClass = `${titleColor.fill} text-neutral-200`;
+            bgClass = `${titleColor.fill} text-neutral-800 dark:text-neutral-200`;
           }
 
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs active:bg-neutral-700 ${bgClass} ${
-                isHighlighted ? "ring-2 ring-amber-400" : "border-neutral-700"
+              className={`relative flex ${
+                viewMode === "week" ? "min-h-[84px]" : "min-h-[56px]"
+              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs active:bg-neutral-200 dark:active:bg-neutral-700 ${bgClass} ${
+                isHighlighted
+                  ? "ring-2 ring-amber-400"
+                  : "border-border-color"
               } ${
                 isMatchDay
                   ? "ring-2 ring-red-400"
@@ -2316,9 +2387,9 @@ function UnifiedCalendar({
                 className={
                   !isHighlighted && !titleColor && !isAway && !isCamp
                     ? weekday === 0
-                      ? "border-b-2 border-red-500 px-1 text-red-400"
+                      ? "border-b-2 border-red-500 px-1 text-red-500 dark:text-red-400"
                       : weekday === 6
-                        ? "border-b-2 border-blue-500 px-1 text-blue-400"
+                        ? "border-b-2 border-blue-500 px-1 text-blue-500 dark:text-blue-400"
                         : ""
                     : ""
                 }
@@ -2342,12 +2413,12 @@ function UnifiedCalendar({
               {schedule &&
                 !schedule.isOff &&
                 (schedule.dayType === "camp" || schedule.dayType === "away") && (
-                  <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-300">
+                  <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-600 dark:text-neutral-300">
                     {schedule.eventName || dayTypeLabel[schedule.dayType]}
                   </span>
                 )}
               {schedule?.isOff && (
-                <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-400">
+                <span className="max-w-full truncate rounded px-1 text-[7px] font-semibold text-neutral-500 dark:text-neutral-400">
                   {otherLocationOffDates.has(key)
                     ? "全体オフ"
                     : `${locationLabel[homeLocation]}のみオフ`}
@@ -2358,7 +2429,7 @@ function UnifiedCalendar({
                   {(schedule?.sessions ?? []).map((s, idx) => (
                     <span
                       key={idx}
-                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-400"
+                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500 dark:text-neutral-400"
                     >
                       <span
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
@@ -2396,7 +2467,7 @@ function UnifiedCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2.5 w-2.5 rounded ring-1 ring-neutral-400" />
           今日
@@ -2406,11 +2477,11 @@ function UnifiedCalendar({
           次の試合日
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded bg-purple-950/40" />
+          <span className="inline-block h-2.5 w-2.5 rounded bg-purple-100 dark:bg-purple-950/40" />
           出稽古
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+          <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
           合宿
         </span>
         {!disablePendingIndicator && (

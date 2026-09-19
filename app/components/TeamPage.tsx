@@ -18,13 +18,17 @@ import {
   TeamEventType,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import ScheduleEditForm, {
+  ScheduleDayPrefill,
+  ScheduleTimeSelect,
+} from "./ScheduleEditForm";
 
-// ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
+// 合宿/試合/出稽古バッジ配色（ライト/ダーク両対応）
 const dayTypeFillColorDark: Record<DayType, string> = {
   practice: "",
-  camp: "bg-pink-950/40 text-pink-400",
-  match: "bg-red-950/40 text-red-400",
-  away: "bg-purple-950/40 text-purple-400",
+  camp: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400",
+  match: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  away: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
 };
 
 type MemberRow = {
@@ -170,60 +174,7 @@ export default function TeamPage({
   const [loadingDayDetail, setLoadingDayDetail] = useState(false);
 
   const [editingSchedule, setEditingSchedule] = useState(false);
-  const [showCopyToDates, setShowCopyToDates] = useState(false);
-  const [copyTargetDates, setCopyTargetDates] = useState<string[]>([]);
-  const [copyDateInput, setCopyDateInput] = useState("");
-  const [savingCopyToDates, setSavingCopyToDates] = useState(false);
-  const [editCategory, setEditCategory] = useState<"off" | DayType>(
-    "practice"
-  );
-  const [editIncludeSessions, setEditIncludeSessions] = useState(true);
-  const [editEventName, setEditEventName] = useState("");
-  const [editOffBothLocations, setEditOffBothLocations] = useState(false);
-  const [editShareBothLocations, setEditShareBothLocations] = useState(true);
-  const [editSessions, setEditSessions] = useState<
-    {
-      type: SessionType;
-      time: string;
-      isFlexibleTime: boolean;
-      isJoint: boolean;
-      jointLocation: Location;
-      locationNote: string;
-    }[]
-  >([]);
-  const [savingSchedule, setSavingSchedule] = useState(false);
-
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkStartDate, setBulkStartDate] = useState("");
-  const [bulkEndDate, setBulkEndDate] = useState("");
-  const [bulkCategory, setBulkCategory] = useState<
-    "off" | "camp" | "match" | "away"
-  >("off");
-  const [bulkEventName, setBulkEventName] = useState("");
-  const [bulkOffBothLocations, setBulkOffBothLocations] = useState(false);
-  const [bulkShareBothLocations, setBulkShareBothLocations] = useState(true);
-  const [bulkIncludeSessions, setBulkIncludeSessions] = useState(false);
-  const [bulkSessions, setBulkSessions] = useState<
-    {
-      type: SessionType;
-      time: string;
-      isFlexibleTime: boolean;
-      isJoint: boolean;
-      jointLocation: Location;
-      locationNote: string;
-    }[]
-  >([
-    {
-      type: "mat",
-      time: "10:00",
-      isFlexibleTime: false,
-      isJoint: false,
-      jointLocation: "tama",
-      locationNote: "",
-    },
-  ]);
-  const [savingBulk, setSavingBulk] = useState(false);
-  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   const canEditMatMenu =
     profile.role === "captain" ||
@@ -559,541 +510,13 @@ export default function TeamPage({
   }
 
   function handleStartEditSchedule() {
-    const category: "off" | DayType = dayDetail?.is_off
-      ? "off"
-      : (dayDetail?.day_type ?? "practice");
-    setEditCategory(category);
-    setEditEventName(dayDetail?.event_name ?? "");
-    setEditOffBothLocations(false);
-    setEditShareBothLocations(true);
-    setEditIncludeSessions(
-      category === "practice" || (dayDetail?.sessions.length ?? 0) > 0
-    );
-    if (dayDetail && dayDetail.sessions.length > 0) {
-      setEditSessions(
-        dayDetail.sessions.map((s) => ({
-          type: s.session_type,
-          time: s.start_time ? s.start_time.slice(0, 5) : "",
-          isFlexibleTime: !s.start_time,
-          isJoint: s.is_joint,
-          jointLocation: s.joint_location ?? scheduleLocation,
-          locationNote: s.location_note ?? "",
-        }))
-      );
-    } else {
-      setEditSessions([
-        {
-          type: "mat",
-          time: "10:00",
-          isFlexibleTime: false,
-          isJoint: false,
-          jointLocation: scheduleLocation,
-          locationNote: "",
-        },
-      ]);
-    }
     setEditingSchedule(true);
   }
 
-  function updateEditSession(
-    idx: number,
-    patch: Partial<{
-      type: SessionType;
-      time: string;
-      isFlexibleTime: boolean;
-      isJoint: boolean;
-      jointLocation: Location;
-      locationNote: string;
-    }>
-  ) {
-    setEditSessions((prev) =>
-      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s))
-    );
-  }
-
-  function addEditSession() {
-    setEditSessions((prev) =>
-      prev.length >= 2
-        ? prev
-        : [
-            ...prev,
-            {
-              type: "weight",
-              time: "17:00",
-              isFlexibleTime: false,
-              isJoint: false,
-              jointLocation: scheduleLocation,
-              locationNote: "",
-            },
-          ]
-    );
-  }
-
-  function removeEditSession(idx: number) {
-    setEditSessions((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  function updateBulkSession(
-    idx: number,
-    patch: Partial<{
-      type: SessionType;
-      time: string;
-      isFlexibleTime: boolean;
-      isJoint: boolean;
-      jointLocation: Location;
-      locationNote: string;
-    }>
-  ) {
-    setBulkSessions((prev) =>
-      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s))
-    );
-  }
-
-  function addBulkSession() {
-    setBulkSessions((prev) =>
-      prev.length >= 2
-        ? prev
-        : [
-            ...prev,
-            {
-              type: "weight",
-              time: "17:00",
-              isFlexibleTime: false,
-              isJoint: false,
-              jointLocation: scheduleLocation,
-              locationNote: "",
-            },
-          ]
-    );
-  }
-
-  function removeBulkSession(idx: number) {
-    setBulkSessions((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
-    );
-  }
-
   function handleOpenBulk() {
-    setBulkStartDate(selectedScheduleDate ?? todayStr);
-    setBulkEndDate(selectedScheduleDate ?? todayStr);
-    setBulkCategory("off");
-    setBulkEventName("");
-    setBulkOffBothLocations(false);
-    setBulkShareBothLocations(true);
-    setBulkIncludeSessions(false);
-    setBulkSessions([
-      {
-        type: "mat",
-        time: "10:00",
-        isFlexibleTime: false,
-        isJoint: false,
-        jointLocation: scheduleLocation,
-        locationNote: "",
-      },
-    ]);
-    setBulkResult(null);
     setBulkOpen(true);
   }
 
-  async function handleSaveBulk() {
-    if (!bulkStartDate || !bulkEndDate) return;
-    if (bulkEndDate < bulkStartDate) {
-      setErrorMsg("終了日は開始日より後の日付にしてください。");
-      return;
-    }
-
-    setSavingBulk(true);
-    setBulkResult(null);
-
-    const dates: string[] = [];
-    const cursorDate = new Date(
-      Number(bulkStartDate.slice(0, 4)),
-      Number(bulkStartDate.slice(5, 7)) - 1,
-      Number(bulkStartDate.slice(8, 10))
-    );
-    const endDateObj = new Date(
-      Number(bulkEndDate.slice(0, 4)),
-      Number(bulkEndDate.slice(5, 7)) - 1,
-      Number(bulkEndDate.slice(8, 10))
-    );
-    while (cursorDate <= endDateObj) {
-      dates.push(toDateKey(cursorDate));
-      cursorDate.setDate(cursorDate.getDate() + 1);
-    }
-
-    let failCount = 0;
-    for (const d of dates) {
-      const errorMessage = await saveScheduleForDate(
-        d,
-        bulkCategory,
-        bulkSessions,
-        bulkIncludeSessions,
-        bulkEventName,
-        bulkOffBothLocations,
-        bulkShareBothLocations
-      );
-      if (errorMessage) failCount++;
-    }
-
-    setSavingBulk(false);
-    if (failCount > 0) {
-      setBulkResult(
-        `${dates.length}日中${dates.length - failCount}日を設定しました（${failCount}日は失敗しました）。`
-      );
-    } else {
-      setBulkResult(`${dates.length}日分をまとめて設定しました。`);
-    }
-    await loadMonthSchedule();
-    if (selectedScheduleDate) await loadDayDetail(selectedScheduleDate);
-  }
-
-  // 1日分の時間割を保存する共通処理（単日編集・期間一括設定の両方から使う）
-  async function saveScheduleForDate(
-    dateStr: string,
-    category: "off" | DayType,
-    sessions: {
-      type: SessionType;
-      time: string;
-      isFlexibleTime: boolean;
-      isJoint: boolean;
-      jointLocation: Location;
-      locationNote: string;
-    }[],
-    includeSessionsFlag: boolean,
-    eventName: string = "",
-    offBothLocations: boolean = false,
-    shareBothLocations: boolean = true
-  ): Promise<string | null> {
-    const isOff = category === "off";
-    const dayType: DayType = isOff ? "practice" : (category as DayType);
-    const includeSessions = isOff
-      ? false
-      : dayType === "practice"
-        ? true
-        : includeSessionsFlag;
-    const isAwayLike = dayType === "camp" || dayType === "away";
-    const trimmedEventName =
-      dayType === "camp" || dayType === "match" || dayType === "away"
-        ? eventName.trim() || null
-        : null;
-
-    const { data: dayRow, error: dayError } = await supabase
-      .from("schedule_days")
-      .upsert(
-        {
-          team_id: profile.team_id,
-          location: scheduleLocation,
-          date: dateStr,
-          is_off: isOff,
-          day_type: dayType,
-          event_name: trimmedEventName,
-          created_by: profile.id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "team_id,location,date" }
-      )
-      .select("id")
-      .single();
-
-    if (dayError || !dayRow) {
-      return dayError?.message ?? "時間割の保存に失敗しました。";
-    }
-
-    const dayId = (dayRow as { id: string }).id;
-
-    const { error: delError } = await supabase
-      .from("schedule_sessions")
-      .delete()
-      .eq("schedule_day_id", dayId);
-
-    if (delError) return delError.message;
-
-    if (!isOff && includeSessions && sessions.length > 0) {
-      const rows = sessions.map((s, idx) => {
-        // 合宿・出稽古は「両拠点に反映する」がオンの時だけ全体練習として扱う
-        const isJoint = isAwayLike ? shareBothLocations : s.isJoint;
-        return {
-          schedule_day_id: dayId,
-          session_no: idx + 1,
-          session_type: s.type,
-          start_time: s.isFlexibleTime ? null : s.time,
-          is_joint: isJoint,
-          joint_location: isJoint ? s.jointLocation : null,
-          location_note: isAwayLike ? s.locationNote.trim() || null : null,
-        };
-      });
-      const { error: insError } = await supabase
-        .from("schedule_sessions")
-        .insert(rows);
-      if (insError) return insError.message;
-
-      if (
-        !(
-          (dayType === "camp" || dayType === "match" || dayType === "away") &&
-          !shareBothLocations
-        )
-      ) {
-        for (const s of sessions) {
-          const isJoint = isAwayLike ? shareBothLocations : s.isJoint;
-          if (isJoint) {
-            const propagateError = await propagateJointSession(
-              dateStr,
-              scheduleLocation,
-              s.jointLocation,
-              {
-                type: s.type,
-                time: s.time,
-                isFlexibleTime: s.isFlexibleTime,
-                locationNote: isAwayLike ? s.locationNote.trim() || null : null,
-              }
-            );
-            if (propagateError) return propagateError;
-          }
-        }
-      }
-    }
-
-    if (
-      !isOff &&
-      (dayType === "camp" || dayType === "match" || dayType === "away") &&
-      shareBothLocations
-    ) {
-      await propagateDayType(
-        dateStr,
-        scheduleLocation,
-        dayType,
-        trimmedEventName
-      );
-    }
-
-    if (isOff && offBothLocations) {
-      const otherLocation: Location =
-        scheduleLocation === "tama" ? "otsuka" : "tama";
-      const { data: otherDay } = await supabase
-        .from("schedule_days")
-        .upsert(
-          {
-            team_id: profile.team_id,
-            location: otherLocation,
-            date: dateStr,
-            is_off: true,
-            day_type: "practice",
-            event_name: null,
-            created_by: profile.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "team_id,location,date" }
-        )
-        .select("id")
-        .single();
-      if (otherDay) {
-        await supabase
-          .from("schedule_sessions")
-          .delete()
-          .eq("schedule_day_id", (otherDay as { id: string }).id);
-      }
-    }
-
-    return null;
-  }
-
-  function handleAddCopyDate() {
-    if (!copyDateInput) return;
-    if (copyDateInput === selectedScheduleDate) {
-      setCopyDateInput("");
-      return;
-    }
-    setCopyTargetDates((prev) =>
-      prev.includes(copyDateInput) ? prev : [...prev, copyDateInput].sort()
-    );
-    setCopyDateInput("");
-  }
-
-  function handleRemoveCopyDate(dateStr: string) {
-    setCopyTargetDates((prev) => prev.filter((d) => d !== dateStr));
-  }
-
-  async function handleCopyScheduleToDates() {
-    if (!selectedScheduleDate) return;
-    if (copyTargetDates.length === 0) {
-      setErrorMsg("コピー先の日付を1つ以上追加してください。");
-      return;
-    }
-
-    setSavingCopyToDates(true);
-
-    for (const dateStr of copyTargetDates) {
-      const errorMessage = await saveScheduleForDate(
-        dateStr,
-        editCategory,
-        editSessions,
-        editIncludeSessions,
-        editEventName,
-        editOffBothLocations,
-        editShareBothLocations
-      );
-      if (errorMessage) {
-        setErrorMsg(`${formatMonthDay(dateStr)}の保存に失敗しました: ${errorMessage}`);
-        setSavingCopyToDates(false);
-        return;
-      }
-    }
-
-    setShowCopyToDates(false);
-    setCopyTargetDates([]);
-    setCopyDateInput("");
-    setSavingCopyToDates(false);
-    await loadMonthSchedule();
-  }
-
-  async function handleSaveSchedule() {
-    if (!selectedScheduleDate) return;
-    setSavingSchedule(true);
-
-    const errorMessage = await saveScheduleForDate(
-      selectedScheduleDate,
-      editCategory,
-      editSessions,
-      editIncludeSessions,
-      editEventName,
-      editOffBothLocations,
-      editShareBothLocations
-    );
-
-    if (errorMessage) {
-      setErrorMsg(errorMessage);
-      setSavingSchedule(false);
-      return;
-    }
-
-    setEditingSchedule(false);
-    setSavingSchedule(false);
-    await loadMonthSchedule();
-    await loadDayDetail(selectedScheduleDate);
-  }
-
-  async function propagateDayType(
-    dateStr: string,
-    editingLocation: Location,
-    dayType: DayType,
-    eventName: string | null = null
-  ) {
-    const otherLocation: Location =
-      editingLocation === "tama" ? "otsuka" : "tama";
-
-    await supabase.from("schedule_days").upsert(
-      {
-        team_id: profile.team_id,
-        location: otherLocation,
-        date: dateStr,
-        is_off: false,
-        day_type: dayType,
-        event_name: eventName,
-        created_by: profile.id,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "team_id,location,date", ignoreDuplicates: false }
-    );
-  }
-
-  // 全体練習のセッションを、もう一方の拠点のカレンダーにも自動で反映する
-  // （既に同じ内容の通知セッションがあれば時刻だけ更新し、無ければ空いている
-  //   セッション枠に追加する。すでに2セッション埋まっている場合は反映できない）
-  async function propagateJointSession(
-    dateStr: string,
-    editingLocation: Location,
-    hostLocation: Location,
-    session: {
-      type: SessionType;
-      time: string;
-      isFlexibleTime?: boolean;
-      locationNote?: string | null;
-    }
-  ): Promise<string | null> {
-    const otherLocation: Location =
-      editingLocation === "tama" ? "otsuka" : "tama";
-    const newStartTime = session.isFlexibleTime ? null : session.time;
-
-    const { data: existingDay } = await supabase
-      .from("schedule_days")
-      .select(
-        "id, sessions:schedule_sessions(id, session_no, session_type, start_time, is_joint, joint_location, location_note)"
-      )
-      .eq("team_id", profile.team_id)
-      .eq("location", otherLocation)
-      .eq("date", dateStr)
-      .maybeSingle();
-
-    const { data: dayRow, error: dayError } = await supabase
-      .from("schedule_days")
-      .upsert(
-        {
-          team_id: profile.team_id,
-          location: otherLocation,
-          date: dateStr,
-          is_off: false,
-          created_by: profile.id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "team_id,location,date" }
-      )
-      .select("id")
-      .single();
-
-    if (dayError || !dayRow) {
-      return dayError?.message ?? `${locationLabel[otherLocation]}の予定作成に失敗しました。`;
-    }
-
-    const dayId = (dayRow as { id: string }).id;
-    const existingSessions =
-      ((existingDay as unknown as { sessions: ScheduleSessionRow[] } | null)
-        ?.sessions ?? []);
-
-    // 既に同じ種別のセッションがあれば、joint化された内容に上書きする
-    // （相手拠点が独自にそのセッションを組んでいた場合も、こちらの内容を優先する）
-    const existingSameType = existingSessions.find(
-      (s) => s.session_type === session.type
-    );
-
-    if (existingSameType) {
-      const needsUpdate =
-        !existingSameType.is_joint ||
-        existingSameType.joint_location !== hostLocation ||
-        (existingSameType.start_time
-          ? existingSameType.start_time.slice(0, 5)
-          : "") !== (newStartTime ?? "") ||
-        existingSameType.location_note !== (session.locationNote ?? null);
-      if (needsUpdate) {
-        await supabase
-          .from("schedule_sessions")
-          .update({
-            start_time: newStartTime,
-            is_joint: true,
-            joint_location: hostLocation,
-            location_note: session.locationNote ?? null,
-          })
-          .eq("id", existingSameType.id);
-      }
-      return null;
-    }
-
-    const usedNos = new Set(existingSessions.map((s) => s.session_no));
-    const sessionNo = !usedNos.has(1) ? 1 : !usedNos.has(2) ? 2 : null;
-    if (sessionNo === null) {
-      return `${locationLabel[otherLocation]}は既に2セッション分の予定が入っているため、全体練習として反映できませんでした。`;
-    }
-
-    await supabase.from("schedule_sessions").insert({
-      schedule_day_id: dayId,
-      session_no: sessionNo,
-      session_type: session.type,
-      start_time: newStartTime,
-      is_joint: true,
-      joint_location: hostLocation,
-      location_note: session.locationNote ?? null,
-    });
-    return null;
-  }
 
   async function loadWeightMaxes() {
     setLoadingMaxes(true);
@@ -1793,195 +1216,18 @@ export default function TeamPage({
                   ✕
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col text-[11px] text-neutral-400">
-                  開始日
-                  <input
-                    type="date"
-                    value={bulkStartDate}
-                    onChange={(e) => setBulkStartDate(e.target.value)}
-                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                  />
-                </label>
-                <label className="flex flex-col text-[11px] text-neutral-400">
-                  終了日
-                  <input
-                    type="date"
-                    value={bulkEndDate}
-                    onChange={(e) => setBulkEndDate(e.target.value)}
-                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                  />
-                </label>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-neutral-400">区分</span>
-                <div className="grid grid-cols-4 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
-                  {(
-                    [
-                      { v: "off", label: "オフ" },
-                      { v: "camp", label: "合宿" },
-                      { v: "match", label: "試合" },
-                      { v: "away", label: "出稽古" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.v}
-                      type="button"
-                      onClick={() => setBulkCategory(opt.v)}
-                      className={`rounded-md py-2 font-medium ${
-                        bulkCategory === opt.v
-                          ? "bg-red-600 text-white shadow"
-                          : "text-neutral-400"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {bulkCategory === "off" && (
-                <label className="flex items-center gap-2 text-xs text-neutral-300">
-                  <input
-                    type="checkbox"
-                    checked={bulkOffBothLocations}
-                    onChange={(e) =>
-                      setBulkOffBothLocations(e.target.checked)
-                    }
-                  />
-                  両拠点ともオフにする
-                </label>
-              )}
-
-              {(bulkCategory === "camp" ||
-                bulkCategory === "match" ||
-                bulkCategory === "away") && (
-                <input
-                  type="text"
-                  value={bulkEventName}
-                  onChange={(e) => setBulkEventName(e.target.value)}
-                  placeholder={
-                    bulkCategory === "camp"
-                      ? "合宿名（例：夏合宿・山梨合宿）"
-                      : bulkCategory === "away"
-                        ? "出稽古先（例：◯◯大学、◯◯高校）"
-                        : "試合名（例：インカレ・県大会）"
-                  }
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                />
-              )}
-
-              {(bulkCategory === "camp" ||
-                bulkCategory === "match" ||
-                bulkCategory === "away") && (
-                <label className="flex items-center gap-2 text-xs text-neutral-300">
-                  <input
-                    type="checkbox"
-                    checked={bulkShareBothLocations}
-                    onChange={(e) =>
-                      setBulkShareBothLocations(e.target.checked)
-                    }
-                  />
-                  両拠点に反映する（チームで一緒に行く場合）
-                </label>
-              )}
-
-              {(bulkCategory === "camp" ||
-                bulkCategory === "match" ||
-                bulkCategory === "away") && (
-                <label className="flex items-center gap-2 text-xs text-neutral-300">
-                  <input
-                    type="checkbox"
-                    checked={bulkIncludeSessions}
-                    onChange={(e) => setBulkIncludeSessions(e.target.checked)}
-                  />
-                  期間中すべての日に同じ練習セクションも設定する
-                </label>
-              )}
-
-              {bulkCategory !== "off" && bulkIncludeSessions && (
-                <div className="flex flex-col gap-3">
-                  {bulkSessions.map((s, idx) => (
-                    <div
-                      key={idx}
-                      className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-neutral-400">
-                          第{idx + 1}セッション
-                        </span>
-                        {bulkSessions.length > 1 && (
-                          <button
-                            onClick={() => removeBulkSession(idx)}
-                            className="text-[11px] text-red-500"
-                          >
-                            削除
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={s.type}
-                          onChange={(e) =>
-                            updateBulkSession(idx, {
-                              type: e.target.value as SessionType,
-                            })
-                          }
-                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                        >
-                          <option value="mat">マット</option>
-                          <option value="running">ラン</option>
-                          <option value="weight">ウェイト</option>
-                        </select>
-                        <ScheduleTimeSelect
-                          value={s.time}
-                          onChange={(v) => updateBulkSession(idx, { time: v })}
-                        />
-                      </div>
-                      {(bulkCategory === "camp" || bulkCategory === "away") && (
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                          練習場所（任意）
-                          <input
-                            type="text"
-                            value={s.locationNote}
-                            onChange={(e) =>
-                              updateBulkSession(idx, {
-                                locationNote: e.target.value,
-                              })
-                            }
-                            placeholder="例：山梨県立武道館、◯◯大学 など"
-                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                          />
-                        </label>
-                      )}
-                    </div>
-                  ))}
-                  {bulkSessions.length < 2 && (
-                    <button
-                      onClick={addBulkSession}
-                      className="self-start text-xs font-medium text-neutral-300"
-                    >
-                      ＋ セッションを追加
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveBulk}
-                  disabled={savingBulk}
-                  className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-                >
-                  {savingBulk ? "設定中…" : "この内容でまとめて設定する"}
-                </button>
-              </div>
-              {bulkResult && (
-                <p className="rounded bg-emerald-950/40 p-2 text-[11px] text-emerald-400">
-                  {bulkResult}
-                </p>
-              )}
+              <ScheduleEditForm
+                teamId={profile.team_id}
+                authorId={profile.id}
+                location={scheduleLocation}
+                mode="range"
+                date={selectedScheduleDate ?? todayStr}
+                onCancel={() => setBulkOpen(false)}
+                onSaved={async () => {
+                  await loadMonthSchedule();
+                  if (selectedScheduleDate) await loadDayDetail(selectedScheduleDate);
+                }}
+              />
             </div>
           )}
           <div className="relative">
@@ -2037,297 +1283,22 @@ export default function TeamPage({
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(selectedScheduleDate)}の時間割
                       </h3>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[11px] text-neutral-400">
-                          区分
-                        </span>
-                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 p-1 text-[11px]">
-                          {(
-                            [
-                              { v: "off", label: "オフ" },
-                              { v: "practice", label: "練習" },
-                              { v: "camp", label: "合宿" },
-                              { v: "match", label: "試合" },
-                              { v: "away", label: "出稽古" },
-                            ] as const
-                          ).map((opt) => (
-                            <button
-                              key={opt.v}
-                              type="button"
-                              onClick={() => setEditCategory(opt.v)}
-                              className={`rounded-md py-2 font-medium ${
-                                editCategory === opt.v
-                                  ? "bg-red-600 text-white shadow"
-                                  : "text-neutral-400"
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {editCategory === "off" && (
-                        <label className="flex items-center gap-2 text-xs text-neutral-300">
-                          <input
-                            type="checkbox"
-                            checked={editOffBothLocations}
-                            onChange={(e) =>
-                              setEditOffBothLocations(e.target.checked)
-                            }
-                          />
-                          両拠点ともオフにする
-                        </label>
-                      )}
-
-                      {(editCategory === "camp" ||
-                        editCategory === "match" ||
-                        editCategory === "away") && (
-                        <input
-                          type="text"
-                          value={editEventName}
-                          onChange={(e) => setEditEventName(e.target.value)}
-                          placeholder={
-                            editCategory === "camp"
-                              ? "合宿名（例：夏合宿・山梨合宿）"
-                              : editCategory === "away"
-                                ? "出稽古先（例：◯◯大学、◯◯高校）"
-                                : "試合名（例：インカレ・県大会）"
-                          }
-                          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                        />
-                      )}
-
-                      {(editCategory === "camp" ||
-                        editCategory === "match" ||
-                        editCategory === "away") && (
-                        <label className="flex items-center gap-2 text-xs text-neutral-300">
-                          <input
-                            type="checkbox"
-                            checked={editShareBothLocations}
-                            onChange={(e) =>
-                              setEditShareBothLocations(e.target.checked)
-                            }
-                          />
-                          両拠点に反映する（チームで一緒に行く場合）
-                        </label>
-                      )}
-
-                      {(editCategory === "camp" ||
-                        editCategory === "match" ||
-                        editCategory === "away") && (
-                        <label className="flex items-center gap-2 text-xs text-neutral-300">
-                          <input
-                            type="checkbox"
-                            checked={editIncludeSessions}
-                            onChange={(e) =>
-                              setEditIncludeSessions(e.target.checked)
-                            }
-                          />
-                          この日も練習セクションを設定する
-                        </label>
-                      )}
-
-                      {editCategory !== "off" &&
-                        (editCategory === "practice" ||
-                          editIncludeSessions) && (
-                        <div className="flex flex-col gap-3">
-                          {editSessions.map((s, idx) => (
-                            <div
-                              key={idx}
-                              className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-neutral-400">
-                                  第{idx + 1}セッション
-                                </span>
-                                <button
-                                  onClick={() => removeEditSession(idx)}
-                                  className="text-[11px] text-red-500"
-                                >
-                                  削除
-                                </button>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <select
-                                  value={s.type}
-                                  onChange={(e) =>
-                                    updateEditSession(idx, {
-                                      type: e.target.value as SessionType,
-                                      isFlexibleTime:
-                                        e.target.value === "mat"
-                                          ? false
-                                          : s.isFlexibleTime,
-                                    })
-                                  }
-                                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                                >
-                                  <option value="mat">マット</option>
-                                  <option value="running">ラン</option>
-                                  <option value="weight">ウェイト</option>
-                                </select>
-                                {s.isFlexibleTime ? (
-                                  <div className="flex items-center rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-500">
-                                    時間は各自
-                                  </div>
-                                ) : (
-                                  <ScheduleTimeSelect
-                                    value={s.time}
-                                    onChange={(v) =>
-                                      updateEditSession(idx, { time: v })
-                                    }
-                                  />
-                                )}
-                              </div>
-                              {s.type !== "mat" && (
-                                <label className="flex items-center gap-2 text-[11px] text-neutral-400">
-                                  <input
-                                    type="checkbox"
-                                    checked={s.isFlexibleTime}
-                                    onChange={(e) =>
-                                      updateEditSession(idx, {
-                                        isFlexibleTime: e.target.checked,
-                                      })
-                                    }
-                                  />
-                                  時間は固定せず「各自」にする（部員がそれぞれ記録時に入力）
-                                </label>
-                              )}
-                              {editCategory === "camp" ||
-                              editCategory === "away" ? (
-                                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                                  練習場所（任意）
-                                  <input
-                                    type="text"
-                                    value={s.locationNote}
-                                    onChange={(e) =>
-                                      updateEditSession(idx, {
-                                        locationNote: e.target.value,
-                                      })
-                                    }
-                                    placeholder="例：山梨県立武道館、◯◯大学 など"
-                                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                                  />
-                                </label>
-                              ) : (
-                                <>
-                                  <label className="flex items-center gap-2 text-[11px] text-neutral-400">
-                                    <input
-                                      type="checkbox"
-                                      checked={s.isJoint}
-                                      onChange={(e) =>
-                                        updateEditSession(idx, {
-                                          isJoint: e.target.checked,
-                                        })
-                                      }
-                                    />
-                                    全体練習（合同）にする
-                                  </label>
-                                  {s.isJoint && (
-                                    <select
-                                      value={s.jointLocation}
-                                      onChange={(e) =>
-                                        updateEditSession(idx, {
-                                          jointLocation: e.target
-                                            .value as Location,
-                                        })
-                                      }
-                                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                                    >
-                                      {locations.map((loc) => (
-                                        <option key={loc} value={loc}>
-                                          {locationLabel[loc]}で実施
-                                        </option>
-                                      ))}
-                                    </select>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          ))}
-                          {editSessions.length < 2 && (
-                            <button
-                              onClick={addEditSession}
-                              className="self-start text-xs font-medium text-neutral-300"
-                            >
-                              ＋ セッションを追加
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2">
-                        <button
-                          onClick={() => setShowCopyToDates((v) => !v)}
-                          className="self-start text-xs font-medium text-neutral-300 underline"
-                        >
-                          {showCopyToDates
-                            ? "他の日へのコピーを閉じる"
-                            : "この内容を他の日にもコピーする"}
-                        </button>
-                        {showCopyToDates && (
-                          <div className="flex flex-col gap-2">
-                            <p className="text-[11px] text-neutral-500">
-                              下でコピー先の日付を1つずつ追加し、今設定している内容(区分・セッション)をまとめてコピーします。保存する前に、まずこちらを実行してください。
-                            </p>
-                            {copyTargetDates.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {copyTargetDates.map((d) => (
-                                  <button
-                                    key={d}
-                                    onClick={() => handleRemoveCopyDate(d)}
-                                    className="flex items-center gap-1 rounded bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                                  >
-                                    {formatMonthDay(d)}
-                                    <span className="text-red-500">✕</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="date"
-                                value={copyDateInput}
-                                onChange={(e) =>
-                                  setCopyDateInput(e.target.value)
-                                }
-                                className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                              />
-                              <button
-                                onClick={handleAddCopyDate}
-                                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
-                              >
-                                日付を追加
-                              </button>
-                            </div>
-                            <button
-                              onClick={handleCopyScheduleToDates}
-                              disabled={savingCopyToDates}
-                              className="self-start rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-                            >
-                              {savingCopyToDates
-                                ? "コピー中…"
-                                : `選んだ${copyTargetDates.length}日にコピーする`}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSaveSchedule}
-                          disabled={savingSchedule}
-                          className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-                        >
-                          保存する
-                        </button>
-                        <button
-                          onClick={() => setEditingSchedule(false)}
-                          className="flex-1 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-300"
-                        >
-                          キャンセル
-                        </button>
-                      </div>
+                      <ScheduleEditForm
+                        teamId={profile.team_id}
+                        authorId={profile.id}
+                        location={scheduleLocation}
+                        mode="single"
+                        date={selectedScheduleDate}
+                        existingDay={
+                          dayDetail as ScheduleDayPrefill | null | undefined
+                        }
+                        onCancel={() => setEditingSchedule(false)}
+                        onSaved={async () => {
+                          setEditingSchedule(false);
+                          await loadMonthSchedule();
+                          await loadDayDetail(selectedScheduleDate);
+                        }}
+                      />
                     </div>
                   ) : loadingDayDetail ? (
                     <p className="py-6 text-center text-xs text-neutral-500">
@@ -3005,47 +1976,6 @@ export default function TeamPage({
   );
 }
 
-function ScheduleTimeSelect({
-  value,
-  onChange,
-}: {
-  value: string; // "HH:MM"
-  onChange: (value: string) => void;
-}) {
-  const [hour, minute] = value ? value.split(":") : ["10", "00"];
-  const hours = Array.from({ length: 24 }, (_, i) =>
-    String(i).padStart(2, "0")
-  );
-  const minutes = ["00", "10", "20", "30", "40", "50"];
-
-  return (
-    <div className="flex gap-1">
-      <select
-        value={hour}
-        onChange={(e) => onChange(`${e.target.value}:${minute || "00"}`)}
-        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
-      >
-        {hours.map((h) => (
-          <option key={h} value={h}>
-            {h}時
-          </option>
-        ))}
-      </select>
-      <select
-        value={minute}
-        onChange={(e) => onChange(`${hour || "10"}:${e.target.value}`)}
-        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
-      >
-        {minutes.map((m) => (
-          <option key={m} value={m}>
-            {m}分
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 function MonthlyCalendar({
   cursor,
   onCursorChange,
@@ -3067,37 +1997,100 @@ function MonthlyCalendar({
   isCoach: boolean;
   viewLocation: Location;
 }) {
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const cells: (Date | null)[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  let cells: (Date | null)[];
+  let headerLabel: string;
+  if (viewMode === "month") {
+    const firstDay = new Date(year, month, 1);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    headerLabel = `${year}年${month + 1}月`;
+  } else {
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    cells = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+    const weekEnd = cells[6] as Date;
+    headerLabel =
+      weekStart.getMonth() === weekEnd.getMonth()
+        ? `${weekStart.getFullYear()}年${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getDate()}日`
+        : `${weekStart.getMonth() + 1}月${weekStart.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  }
+
+  function handlePrev() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() - 7);
+      onCursorChange(d);
+    }
+  }
+
+  function handleNext() {
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() + 7);
+      onCursorChange(d);
+    }
+  }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="rounded-lg border border-border-color bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <button
-          onClick={() => onCursorChange(new Date(year, month - 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handlePrev}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＜
         </button>
-        <span className="text-sm font-semibold">
-          {year}年{month + 1}月
+        <span className="text-sm font-semibold text-foreground">
+          {headerLabel}
         </span>
         <button
-          onClick={() => onCursorChange(new Date(year, month + 1, 1))}
-          className="rounded px-2 py-1 text-xs text-neutral-400 active:bg-neutral-800"
+          onClick={handleNext}
+          className="rounded px-2 py-1 text-xs text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           ＞
         </button>
       </div>
+      <div className="mb-2 flex justify-center">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+          {(
+            [
+              { v: "month", label: "月表示" },
+              { v: "week", label: "週表示" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => setViewMode(opt.v)}
+              className={`rounded-md px-3 py-1 font-medium ${
+                viewMode === opt.v
+                  ? "bg-red-600 text-white shadow"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {loading ? (
-        <p className="text-xs text-neutral-500">読み込み中…</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-500">読み込み中…</p>
       ) : (
         <>
           <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
@@ -3106,10 +2099,10 @@ function MonthlyCalendar({
                 key={w}
                 className={
                   idx === 0
-                    ? "font-semibold text-red-400"
+                    ? "font-semibold text-red-500 dark:text-red-400"
                     : idx === 6
-                      ? "font-semibold text-blue-400"
-                      : "text-neutral-500"
+                      ? "font-semibold text-blue-500 dark:text-blue-400"
+                      : "text-neutral-500 dark:text-neutral-500"
                 }
               >
                 {w}
@@ -3130,35 +2123,37 @@ function MonthlyCalendar({
                 <button
                   key={i}
                   onClick={() => onSelectDate(key)}
-                  className={`flex min-h-[64px] flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
+                  className={`flex ${
+                    viewMode === "week" ? "min-h-[96px]" : "min-h-[64px]"
+                  } flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     day?.is_off
-                      ? "border-neutral-700 bg-neutral-900"
+                      ? "border-border-color bg-neutral-100 dark:bg-neutral-900"
                       : !isCoach && isFullySubmitted
-                        ? "border-emerald-700 bg-emerald-900/60"
+                        ? "border-emerald-300 bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/60"
                         : day?.day_type === "camp"
-                          ? "border-pink-900/60 bg-pink-950/40"
+                          ? "border-pink-300 bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/40"
                           : day?.day_type === "match"
-                            ? "border-red-900/60 bg-red-950/40"
+                            ? "border-red-300 bg-red-100 dark:border-red-900/60 dark:bg-red-950/40"
                             : isHighlighted
-                              ? "border-amber-400 bg-amber-950/40 ring-1 ring-amber-400"
-                              : "border-neutral-700 bg-neutral-800 active:bg-neutral-700"
+                              ? "border-amber-400 bg-amber-100 ring-1 ring-amber-400 dark:bg-amber-950/40"
+                              : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
                   } ${isHighlighted && !day?.is_off ? "ring-1 ring-amber-400" : ""}`}
                 >
                   <span
                     className={`text-[11px] font-semibold ${
                       day?.is_off
-                        ? "text-neutral-600"
+                        ? "text-neutral-400 dark:text-neutral-600"
                         : !isHighlighted && weekday === 0
-                          ? "border-b-2 border-red-500 text-red-400"
+                          ? "border-b-2 border-red-500 text-red-500 dark:text-red-400"
                           : !isHighlighted && weekday === 6
-                            ? "border-b-2 border-blue-500 text-blue-400"
-                            : "text-neutral-200"
+                            ? "border-b-2 border-blue-500 text-blue-500 dark:text-blue-400"
+                            : "text-foreground"
                     }`}
                   >
                     {date.getDate()}
                   </span>
                   {day?.is_off && (
-                    <span className="text-[9px] text-neutral-500">
+                    <span className="text-[9px] text-neutral-500 dark:text-neutral-500">
                       全体オフ
                     </span>
                   )}
@@ -3184,7 +2179,7 @@ function MonthlyCalendar({
                         <span
                           className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                         />
-                        <span className="break-words text-[9px] text-neutral-300">
+                        <span className="break-words text-[9px] text-neutral-600 dark:text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time ? `${s.start_time.slice(0, 5)}〜` : "各自"}
                           {s.location_note
@@ -3201,7 +2196,9 @@ function MonthlyCalendar({
                     day && !day.is_off && count && (
                       <span
                         className={`text-[10px] font-semibold ${
-                          isFullySubmitted ? "text-emerald-300" : "text-neutral-300"
+                          isFullySubmitted
+                            ? "text-emerald-600 dark:text-emerald-300"
+                            : "text-neutral-600 dark:text-neutral-300"
                         }`}
                       >
                         {count.submitted}/{count.total}人
@@ -3213,7 +2210,7 @@ function MonthlyCalendar({
             })}
           </div>
           {isCoach ? (
-            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
               {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
                 <span key={t} className="flex items-center gap-1">
                   <span
@@ -3223,34 +2220,34 @@ function MonthlyCalendar({
                 </span>
               ))}
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
                 合宿
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-red-100 dark:bg-red-950/40" />
                 試合
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />
                 オフ
               </span>
             </p>
           ) : (
-            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500">
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-900/60 ring-1 ring-emerald-700" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-400 dark:bg-emerald-900/60 dark:ring-emerald-700" />
                 全員提出済み
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-950/40" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
                 合宿
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-red-950/40" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-red-100 dark:bg-red-950/40" />
                 試合
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-900" />
+                <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />
                 オフ
               </span>
             </p>

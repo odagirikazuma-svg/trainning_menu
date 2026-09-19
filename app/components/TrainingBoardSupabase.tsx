@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
@@ -19,6 +19,14 @@ import {
   trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import { useSubNav } from "./shell/AppShell";
+import SubTabBar from "./shell/SubTabBar";
+import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
+
+const locationSubTabItems = locations.map((loc) => ({
+  value: loc,
+  label: locationLabel[loc],
+}));
 
 // ダークテーマ用の合宿/試合/出稽古バッジ配色（types.tsの共有カラーはライト前提のため、ここではローカルに上書きする）
 const dayTypeFillColorDark: Record<DayType, string> = {
@@ -147,6 +155,9 @@ export default function TrainingBoardSupabase({
       location_note: string | null;
     }[];
   } | null>(null);
+  // コーチがマット掲示板から直接、時間割（練習セクション）を編集できるようにする
+  const [editingViewDateSchedule, setEditingViewDateSchedule] = useState(false);
+  const [showBulkScheduleForm, setShowBulkScheduleForm] = useState(false);
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [confirmingNew, setConfirmingNew] = useState(false);
@@ -340,21 +351,25 @@ export default function TrainingBoardSupabase({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  async function loadViewDateSchedule() {
+    const { data } = await supabase
+      .from("schedule_days")
+      .select(
+        "is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location, location_note)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("location", activeLocation)
+      .eq("date", viewDate)
+      .maybeSingle();
+    setViewDateSchedule(
+      (data as unknown as typeof viewDateSchedule) ?? null
+    );
+  }
+
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("schedule_days")
-        .select(
-          "is_off, day_type, event_name, sessions:schedule_sessions(session_type, start_time, is_joint, joint_location, location_note)"
-        )
-        .eq("team_id", profile.team_id)
-        .eq("location", activeLocation)
-        .eq("date", viewDate)
-        .maybeSingle();
-      setViewDateSchedule(
-        (data as unknown as typeof viewDateSchedule) ?? null
-      );
-    })();
+    loadViewDateSchedule();
+    setEditingViewDateSchedule(false);
+    setShowBulkScheduleForm(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewDate, activeLocation]);
 
@@ -818,6 +833,83 @@ export default function TrainingBoardSupabase({
 
   const practiceSection = (
     <div ref={practiceSectionRef}>
+        {isCoachView && (
+          <section className="mb-3 flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-neutral-400">
+                {locationLabel[activeLocation]}・{formatMonthDay(viewDate)}の時間割
+                {viewDateSchedule && !viewDateSchedule.is_off && (
+                  <span className="ml-1 font-normal text-neutral-500">
+                    （{dayTypeLabel[viewDateSchedule.day_type]}
+                    {viewDateSchedule.event_name
+                      ? `：${viewDateSchedule.event_name}`
+                      : ""}
+                    ）
+                  </span>
+                )}
+                {viewDateSchedule?.is_off && (
+                  <span className="ml-1 font-normal text-neutral-500">
+                    （オフ）
+                  </span>
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkScheduleForm(false);
+                  setEditingViewDateSchedule((v) => !v);
+                }}
+                className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
+              >
+                {editingViewDateSchedule
+                  ? "閉じる"
+                  : viewDateSchedule
+                    ? "編集する"
+                    : "時間割を設定する"}
+              </button>
+            </div>
+            {editingViewDateSchedule && (
+              <ScheduleEditForm
+                teamId={profile.team_id}
+                authorId={profile.id}
+                location={activeLocation}
+                mode="single"
+                date={viewDate}
+                existingDay={viewDateSchedule as ScheduleDayPrefill | null}
+                onCancel={() => setEditingViewDateSchedule(false)}
+                onSaved={async () => {
+                  setEditingViewDateSchedule(false);
+                  await loadViewDateSchedule();
+                }}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingViewDateSchedule(false);
+                setShowBulkScheduleForm((v) => !v);
+              }}
+              className="self-start text-[11px] font-medium text-neutral-400 underline"
+            >
+              {showBulkScheduleForm
+                ? "期間まとめて設定を閉じる"
+                : "期間でまとめて設定する（オフ・合宿・試合・出稽古）"}
+            </button>
+            {showBulkScheduleForm && (
+              <ScheduleEditForm
+                teamId={profile.team_id}
+                authorId={profile.id}
+                location={activeLocation}
+                mode="range"
+                date={viewDate}
+                onCancel={() => setShowBulkScheduleForm(false)}
+                onSaved={async () => {
+                  await loadViewDateSchedule();
+                }}
+              />
+            )}
+          </section>
+        )}
         {/* メニュー一覧（横スクロール、スマホ向け） */}
         <div className="flex flex-col gap-2">
           {showNewForm && canCreateMenu(profile.role) && (
@@ -1492,25 +1584,21 @@ export default function TrainingBoardSupabase({
     </div>
   );
 
+  // 拠点タブ（多摩／大塚）はフッター上のサブナビに表示する
+  const locationSubNav = useMemo(
+    () => (
+      <SubTabBar
+        items={locationSubTabItems}
+        active={activeLocation}
+        onChange={setActiveLocation}
+      />
+    ),
+    [activeLocation]
+  );
+  useSubNav(locationSubNav);
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
-      {/* 拠点タブ */}
-      <div className="sticky top-0 z-10 flex border-b border-neutral-800 bg-neutral-900">
-        {locations.map((loc) => (
-          <button
-            key={loc}
-            onClick={() => setActiveLocation(loc)}
-            className={`flex-1 py-3 text-sm font-medium transition ${
-              activeLocation === loc
-                ? "border-b-2 border-red-600 text-red-400"
-                : "text-neutral-500"
-            }`}
-          >
-            {locationLabel[loc]}
-          </button>
-        ))}
-      </div>
-
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
