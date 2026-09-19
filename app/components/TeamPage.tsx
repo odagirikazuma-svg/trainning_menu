@@ -1174,7 +1174,7 @@ export default function TeamPage({
 
         {/* 月間の練習スケジュール */}
         <section className="flex flex-col gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             月間の練習スケジュール
           </h2>
@@ -1492,7 +1492,7 @@ export default function TeamPage({
 
         {/* 日別の提出状況 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             {selectedScheduleDate
               ? `${formatMonthDay(selectedScheduleDate)}の提出状況`
@@ -1627,7 +1627,7 @@ export default function TeamPage({
 
         {/* 開催中のイベント */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             開催中のイベント
           </h2>
@@ -1724,7 +1724,7 @@ export default function TeamPage({
 
         {/* イベント一覧 */}
         <section className="flex flex-col gap-4 border-t border-neutral-800 pt-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             イベント一覧
           </h2>
