@@ -9,6 +9,7 @@ import {
 } from "../../components/shell/CalendarViewPrefProvider";
 import { createClient } from "../../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../../lib/push";
+import MemberManagementSection from "../../components/MemberManagementSection";
 
 const themeOptions: { value: ThemePref; label: string }[] = [
   { value: "system", label: "端末設定に合わせる" },
@@ -538,26 +539,6 @@ function IconSection() {
   );
 }
 
-function CoachManagementBridgeSection() {
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        メンバー管理
-      </h2>
-      <p className="rounded-lg border border-dashed border-neutral-400 p-3 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-        メンバー情報の編集・新規メンバー登録は、近日中にここへ移設予定です。現在は管理ページからご利用いただけます。
-      </p>
-      <a
-        href="/admin"
-        className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs font-medium text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
-      >
-        管理ページを開く
-      </a>
-    </section>
-  );
-}
-
 export default function SettingsPage() {
   const { profile, signOut } = useProfile();
 
@@ -568,7 +549,11 @@ export default function SettingsPage() {
       <IconSection />
       {profile.role !== "coach" && <NextMatchSection />}
       <NotificationSection />
-      {profile.role === "coach" && <CoachManagementBridgeSection />}
+      {profile.role === "coach" && (
+        <div className="border-t border-border-color pt-4">
+          <MemberManagementSection profile={profile} />
+        </div>
+      )}
 
       <div className="border-t border-border-color pt-4">
         <button

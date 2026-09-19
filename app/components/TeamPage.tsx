@@ -1490,8 +1490,6 @@ export default function TeamPage({
           </div>
         </section>
 
-        {!isCoach && (
-          <>
         {/* 日別の提出状況 */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -1514,30 +1512,34 @@ export default function TeamPage({
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
-            <div
-              className={
-                isCoach ? "flex flex-col gap-3" : "grid grid-cols-2 gap-3"
-              }
-            >
-              {(isCoach ? [scheduleLocation] : (["tama", "otsuka"] as Location[])).map((loc) => (
+            <div className="grid grid-cols-2 gap-3">
+              {(["tama", "otsuka"] as Location[]).map((loc) => (
                 <div key={loc} className="flex flex-col gap-3">
-                  {!isCoach && (
-                    <p className="text-xs font-semibold text-neutral-400">
-                      {locationLabel[loc]}
-                    </p>
-                  )}
+                  <p className="text-xs font-semibold text-neutral-400">
+                    {locationLabel[loc]}
+                  </p>
                   {daySubmissionDetail.filter((d) => d.location === loc)
                     .length === 0 ? (
                     <p className="text-[11px] text-neutral-600">該当なし</p>
                   ) : (
-                    groupDetailByGrade(
-                      daySubmissionDetail.filter((d) => d.location === loc)
-                    ).map((group) => (
+                    // 学年ごとの区切りが多摩・大塚で縦にずれないよう、両拠点を合わせた
+                    // 学年一覧（groupDetailByGrade(daySubmissionDetail)）を基準に、
+                    // 各拠点はその学年に該当する部員だけを絞り込んで表示する
+                    groupDetailByGrade(daySubmissionDetail).map((group) => {
+                      const rowsForLoc = group.rows.filter(
+                        (d) => d.location === loc
+                      );
+                      return (
                       <div key={group.label} className="flex flex-col gap-1">
                         <p className="text-[10px] text-neutral-500">
                           {group.label}
                         </p>
-                        {group.rows.map((d) => {
+                        {rowsForLoc.length === 0 ? (
+                          <p className="text-[11px] text-neutral-700 dark:text-neutral-600">
+                            該当なし
+                          </p>
+                        ) : (
+                        rowsForLoc.map((d) => {
                           const resolved =
                             d.matStatus === "missing" ||
                             d.matStatus === "report" ||
@@ -1597,17 +1599,17 @@ export default function TeamPage({
                               )}
                             </button>
                           );
-                        })}
+                        })
+                        )}
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               ))}
             </div>
           )}
         </section>
-          </>
-        )}
 
         {/* 開催中のイベント */}
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
@@ -2008,6 +2010,22 @@ function MonthlyCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultCalendarView]);
 
+  // 週表示になったタイミング（トグル操作・初期表示が週表示の場合のいずれも）で、
+  // 選択中の日付（なければ今日）を含む週がまだ表示されていなければ、その週にジャンプする
+  useEffect(() => {
+    if (viewMode !== "week") return;
+    const targetKey = highlightDate ?? toDateKey(new Date());
+    const [ty, tm, td] = targetKey.split("-").map(Number);
+    const target = new Date(ty, tm - 1, td);
+    const weekStart = new Date(cursor);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    if (target >= weekStart && target <= weekEnd) return;
+    onCursorChange(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
+
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
 
@@ -2086,18 +2104,7 @@ function MonthlyCalendar({
             <button
               key={opt.v}
               type="button"
-              onClick={() => {
-                if (opt.v === "week" && viewMode !== "week") {
-                  // 週表示に切り替えたときは、選択中の日付（なければ今日）を含む週を表示する
-                  if (highlightDate) {
-                    const [ty, tm, td] = highlightDate.split("-").map(Number);
-                    onCursorChange(new Date(ty, tm - 1, td));
-                  } else {
-                    onCursorChange(new Date());
-                  }
-                }
-                setViewMode(opt.v);
-              }}
+              onClick={() => setViewMode(opt.v)}
               className={`rounded-md px-3 py-1 font-medium ${
                 viewMode === opt.v
                   ? "bg-red-600 text-white shadow"

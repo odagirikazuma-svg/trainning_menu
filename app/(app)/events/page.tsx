@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useProfile, useSubNav } from "../../components/shell/AppShell";
 import SubTabBar from "../../components/shell/SubTabBar";
 import { createClient } from "../../lib/supabase/client";
-import { teamEventTypeLabel } from "../../lib/types";
+import { Location, locationLabel, teamEventTypeLabel } from "../../lib/types";
 
 type EventTab = "weight_max" | "body_composition" | "match_reflection";
 
@@ -654,6 +654,470 @@ function TeamEventTab({
   );
 }
 
+// ===== コーチ向け：イベントの作成・集計管理 =====
+
+type EventMemberRow = {
+  id: string;
+  display_name: string;
+  home_location: Location | null;
+  role: string;
+};
+
+function EventTargetPicker({
+  members,
+  selectedIds,
+  onChange,
+}: {
+  members: EventMemberRow[];
+  selectedIds: Set<string>;
+  onChange: (ids: Set<string>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+          対象者(選ばなければ全員が対象になります)
+        </span>
+        {selectedIds.size > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange(new Set())}
+            className="text-[11px] text-neutral-500 underline dark:text-neutral-400"
+          >
+            選択をクリア
+          </button>
+        )}
+      </div>
+      <div className="max-h-40 overflow-y-auto rounded border border-border-color bg-background p-2">
+        <div className="flex flex-col gap-1">
+          {members
+            .filter(
+              (m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob"
+            )
+            .map((m) => (
+              <label
+                key={m.id}
+                className="flex items-center gap-2 text-xs text-foreground"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(m.id)}
+                  onChange={(e) => {
+                    const next = new Set(selectedIds);
+                    if (e.target.checked) next.add(m.id);
+                    else next.delete(m.id);
+                    onChange(next);
+                  }}
+                  className="h-3.5 w-3.5"
+                />
+                {m.display_name}
+                <span className="text-neutral-500 dark:text-neutral-500">
+                  （{locationLabel[m.home_location ?? "tama"]}）
+                </span>
+              </label>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useEventMembers(teamId: string) {
+  const supabase = createClient();
+  const [members, setMembers] = useState<EventMemberRow[]>([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, display_name, home_location, role")
+        .eq("team_id", teamId);
+      setMembers((data ?? []) as EventMemberRow[]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
+  return members;
+}
+
+function WeightMaxCoachManagement({
+  profile,
+}: {
+  profile: ReturnType<typeof useProfile>["profile"];
+}) {
+  const supabase = createClient();
+  const members = useEventMembers(profile.team_id);
+  const [event, setEvent] = useState<WeightMaxEventRow | null | undefined>(
+    undefined
+  );
+  const [submittedCount, setSubmittedCount] = useState(0);
+  const [targetCount, setTargetCount] = useState<number | null>(null);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function load() {
+    const { data, error } = await supabase
+      .from("weight_max_events")
+      .select("id, deadline, created_at, closed_at")
+      .eq("team_id", profile.team_id)
+      .is("closed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    const ev = (data as WeightMaxEventRow | null) ?? null;
+    setEvent(ev);
+    if (ev) {
+      const { data: maxData } = await supabase
+        .from("weight_maxes")
+        .select("author_id")
+        .eq("team_id", profile.team_id)
+        .eq("event_id", ev.id);
+      setSubmittedCount((maxData ?? []).length);
+
+      const { data: targetData } = await supabase
+        .from("weight_max_event_targets")
+        .select("member_id")
+        .eq("event_id", ev.id);
+      setTargetCount(
+        targetData && targetData.length > 0 ? targetData.length : null
+      );
+    } else {
+      setTargetCount(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDeadline) return;
+    setSaving(true);
+    const { data: inserted, error } = await supabase
+      .from("weight_max_events")
+      .insert({
+        team_id: profile.team_id,
+        deadline: newDeadline,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      setErrorMsg(error.message);
+      setSaving(false);
+      return;
+    }
+    if (selectedTargetIds.size > 0 && inserted) {
+      const targetRows = Array.from(selectedTargetIds).map((memberId) => ({
+        event_id: (inserted as { id: string }).id,
+        member_id: memberId,
+      }));
+      const { error: targetError } = await supabase
+        .from("weight_max_event_targets")
+        .insert(targetRows);
+      if (targetError) setErrorMsg(targetError.message);
+    }
+    setNewDeadline("");
+    setSelectedTargetIds(new Set());
+    await load();
+    setSaving(false);
+  }
+
+  async function handleEnd() {
+    if (!event) return;
+    if (
+      !window.confirm(
+        "このウェイトMAX集計を終了しますか？（これまでの提出内容はチームページの履歴に残ります）"
+      )
+    )
+      return;
+    const { error } = await supabase
+      .from("weight_max_events")
+      .update({ closed_at: new Date().toISOString() })
+      .eq("id", event.id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      await load();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        締切日を設定すると、部員のマイページの「タスク一覧」に提出タスクが表示されます(期日を過ぎると赤く強調され、提出すると一覧から消えます)。提出内容はチームページで確認できます。
+      </p>
+      {errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+          {errorMsg}
+        </p>
+      )}
+      {event === undefined ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : event ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-border-color bg-surface-2 p-3">
+          <p className="text-sm text-foreground">
+            締切: <span className="font-semibold">{event.deadline}</span>
+          </p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            提出済み {submittedCount}人 /{" "}
+            {targetCount ??
+              members.filter(
+                (m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob"
+              ).length}
+            人
+            {targetCount != null && "（対象者を限定しています）"}
+          </p>
+          <button
+            onClick={handleEnd}
+            className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
+          >
+            この集計を終了する
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleCreate} className="flex flex-col gap-2">
+          <EventTargetPicker
+            members={members}
+            selectedIds={selectedTargetIds}
+            onChange={setSelectedTargetIds}
+          />
+          <div className="flex items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              締切日
+              <input
+                type="date"
+                required
+                value={newDeadline}
+                onChange={(e) => setNewDeadline(e.target.value)}
+                className="rounded border border-border-color bg-background px-2 py-1.5 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+            >
+              集計を開始する
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function TeamEventCoachManagement({
+  type,
+  profile,
+}: {
+  type: "match_reflection" | "body_composition";
+  profile: ReturnType<typeof useProfile>["profile"];
+}) {
+  const supabase = createClient();
+  const members = useEventMembers(profile.team_id);
+  const [event, setEvent] = useState<TeamEventRow | null | undefined>(
+    undefined
+  );
+  const [submittedCount, setSubmittedCount] = useState(0);
+  const [targetCount, setTargetCount] = useState<number | null>(null);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function load() {
+    const { data, error } = await supabase
+      .from("team_events")
+      .select("id, type, title, deadline, closed_at")
+      .eq("team_id", profile.team_id)
+      .eq("type", type)
+      .is("closed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    const ev = (data as TeamEventRow | null) ?? null;
+    setEvent(ev);
+    if (ev) {
+      const { data: subData } = await supabase
+        .from("team_event_submissions")
+        .select("author_id")
+        .eq("event_id", ev.id);
+      setSubmittedCount((subData ?? []).length);
+
+      const { data: targetData } = await supabase
+        .from("team_event_targets")
+        .select("member_id")
+        .eq("event_id", ev.id);
+      setTargetCount(
+        targetData && targetData.length > 0 ? targetData.length : null
+      );
+    } else {
+      setTargetCount(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDeadline) return;
+    if (type === "match_reflection" && !newTitle.trim()) return;
+    setSaving(true);
+    const { data: inserted, error } = await supabase
+      .from("team_events")
+      .insert({
+        team_id: profile.team_id,
+        type,
+        title: newTitle.trim(),
+        deadline: newDeadline,
+        created_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      setErrorMsg(error.message);
+      setSaving(false);
+      return;
+    }
+    if (type === "match_reflection" && selectedTargetIds.size > 0 && inserted) {
+      const targetRows = Array.from(selectedTargetIds).map((memberId) => ({
+        event_id: (inserted as { id: string }).id,
+        member_id: memberId,
+      }));
+      const { error: targetError } = await supabase
+        .from("team_event_targets")
+        .insert(targetRows);
+      if (targetError) setErrorMsg(targetError.message);
+    }
+    setNewDeadline("");
+    setNewTitle("");
+    setSelectedTargetIds(new Set());
+    await load();
+    setSaving(false);
+  }
+
+  async function handleEnd() {
+    if (!event) return;
+    if (
+      !window.confirm(
+        "このイベントを終了しますか？（これまでの提出内容はチームページの履歴に残ります）"
+      )
+    )
+      return;
+    const { error } = await supabase
+      .from("team_events")
+      .update({ closed_at: new Date().toISOString() })
+      .eq("id", event.id);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      await load();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        締切日を設定すると、部員のマイページの「タスク一覧」に提出タスクが表示されます(期日を過ぎると赤く強調され、提出すると一覧から消えます)。提出内容はチームページで確認できます。
+      </p>
+      {errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+          {errorMsg}
+        </p>
+      )}
+      {event === undefined ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : event ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-border-color bg-surface-2 p-3">
+          {event.title && (
+            <p className="text-sm font-semibold text-foreground">
+              {event.title}
+            </p>
+          )}
+          <p className="text-sm text-foreground">
+            締切: <span className="font-semibold">{event.deadline}</span>
+          </p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            提出済み {submittedCount}人 /{" "}
+            {targetCount ??
+              members.filter(
+                (m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob"
+              ).length}
+            人
+            {targetCount != null && "（対象者を限定しています）"}
+          </p>
+          <button
+            onClick={handleEnd}
+            className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
+          >
+            このイベントを終了する
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleCreate} className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+            {type === "match_reflection"
+              ? "タイトル(例：全日本学生選手権、東日本学生リーグ戦)"
+              : "タイトル(任意)"}
+            <input
+              type="text"
+              required={type === "match_reflection"}
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className="rounded border border-border-color bg-background px-2 py-1.5 text-sm text-foreground"
+            />
+          </label>
+          {type === "match_reflection" && (
+            <EventTargetPicker
+              members={members}
+              selectedIds={selectedTargetIds}
+              onChange={setSelectedTargetIds}
+            />
+          )}
+          <div className="flex items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              締切日
+              <input
+                type="date"
+                required
+                value={newDeadline}
+                onChange={(e) => setNewDeadline(e.target.value)}
+                className="rounded border border-border-color bg-background px-2 py-1.5 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+            >
+              イベントを作成する
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 const eventSubTabItems = (Object.keys(tabLabel) as EventTab[]).map((t) => ({
   value: t,
   label: tabLabel[t],
@@ -662,6 +1126,7 @@ const eventSubTabItems = (Object.keys(tabLabel) as EventTab[]).map((t) => ({
 export default function EventsPage() {
   const { profile } = useProfile();
   const [tab, setTab] = useState<EventTab>("weight_max");
+  const isCoach = profile.role === "coach";
 
   // node は useMemo で安定させる（毎レンダー新しいJSXを渡すと無限ループの原因になる）
   const eventsSubNav = useMemo(
@@ -672,13 +1137,30 @@ export default function EventsPage() {
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
-      {tab === "weight_max" && <WeightMaxTab profile={profile} />}
-      {tab === "body_composition" && (
-        <TeamEventTab type="body_composition" profile={profile} />
+      {isCoach && (
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+          イベントを作成する
+        </h2>
       )}
-      {tab === "match_reflection" && (
-        <TeamEventTab type="match_reflection" profile={profile} />
-      )}
+      {tab === "weight_max" &&
+        (isCoach ? (
+          <WeightMaxCoachManagement profile={profile} />
+        ) : (
+          <WeightMaxTab profile={profile} />
+        ))}
+      {tab === "body_composition" &&
+        (isCoach ? (
+          <TeamEventCoachManagement type="body_composition" profile={profile} />
+        ) : (
+          <TeamEventTab type="body_composition" profile={profile} />
+        ))}
+      {tab === "match_reflection" &&
+        (isCoach ? (
+          <TeamEventCoachManagement type="match_reflection" profile={profile} />
+        ) : (
+          <TeamEventTab type="match_reflection" profile={profile} />
+        ))}
     </div>
   );
 }
