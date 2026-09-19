@@ -979,9 +979,49 @@ export default function TrainingBoardSupabase({
         </div>
 
       {isCoachView && (
-        <h3 className="text-xs font-semibold text-neutral-400">
-          {formatMonthDay(viewDate)}の練習メニュー
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold text-neutral-400">
+            {formatMonthDay(viewDate)}の練習メニュー
+            {viewDateSchedule && !viewDateSchedule.is_off && (
+              <span className="ml-1 font-normal text-neutral-500">
+                （{dayTypeLabel[viewDateSchedule.day_type]}
+                {viewDateSchedule.event_name
+                  ? `：${viewDateSchedule.event_name}`
+                  : ""}
+                ）
+              </span>
+            )}
+            {viewDateSchedule?.is_off && (
+              <span className="ml-1 font-normal text-neutral-500">（オフ）</span>
+            )}
+          </h3>
+          <button
+            type="button"
+            onClick={() => setEditingViewDateSchedule((v) => !v)}
+            className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
+          >
+            {editingViewDateSchedule
+              ? "閉じる"
+              : viewDateSchedule
+                ? "時間割を編集する"
+                : "時間割を設定する"}
+          </button>
+        </div>
+      )}
+      {isCoachView && editingViewDateSchedule && (
+        <ScheduleEditForm
+          teamId={profile.team_id}
+          authorId={profile.id}
+          location={activeLocation}
+          mode="single"
+          date={viewDate}
+          existingDay={viewDateSchedule as ScheduleDayPrefill | null}
+          onCancel={() => setEditingViewDateSchedule(false)}
+          onSaved={async () => {
+            setEditingViewDateSchedule(false);
+            await loadViewDateSchedule();
+          }}
+        />
       )}
       {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
@@ -1303,75 +1343,30 @@ export default function TrainingBoardSupabase({
           </>
         ) : (
           <div className="rounded-lg border border-neutral-800 p-4">
-            <div className="mt-2 mb-1 flex items-center justify-between gap-2 text-xs text-neutral-500">
-              <span>
-                {locationLabel[activeLocation]}・{viewDate}
-                {matSessionForViewDate?.start_time &&
-                  `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
-                {viewDateSchedule && !viewDateSchedule.is_off && (
-                  <span className="ml-1">
-                    （{dayTypeLabel[viewDateSchedule.day_type]}
-                    {viewDateSchedule.event_name
-                      ? `：${viewDateSchedule.event_name}`
-                      : ""}
-                    ）
-                  </span>
-                )}
-                {viewDateSchedule?.is_off && <span className="ml-1">（オフ）</span>}
-              </span>
-              {isCoachView && (
-                <button
-                  type="button"
-                  onClick={() => setEditingViewDateSchedule((v) => !v)}
-                  className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
-                >
-                  {editingViewDateSchedule
-                    ? "閉じる"
-                    : viewDateSchedule
-                      ? "このセッションを編集する"
-                      : "時間割を設定する"}
-                </button>
-              )}
+            <div className="mt-2 mb-1 text-xs text-neutral-500">
+              {locationLabel[activeLocation]}・{viewDate}
+              {matSessionForViewDate?.start_time &&
+                `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
             </div>
-
-            {editingViewDateSchedule && (
-              <div className="mb-3">
-                <ScheduleEditForm
-                  teamId={profile.team_id}
-                  authorId={profile.id}
-                  location={activeLocation}
-                  mode="single"
-                  date={viewDate}
-                  existingDay={viewDateSchedule as ScheduleDayPrefill | null}
-                  onCancel={() => setEditingViewDateSchedule(false)}
-                  onSaved={async () => {
-                    setEditingViewDateSchedule(false);
-                    await loadViewDateSchedule();
-                  }}
-                />
-              </div>
-            )}
-
-            {!editingViewDateSchedule &&
-              (matSessionForViewDate ? (
-                <div>
-                  <p className="mb-3 text-sm text-neutral-400">
-                    このセッションのメニューはまだ作成されていません
-                  </p>
-                  {canCreateMenu(profile.role) && (
-                    <button
-                      onClick={handleOpenNewForm}
-                      className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
-                    >
-                      このセッションのメニューを作成する
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <p className="py-2 text-center text-sm text-neutral-500">
-                  まだスケジュールは作成されていません。
+            {matSessionForViewDate ? (
+              <div>
+                <p className="mb-3 text-sm text-neutral-400">
+                  このセッションのメニューはまだ作成されていません
                 </p>
-              ))}
+                {canCreateMenu(profile.role) && (
+                  <button
+                    onClick={handleOpenNewForm}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
+                  >
+                    このセッションのメニューを作成する
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="py-2 text-center text-sm text-neutral-500">
+                まだスケジュールは作成されていません。
+              </p>
+            )}
           </div>
         )}
     </div>

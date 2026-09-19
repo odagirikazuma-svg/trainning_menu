@@ -912,11 +912,11 @@ export default function CoachAdminPage({
 
         {adminSubTab === "submissions" && (
         <>
-        {/* 報告状況一覧 */}
+        {/* 提出状況一覧 */}
         <section className="flex flex-col gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            報告状況一覧
+            提出状況一覧
           </h2>
 
           <ReportCalendar
@@ -1092,7 +1092,7 @@ export default function CoachAdminPage({
         <>
         {/* 怪我人一覧 */}
         <section className="flex flex-col gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我人一覧
           </h2>
@@ -1222,7 +1222,7 @@ function InjuryListItem({
         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs active:bg-black/5"
       >
         <span className="flex flex-col">
-          <span className="font-medium text-neutral-100">
+          <span className="font-medium text-foreground">
             {inj.author?.display_name ?? "不明"}
           </span>
           <span className="text-neutral-400">
@@ -1237,7 +1237,7 @@ function InjuryListItem({
         <span className="text-neutral-600">{isOpen ? "︿" : "﹀"}</span>
       </button>
       {isOpen && (
-        <div className="flex flex-col gap-1 border-t border-neutral-800 px-3 py-2.5 text-xs text-neutral-300">
+        <div className="flex flex-col gap-1 border-t border-neutral-800 px-3 py-2.5 text-xs text-foreground">
           {inj.detail && <p className="whitespace-pre-wrap">{inj.detail}</p>}
           <p>
             完治見込み日:{" "}
