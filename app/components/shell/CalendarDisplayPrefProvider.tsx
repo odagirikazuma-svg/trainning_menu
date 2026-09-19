@@ -6,7 +6,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 // マス目のスペースが限られているため、最大2つ（スロット1・スロット2）まで選べる。
 export type CalendarSlotOption =
   | "none"
-  | "mat_time"
   | "training_time"
   | "actual_type"
   | "training_content"
@@ -14,7 +13,6 @@ export type CalendarSlotOption =
 
 export const calendarSlotOptionLabel: Record<CalendarSlotOption, string> = {
   none: "表示しない",
-  mat_time: "マット開始時刻（予定）",
   training_time: "トレーニング開始時刻（予定）",
   actual_type: "実際に行った種目（ラン/ウェイト/その他）",
   training_content: "メニューのタイトル",
@@ -23,7 +21,6 @@ export const calendarSlotOptionLabel: Record<CalendarSlotOption, string> = {
 
 export const calendarSlotOptions: CalendarSlotOption[] = [
   "none",
-  "mat_time",
   "training_time",
   "actual_type",
   "training_content",
@@ -38,8 +35,8 @@ export type CalendarDisplayPref = {
 };
 
 const DEFAULT_PREF: CalendarDisplayPref = {
-  slot1: "mat_time",
-  // 「予定」ではなく「実際に何をやったか」が分かるようにデフォルトはactual_typeにする
+  // 「予定」ではなく「実際に何をやったか」が分かるようにデフォルトはactual_type・タイトルにする
+  slot1: "training_content",
   slot2: "actual_type",
   highlightMatch: true,
 };

@@ -2444,15 +2444,6 @@ function UnifiedCalendar({
     title: string | undefined
   ) {
     if (slot === "none") return null;
-    if (slot === "mat_time") {
-      const s = schedule?.sessions.find((s) => s.type === "mat");
-      if (!s) return null;
-      return (
-        <span key={slotId} className="max-w-full truncate">
-          {formatSessionSlot(s, schedule)}
-        </span>
-      );
-    }
     if (slot === "training_time") {
       const s = schedule?.sessions.find((s) => s.type !== "mat");
       if (!s) return null;

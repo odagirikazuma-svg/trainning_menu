@@ -143,18 +143,18 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
       </span>
       {nextMatch ? (
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="shrink-0 text-[10px] font-semibold leading-none text-indigo-200">
+          <span className="shrink-0 text-[10px] font-semibold leading-none text-white/70">
             次の試合まで
           </span>
           <span className="shrink-0 text-2xl font-extrabold leading-none text-white">
             あと{daysUntil(nextMatch.date)}日
           </span>
-          <span className="min-w-0 truncate text-xs font-semibold leading-none text-indigo-100">
+          <span className="min-w-0 truncate text-xs font-semibold leading-none text-white/85">
             【{nextMatch.name}】
           </span>
         </div>
       ) : (
-        <span className="text-[11px] text-indigo-200">
+        <span className="text-[11px] text-white/70">
           次の試合の予定はまだありません
         </span>
       )}
@@ -262,7 +262,7 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
       <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
-      <span className="text-[10px] leading-tight text-indigo-100">
+      <span className="text-[10px] leading-tight text-white/80">
         {line("昨日の提出状況", yesterdayStr, stats)}
         {line("今日の提出状況", todayStr, stats)}
       </span>
@@ -298,8 +298,8 @@ export default function Header({
     <header
       ref={headerRef}
       // 試合カウントダウンなどを目立たせつつ、ボタン類で多用している赤とは
-      // 被らないよう、ヘッダー全体をインディゴで統一する
-      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-indigo-900/40 bg-indigo-700/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.25)] backdrop-blur dark:border-indigo-950/60 dark:bg-indigo-900/95"
+      // 被らないよう、ヘッダー全体を指定色（マット・グレイッシュな紫）で統一する
+      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-black/20 bg-[#7c6c77]/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.25)] backdrop-blur dark:border-black/40 dark:bg-[#5c4f57]/95"
       style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
       <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-white/50" />
