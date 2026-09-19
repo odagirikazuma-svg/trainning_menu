@@ -15,8 +15,6 @@ import {
   SessionType,
   sessionTypeDotColor,
   sessionTypeLabel,
-  TrainingType,
-  trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { useSubNav } from "./shell/AppShell";
@@ -161,7 +159,6 @@ export default function TrainingBoardSupabase({
   } | null>(null);
   // コーチがマット掲示板から直接、時間割（練習セクション）を編集できるようにする
   const [editingViewDateSchedule, setEditingViewDateSchedule] = useState(false);
-  const [showBulkScheduleForm, setShowBulkScheduleForm] = useState(false);
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [confirmingNew, setConfirmingNew] = useState(false);
@@ -172,16 +169,13 @@ export default function TrainingBoardSupabase({
   const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
+  const [showMissingPopup, setShowMissingPopup] = useState(false);
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAltType, setAbsentAltType] = useState<
     "running" | "weight" | "other"
   >("running");
   const [absentAlternative, setAbsentAlternative] = useState("");
-  // 実施報告・未実施報告の提出先メニューに自分の拠点が含まれていない場合の確認モーダル
-  const [locationGuardAction, setLocationGuardAction] = useState<
-    "report" | "absent" | null
-  >(null);
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
   );
@@ -202,16 +196,6 @@ export default function TrainingBoardSupabase({
   const [locationRoster, setLocationRoster] = useState<
     { id: string; display_name: string }[]
   >([]);
-  const [dayWeightLogs, setDayWeightLogs] = useState<
-    {
-      author_id: string;
-      display_name: string;
-      content: string;
-      type: TrainingType;
-      title: string | null;
-    }[]
-  >([]);
-  const [loadingDayWeightLogs, setLoadingDayWeightLogs] = useState(false);
   const [submissionMap, setSubmissionMap] = useState<
     Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
   >({});
@@ -255,42 +239,6 @@ export default function TrainingBoardSupabase({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCoachView, activeLocation]);
-
-  useEffect(() => {
-    if (!isCoachView) return;
-    (async () => {
-      setLoadingDayWeightLogs(true);
-      const { data, error } = await supabase
-        .from("weight_logs")
-        .select(
-          "author_id, content, type, title, author:profiles!weight_logs_author_id_fkey(display_name, home_location)"
-        )
-        .eq("team_id", profile.team_id)
-        .eq("date", viewDate);
-      if (!error) {
-        const rows = (data ?? []) as unknown as {
-          author_id: string;
-          content: string;
-          type: TrainingType;
-          title: string | null;
-          author: { display_name: string; home_location: Location | null } | null;
-        }[];
-        setDayWeightLogs(
-          rows
-            .filter((r) => r.author?.home_location === activeLocation)
-            .map((r) => ({
-              author_id: r.author_id,
-              display_name: r.author?.display_name ?? "不明",
-              content: r.content,
-              type: r.type,
-              title: r.title,
-            }))
-        );
-      }
-      setLoadingDayWeightLogs(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCoachView, activeLocation, viewDate]);
 
   useEffect(() => {
     setJointNoticeDate(null);
@@ -356,6 +304,7 @@ export default function TrainingBoardSupabase({
     if (selectedId) loadComments(selectedId);
     setShowCommentForm(false);
     setShowReportForm(false);
+    setShowMissingPopup(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -377,7 +326,6 @@ export default function TrainingBoardSupabase({
   useEffect(() => {
     loadViewDateSchedule();
     setEditingViewDateSchedule(false);
-    setShowBulkScheduleForm(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewDate, activeLocation]);
 
@@ -757,12 +705,14 @@ export default function TrainingBoardSupabase({
     setCommentText("");
   }
 
-  async function performAddReport() {
+  async function handleAddReport(e: React.FormEvent) {
+    e.preventDefault();
     await submitComment("report", reportText);
     setReportText("");
   }
 
-  async function performAddAbsent() {
+  async function handleAddAbsent(e: React.FormEvent) {
+    e.preventDefault();
     if (!absentReason.trim() || !absentAlternative.trim()) return;
     const altTypeLabel =
       absentAltType === "running"
@@ -775,33 +725,6 @@ export default function TrainingBoardSupabase({
     setAbsentReason("");
     setAbsentAltType("running");
     setAbsentAlternative("");
-  }
-
-  // 選択中のメニューに、自分の所属拠点が参加者として含まれているか
-  // （全体練習＝is_jointは常に両拠点が対象。片方のみの練習は、そのlocationの拠点のみが対象）
-  function menuIncludesOwnLocation(menu: MenuRow | null | undefined) {
-    if (!menu) return true;
-    if (menu.is_joint) return true;
-    return menu.location === memberHomeLocation;
-  }
-
-  async function handleAddReport(e: React.FormEvent) {
-    e.preventDefault();
-    if (!menuIncludesOwnLocation(selected)) {
-      setLocationGuardAction("report");
-      return;
-    }
-    await performAddReport();
-  }
-
-  async function handleAddAbsent(e: React.FormEvent) {
-    e.preventDefault();
-    if (!absentReason.trim() || !absentAlternative.trim()) return;
-    if (!menuIncludesOwnLocation(selected)) {
-      setLocationGuardAction("absent");
-      return;
-    }
-    await performAddAbsent();
   }
 
   const selected =
@@ -831,7 +754,6 @@ export default function TrainingBoardSupabase({
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
-  const isViewOnly = profile.role === "coach" || profile.role === "manager";
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
   const reportSubmittedCount = selectedSubmission
@@ -888,10 +810,7 @@ export default function TrainingBoardSupabase({
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  setShowBulkScheduleForm(false);
-                  setEditingViewDateSchedule((v) => !v);
-                }}
+                onClick={() => setEditingViewDateSchedule((v) => !v)}
                 className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
               >
                 {editingViewDateSchedule
@@ -912,31 +831,6 @@ export default function TrainingBoardSupabase({
                 onCancel={() => setEditingViewDateSchedule(false)}
                 onSaved={async () => {
                   setEditingViewDateSchedule(false);
-                  await loadViewDateSchedule();
-                }}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setEditingViewDateSchedule(false);
-                setShowBulkScheduleForm((v) => !v);
-              }}
-              className="self-start text-[11px] font-medium text-neutral-400 underline"
-            >
-              {showBulkScheduleForm
-                ? "期間まとめて設定を閉じる"
-                : "期間でまとめて設定する（オフ・合宿・試合・出稽古）"}
-            </button>
-            {showBulkScheduleForm && (
-              <ScheduleEditForm
-                teamId={profile.team_id}
-                authorId={profile.id}
-                location={activeLocation}
-                mode="range"
-                date={viewDate}
-                onCancel={() => setShowBulkScheduleForm(false)}
-                onSaved={async () => {
                   await loadViewDateSchedule();
                 }}
               />
@@ -1304,9 +1198,19 @@ export default function TrainingBoardSupabase({
                 <h3 className="text-xs font-semibold text-neutral-400">
                   実施報告
                 </h3>
-                <span className="text-[11px] text-neutral-500">
-                  {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
-                </span>
+                {isCoachView ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowMissingPopup(true)}
+                    className="text-[11px] text-neutral-500 underline decoration-dotted"
+                  >
+                    {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-neutral-500">
+                    {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
+                  </span>
+                )}
               </div>
               <ul className="flex flex-col gap-3">
                 {visibleReports.length === 0 && (
@@ -1327,27 +1231,7 @@ export default function TrainingBoardSupabase({
                 ))}
               </ul>
 
-              {isViewOnly ? (
-                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
-                  <p className="mb-1.5 font-semibold text-neutral-400">
-                    実施報告を提出したメンバー
-                  </p>
-                  {reports.length === 0 ? (
-                    <p className="text-neutral-500">まだいません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {reports.map((r) => (
-                        <span
-                          key={r.id}
-                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
-                        >
-                          {r.author?.display_name ?? "不明"}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : myReport ? (
+              {myReport ? (
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
                   実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1405,27 +1289,7 @@ export default function TrainingBoardSupabase({
                   />
                 ))}
               </ul>
-              {isViewOnly ? (
-                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
-                  <p className="mb-1.5 font-semibold text-neutral-400">
-                    未実施報告を提出したメンバー
-                  </p>
-                  {absentReports.length === 0 ? (
-                    <p className="text-neutral-500">まだいません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {absentReports.map((c) => (
-                        <span
-                          key={c.id}
-                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
-                        >
-                          {c.author?.display_name ?? "不明"}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : myAbsent ? (
+              {myAbsent ? (
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1483,106 +1347,6 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
-            {isCoachView && (
-              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-                <h3 className="text-xs font-semibold text-neutral-400">
-                  未提出者（{locationLabel[activeLocation]}）
-                </h3>
-                {(() => {
-                  const reportedIds = new Set(reports.map((r) => r.author_id));
-                  const absentIds = new Set(
-                    absentReports.map((c) => c.author_id)
-                  );
-                  const missing = locationRoster.filter(
-                    (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
-                  );
-                  return missing.length === 0 ? (
-                    <p className="text-xs text-neutral-500">
-                      全員提出済みです。
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {missing.map((m) => (
-                        <span
-                          key={m.id}
-                          className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                        >
-                          {m.display_name}
-                        </span>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </section>
-            )}
-
-            {isCoachView &&
-              matSessionForViewDate &&
-              viewDateSchedule?.sessions.some(
-                (s) => s.session_type !== "mat"
-              ) && (
-                <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-                  <h3 className="text-xs font-semibold text-neutral-400">
-                    トレ報（{locationLabel[activeLocation]}）
-                  </h3>
-                  {loadingDayWeightLogs ? (
-                    <p className="text-xs text-neutral-500">読み込み中…</p>
-                  ) : dayWeightLogs.length === 0 ? (
-                    <p className="text-xs text-neutral-500">
-                      まだトレ報の提出はありません。
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {dayWeightLogs.map((log) => (
-                        <div
-                          key={log.author_id}
-                          className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm"
-                        >
-                          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
-                            {log.display_name}
-                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
-                              {trainingTypeLabel[log.type]}
-                              {log.title && `・${log.title}`}
-                            </span>
-                          </p>
-                          <p className="whitespace-pre-wrap text-neutral-100">
-                            {log.content}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div>
-                    <p className="mb-1.5 text-xs font-semibold text-neutral-400">
-                      未提出者
-                    </p>
-                    {(() => {
-                      const loggedIds = new Set(
-                        dayWeightLogs.map((l) => l.author_id)
-                      );
-                      const missing = locationRoster.filter(
-                        (m) => !loggedIds.has(m.id)
-                      );
-                      return missing.length === 0 ? (
-                        <p className="text-xs text-neutral-500">
-                          全員提出済みです。
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {missing.map((m) => (
-                            <span
-                              key={m.id}
-                              className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                            >
-                              {m.display_name}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </section>
-              )}
               </>
             )}
           </>
@@ -1598,14 +1362,25 @@ export default function TrainingBoardSupabase({
                 <p className="mb-3 text-sm text-neutral-400">
                   このセッションのメニューはまだ作成されていません
                 </p>
-                {canCreateMenu(profile.role) && (
-                  <button
-                    onClick={handleOpenNewForm}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
-                  >
-                    このセッションのメニューを作成する
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {canCreateMenu(profile.role) && (
+                    <button
+                      onClick={handleOpenNewForm}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
+                    >
+                      このセッションのメニューを作成する
+                    </button>
+                  )}
+                  {isCoachView && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingViewDateSchedule(true)}
+                      className="rounded-lg border border-neutral-700 px-3 py-2 text-xs font-medium text-neutral-400 active:bg-neutral-800"
+                    >
+                      このセッションを編集する
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="py-2 text-center text-sm text-neutral-500">
@@ -1665,53 +1440,49 @@ export default function TrainingBoardSupabase({
         {practiceSection}
       </div>
 
-      {locationGuardAction && (
+      {showMissingPopup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => setLocationGuardAction(null)}
+          onClick={() => setShowMissingPopup(false)}
         >
           <div
-            className="relative flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border-color bg-surface p-4 shadow-xl"
+            className="relative flex w-full max-w-sm flex-col gap-2 rounded-lg border border-border-color bg-surface p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm font-semibold text-foreground">
-              {locationLabel[memberHomeLocation]}の部員は含まれていません
-            </p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              このメニューは{locationLabel[selected?.location ?? memberHomeLocation]}のみで実施される練習のため、あなたの所属拠点（{locationLabel[memberHomeLocation]}）は対象に含まれていません。このまま提出しますか？それとも自分の拠点の掲示板に移動しますか？
-            </p>
-            <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                未提出者（{locationLabel[activeLocation]}）
+              </p>
               <button
                 type="button"
-                onClick={async () => {
-                  const action = locationGuardAction;
-                  setLocationGuardAction(null);
-                  if (action === "report") await performAddReport();
-                  else if (action === "absent") await performAddAbsent();
-                }}
-                className="rounded-lg bg-neutral-700 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-600"
+                onClick={() => setShowMissingPopup(false)}
+                aria-label="閉じる"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 active:bg-neutral-800/50"
               >
-                このまま提出する
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLocationGuardAction(null);
-                  setSelectedId(null);
-                  setActiveLocation(memberHomeLocation);
-                }}
-                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white active:bg-red-700"
-              >
-                自分の拠点（{locationLabel[memberHomeLocation]}）の掲示板に移動する
-              </button>
-              <button
-                type="button"
-                onClick={() => setLocationGuardAction(null)}
-                className="rounded-lg px-4 py-2 text-xs font-medium text-neutral-500 active:bg-neutral-800/50"
-              >
-                キャンセル
+                ✕
               </button>
             </div>
+            {(() => {
+              const reportedIds = new Set(reports.map((r) => r.author_id));
+              const absentIds = new Set(absentReports.map((c) => c.author_id));
+              const missing = locationRoster.filter(
+                (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
+              );
+              return missing.length === 0 ? (
+                <p className="text-xs text-neutral-500">全員提出済みです。</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {missing.map((m) => (
+                    <span
+                      key={m.id}
+                      className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                    >
+                      {m.display_name}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
