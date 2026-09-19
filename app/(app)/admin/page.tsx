@@ -6,7 +6,7 @@ import { useProfile } from "../../components/shell/AppShell";
 import CoachAdminPage from "../../components/CoachAdminPage";
 
 export default function AdminRoute() {
-  const { profile, signOut } = useProfile();
+  const { profile } = useProfile();
   const router = useRouter();
 
   useEffect(() => {
@@ -23,5 +23,5 @@ export default function AdminRoute() {
     );
   }
 
-  return <CoachAdminPage profile={profile} signOut={signOut} />;
+  return <CoachAdminPage profile={profile} />;
 }

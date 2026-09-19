@@ -14,13 +14,10 @@ import {
   SessionType,
   sessionTypeDotColor,
   sessionTypeLabel,
-  teamEventTypeLabel,
-  TeamEventType,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import ScheduleEditForm, {
   ScheduleDayPrefill,
-  ScheduleTimeSelect,
 } from "./ScheduleEditForm";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
@@ -73,19 +70,6 @@ type ScheduleDetailRow = {
   start_time: string | null;
   is_off: boolean;
   creator: { display_name: string } | null;
-};
-
-type WeightMaxRow = {
-  author_id: string;
-  event_id: string | null;
-  bench: number | null;
-  squat: number | null;
-  deadlift: number | null;
-};
-
-type WeightMaxEventInfo = {
-  id: string;
-  measurementDate: string;
 };
 
 function toDateKey(d: Date) {
@@ -183,49 +167,7 @@ export default function TeamPage({
     profile.role === "vice_leader" ||
     profile.role === "coach";
   const isCoach = profile.role === "coach";
-  // 部員（コーチ以外）が閲覧・操作できる拠点。マネージャーは多摩所属として扱う。
-  const restrictedHomeLocation: Location =
-    profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
   const todayStr = toDateKey(new Date());
-
-  const [weightMaxes, setWeightMaxes] = useState<WeightMaxRow[]>([]);
-
-  const [activeEvents, setActiveEvents] = useState<
-    { id: string; type: "weight_max" | TeamEventType; label: string; deadline: string }[]
-  >([]);
-  const [loadingActiveEvents, setLoadingActiveEvents] = useState(true);
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
-  const [eventSubmissionDetail, setEventSubmissionDetail] = useState<
-    { memberId: string; displayName: string; location: Location; submitted: boolean }[]
-  >([]);
-  const [loadingEventDetail, setLoadingEventDetail] = useState(false);
-  const [loadingMaxes, setLoadingMaxes] = useState(true);
-  const [weightMaxEvents, setWeightMaxEvents] = useState<WeightMaxEventInfo[]>(
-    []
-  );
-
-  const [teamEvents, setTeamEvents] = useState<
-    {
-      id: string;
-      type: TeamEventType;
-      title: string;
-      deadline: string;
-      created_at: string;
-    }[]
-  >([]);
-  const [teamEventSubmissions, setTeamEventSubmissions] = useState<
-    {
-      event_id: string;
-      author_id: string;
-      content: string;
-      weight_kg: number | null;
-      body_fat_pct: number | null;
-      measurement_date: string | null;
-      muscle_mass_kg: number | null;
-      lean_body_mass_kg: number | null;
-    }[]
-  >([]);
-  const [loadingTeamEvents, setLoadingTeamEvents] = useState(true);
 
   const [submissionCounts, setSubmissionCounts] = useState<
     Map<string, { submitted: number; total: number }>
@@ -253,9 +195,6 @@ export default function TeamPage({
 
   useEffect(() => {
     loadMembers();
-    loadWeightMaxes();
-    loadTeamEvents();
-    loadActiveEvents();
     if (selectedScheduleDate) loadDayDetail(selectedScheduleDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -519,259 +458,6 @@ export default function TeamPage({
   }
 
 
-  async function loadWeightMaxes() {
-    setLoadingMaxes(true);
-    const { data, error } = await supabase
-      .from("weight_maxes")
-      .select("author_id, event_id, bench, squat, deadlift")
-      .eq("team_id", profile.team_id);
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setWeightMaxes((data ?? []) as WeightMaxRow[]);
-    }
-
-    const { data: eventData, error: eventError } = await supabase
-      .from("weight_max_events")
-      .select("id, deadline, closed_at")
-      .eq("team_id", profile.team_id);
-
-    if (eventError) {
-      setErrorMsg(eventError.message);
-    } else {
-      const events = (
-        (eventData ?? []) as {
-          id: string;
-          deadline: string;
-          closed_at: string | null;
-        }[]
-      ).map((e) => {
-        // 測定日は「締切日」と「集計終了日」のうち早い方
-        const closedDateStr = e.closed_at
-          ? toDateKey(new Date(e.closed_at))
-          : null;
-        const measurementDate =
-          closedDateStr && closedDateStr < e.deadline
-            ? closedDateStr
-            : e.deadline;
-        return { id: e.id, measurementDate };
-      });
-      events.sort((a, b) => b.measurementDate.localeCompare(a.measurementDate));
-      setWeightMaxEvents(events);
-    }
-    setLoadingMaxes(false);
-  }
-
-  async function loadTeamEvents() {
-    setLoadingTeamEvents(true);
-    const { data: eventData, error: eventError } = await supabase
-      .from("team_events")
-      .select("id, type, title, deadline, created_at")
-      .eq("team_id", profile.team_id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (eventError) {
-      setErrorMsg(eventError.message);
-      setLoadingTeamEvents(false);
-      return;
-    }
-    const events = (eventData ?? []) as {
-      id: string;
-      type: TeamEventType;
-      title: string;
-      deadline: string;
-      created_at: string;
-    }[];
-    setTeamEvents(events);
-
-    if (events.length === 0) {
-      setTeamEventSubmissions([]);
-      setLoadingTeamEvents(false);
-      return;
-    }
-
-    const { data: subData, error: subError } = await supabase
-      .from("team_event_submissions")
-      .select(
-        "event_id, author_id, content, weight_kg, body_fat_pct, measurement_date, muscle_mass_kg, lean_body_mass_kg"
-      )
-      .in(
-        "event_id",
-        events.map((e) => e.id)
-      );
-
-    if (subError) {
-      setErrorMsg(subError.message);
-    } else {
-      setTeamEventSubmissions(
-        (subData ?? []) as {
-          event_id: string;
-          author_id: string;
-          content: string;
-          weight_kg: number | null;
-          body_fat_pct: number | null;
-          measurement_date: string | null;
-          muscle_mass_kg: number | null;
-          lean_body_mass_kg: number | null;
-        }[]
-      );
-    }
-    setLoadingTeamEvents(false);
-  }
-
-  // 現在開催中の全イベント（ウェイトMAX集計＋試合の振り返り＋体組成の提出）を一覧化する
-  async function loadActiveEvents() {
-    setLoadingActiveEvents(true);
-    const list: {
-      id: string;
-      type: "weight_max" | TeamEventType;
-      label: string;
-      deadline: string;
-    }[] = [];
-
-    const { data: wmEvent, error: wmError } = await supabase
-      .from("weight_max_events")
-      .select("id, deadline")
-      .eq("team_id", profile.team_id)
-      .is("closed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (wmError) {
-      setErrorMsg(wmError.message);
-    } else if (wmEvent) {
-      const event = wmEvent as { id: string; deadline: string };
-      list.push({
-        id: event.id,
-        type: "weight_max",
-        label: "ウェイトMAX集計",
-        deadline: event.deadline,
-      });
-    }
-
-    const { data: teEvents, error: teError } = await supabase
-      .from("team_events")
-      .select("id, type, title, deadline")
-      .eq("team_id", profile.team_id)
-      .is("closed_at", null);
-    if (teError) {
-      setErrorMsg(teError.message);
-    } else {
-      for (const e of (teEvents ?? []) as {
-        id: string;
-        type: TeamEventType;
-        title: string;
-        deadline: string;
-      }[]) {
-        list.push({
-          id: e.id,
-          type: e.type,
-          label: e.title
-            ? `${teamEventTypeLabel[e.type]}：${e.title}`
-            : teamEventTypeLabel[e.type],
-          deadline: e.deadline,
-        });
-      }
-    }
-
-    list.sort((a, b) => a.deadline.localeCompare(b.deadline));
-    setActiveEvents(list);
-    setLoadingActiveEvents(false);
-  }
-
-  async function loadEventSubmissionDetail(event: {
-    id: string;
-    type: "weight_max" | TeamEventType;
-  }) {
-    setLoadingEventDetail(true);
-
-    let targetIds: Set<string> | null = null;
-    if (event.type === "weight_max") {
-      const { data: targets, error: targetError } = await supabase
-        .from("weight_max_event_targets")
-        .select("member_id")
-        .eq("event_id", event.id);
-      if (targetError) {
-        setErrorMsg(targetError.message);
-      } else if (targets && targets.length > 0) {
-        targetIds = new Set(
-          (targets as { member_id: string }[]).map((t) => t.member_id)
-        );
-      }
-    } else {
-      const { data: targets, error: targetError } = await supabase
-        .from("team_event_targets")
-        .select("member_id")
-        .eq("event_id", event.id);
-      if (targetError) {
-        setErrorMsg(targetError.message);
-      } else if (targets && targets.length > 0) {
-        targetIds = new Set(
-          (targets as { member_id: string }[]).map((t) => t.member_id)
-        );
-      }
-    }
-
-    const requiredMembers = members.filter(
-      (m) =>
-        m.role !== "coach" &&
-        m.role !== "manager" &&
-        m.role !== "ob" &&
-        !m.isPending &&
-        (!targetIds || targetIds.has(m.id))
-    );
-
-    let submittedIds = new Set<string>();
-    if (event.type === "weight_max") {
-      const { data, error } = await supabase
-        .from("weight_maxes")
-        .select("author_id")
-        .eq("event_id", event.id);
-      if (error) setErrorMsg(error.message);
-      else
-        submittedIds = new Set(
-          ((data ?? []) as { author_id: string }[]).map((r) => r.author_id)
-        );
-    } else {
-      const { data, error } = await supabase
-        .from("team_event_submissions")
-        .select("author_id")
-        .eq("event_id", event.id);
-      if (error) setErrorMsg(error.message);
-      else
-        submittedIds = new Set(
-          ((data ?? []) as { author_id: string }[]).map((r) => r.author_id)
-        );
-    }
-
-    setEventSubmissionDetail(
-      requiredMembers
-        .map((m) => ({
-          memberId: m.id,
-          displayName: m.display_name,
-          location: m.home_location ?? "tama",
-          submitted: submittedIds.has(m.id),
-        }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"))
-    );
-    setLoadingEventDetail(false);
-  }
-
-  function handleToggleEventDetail(event: {
-    id: string;
-    type: "weight_max" | TeamEventType;
-  }) {
-    if (expandedEventId === event.id) {
-      setExpandedEventId(null);
-      return;
-    }
-    setExpandedEventId(event.id);
-    loadEventSubmissionDetail(event);
-  }
-
-  // 直近1週間の「オフではない練習」のうち、実施報告・未実施報告が
-  // まだ提出されていないものがあるかどうかを部員ごとに調べる
   function requiredMembersForLocation(loc: Location): MemberRow[] {
     return members.filter(
       (m) =>
@@ -1127,41 +813,6 @@ export default function TeamPage({
     setLoadingDaySubmissionDetail(false);
   }
 
-
-  // イベントごとに「著者ID -> 記録」のMapを作る
-  const weightMaxesByEvent = new Map<string, Map<string, WeightMaxRow>>();
-  for (const w of weightMaxes) {
-    if (!w.event_id) continue;
-    const inner = weightMaxesByEvent.get(w.event_id) ?? new Map();
-    inner.set(w.author_id, w);
-    weightMaxesByEvent.set(w.event_id, inner);
-  }
-
-  function formatWithDiff(
-    current: number | null,
-    previous: number | null | undefined
-  ): { text: string; className: string } {
-    if (current == null) {
-      return { text: "-", className: "text-neutral-600" };
-    }
-    if (previous == null) {
-      return { text: `${current}`, className: "text-neutral-200" };
-    }
-    const diff = current - previous;
-    if (diff === 0) {
-      return { text: `${current}（±0）`, className: "text-neutral-400" };
-    }
-    if (diff > 0) {
-      return {
-        text: `${current}（+${diff}）`,
-        className: "font-semibold text-blue-400",
-      };
-    }
-    return {
-      text: `${current}（${diff}）`,
-      className: "font-semibold text-red-400",
-    };
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">

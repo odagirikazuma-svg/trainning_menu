@@ -350,10 +350,8 @@ function ReportCalendar({
 
 export default function CoachAdminPage({
   profile,
-  signOut,
 }: {
   profile: Profile;
-  signOut: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();

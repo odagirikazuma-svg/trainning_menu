@@ -144,7 +144,6 @@ export default function TrainingBoardSupabase({
     null
   );
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
     day_type: DayType;
@@ -166,7 +165,6 @@ export default function TrainingBoardSupabase({
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showMissingPopup, setShowMissingPopup] = useState(false);
@@ -424,7 +422,6 @@ export default function TrainingBoardSupabase({
   }
 
   async function loadMenus(): Promise<MenuRow[]> {
-    setLoadingMenus(true);
     const { data, error } = await supabase
       .from("menus")
       .select(
@@ -441,7 +438,6 @@ export default function TrainingBoardSupabase({
       setMenus(rows);
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
-    setLoadingMenus(false);
     return rows;
   }
 
@@ -664,7 +660,6 @@ export default function TrainingBoardSupabase({
     await loadComments(selectedId);
     if (kind === "report" || kind === "absent") {
       await loadSubmissionSummary(menus.map((m) => m.id));
-      setTaskRefreshSignal((n) => n + 1);
     }
   }
 
@@ -696,7 +691,6 @@ export default function TrainingBoardSupabase({
     }
     if (selectedId) await loadComments(selectedId);
     await loadSubmissionSummary(menus.map((m) => m.id));
-    setTaskRefreshSignal((n) => n + 1);
   }
 
   async function handleAddComment(e: React.FormEvent) {
