@@ -1513,33 +1513,37 @@ export default function TeamPage({
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {(["tama", "otsuka"] as Location[]).map((loc) => (
+              {(() => {
+                // 学年ごとの区切りが多摩・大塚で縦にずれないよう、両拠点を合わせた
+                // 学年一覧を基準に、各拠点の行数の差だけ高さの揃った空白行を
+                // 差し込んで、次の学年の開始位置を揃える
+                const gradeGroups = groupDetailByGrade(daySubmissionDetail).map(
+                  (group) => ({
+                    label: group.label,
+                    tamaRows: group.rows.filter((d) => d.location === "tama"),
+                    otsukaRows: group.rows.filter(
+                      (d) => d.location === "otsuka"
+                    ),
+                  })
+                );
+                return (["tama", "otsuka"] as Location[]).map((loc) => (
                 <div key={loc} className="flex flex-col gap-3">
                   <p className="text-xs font-semibold text-neutral-400">
                     {locationLabel[loc]}
                   </p>
-                  {daySubmissionDetail.filter((d) => d.location === loc)
-                    .length === 0 ? (
-                    <p className="text-[11px] text-neutral-600">該当なし</p>
-                  ) : (
-                    // 学年ごとの区切りが多摩・大塚で縦にずれないよう、両拠点を合わせた
-                    // 学年一覧（groupDetailByGrade(daySubmissionDetail)）を基準に、
-                    // 各拠点はその学年に該当する部員だけを絞り込んで表示する
-                    groupDetailByGrade(daySubmissionDetail).map((group) => {
-                      const rowsForLoc = group.rows.filter(
-                        (d) => d.location === loc
+                  {gradeGroups.map((group) => {
+                      const rowsForLoc =
+                        loc === "tama" ? group.tamaRows : group.otsukaRows;
+                      const maxRows = Math.max(
+                        group.tamaRows.length,
+                        group.otsukaRows.length
                       );
                       return (
                       <div key={group.label} className="flex flex-col gap-1">
                         <p className="text-[10px] text-neutral-500">
                           {group.label}
                         </p>
-                        {rowsForLoc.length === 0 ? (
-                          <p className="text-[11px] text-neutral-700 dark:text-neutral-600">
-                            該当なし
-                          </p>
-                        ) : (
-                        rowsForLoc.map((d) => {
+                        {rowsForLoc.map((d) => {
                           const resolved =
                             d.matStatus === "missing" ||
                             d.matStatus === "report" ||
@@ -1599,14 +1603,24 @@ export default function TeamPage({
                               )}
                             </button>
                           );
-                        })
-                        )}
+                        })}
+                        {Array.from({
+                          length: maxRows - rowsForLoc.length,
+                        }).map((_, i) => (
+                          <div
+                            key={`spacer-${i}`}
+                            aria-hidden="true"
+                            className="invisible flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs"
+                          >
+                            <span>&nbsp;</span>
+                          </div>
+                        ))}
                       </div>
                       );
-                    })
-                  )}
+                    })}
                 </div>
-              ))}
+                ));
+              })()}
             </div>
           )}
         </section>

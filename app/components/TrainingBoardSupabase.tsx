@@ -108,8 +108,11 @@ export default function TrainingBoardSupabase({
     initialDate: string | null;
     initialStartTime: string | null;
   }>(() => {
+    // 自分の所属拠点（未設定・マネージャーは多摩扱い）を最初に表示する
+    const ownLocation: Location =
+      profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
     if (typeof window === "undefined") {
-      return { initialLocation: "tama", initialDate: null, initialStartTime: null };
+      return { initialLocation: ownLocation, initialDate: null, initialStartTime: null };
     }
     try {
       const raw = sessionStorage.getItem("jumpTo");
@@ -125,7 +128,7 @@ export default function TrainingBoardSupabase({
     } catch {
       // 無視して通常起動にフォールバック
     }
-    return { initialLocation: "tama", initialDate: null, initialStartTime: null };
+    return { initialLocation: ownLocation, initialDate: null, initialStartTime: null };
   });
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
@@ -175,6 +178,10 @@ export default function TrainingBoardSupabase({
     "running" | "weight" | "other"
   >("running");
   const [absentAlternative, setAbsentAlternative] = useState("");
+  // 実施報告・未実施報告の提出先メニューに自分の拠点が含まれていない場合の確認モーダル
+  const [locationGuardAction, setLocationGuardAction] = useState<
+    "report" | "absent" | null
+  >(null);
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
   );
@@ -750,14 +757,12 @@ export default function TrainingBoardSupabase({
     setCommentText("");
   }
 
-  async function handleAddReport(e: React.FormEvent) {
-    e.preventDefault();
+  async function performAddReport() {
     await submitComment("report", reportText);
     setReportText("");
   }
 
-  async function handleAddAbsent(e: React.FormEvent) {
-    e.preventDefault();
+  async function performAddAbsent() {
     if (!absentReason.trim() || !absentAlternative.trim()) return;
     const altTypeLabel =
       absentAltType === "running"
@@ -770,6 +775,33 @@ export default function TrainingBoardSupabase({
     setAbsentReason("");
     setAbsentAltType("running");
     setAbsentAlternative("");
+  }
+
+  // 選択中のメニューに、自分の所属拠点が参加者として含まれているか
+  // （全体練習＝is_jointは常に両拠点が対象。片方のみの練習は、そのlocationの拠点のみが対象）
+  function menuIncludesOwnLocation(menu: MenuRow | null | undefined) {
+    if (!menu) return true;
+    if (menu.is_joint) return true;
+    return menu.location === memberHomeLocation;
+  }
+
+  async function handleAddReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!menuIncludesOwnLocation(selected)) {
+      setLocationGuardAction("report");
+      return;
+    }
+    await performAddReport();
+  }
+
+  async function handleAddAbsent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!absentReason.trim() || !absentAlternative.trim()) return;
+    if (!menuIncludesOwnLocation(selected)) {
+      setLocationGuardAction("absent");
+      return;
+    }
+    await performAddAbsent();
   }
 
   const selected =
@@ -1632,6 +1664,57 @@ export default function TrainingBoardSupabase({
 
         {practiceSection}
       </div>
+
+      {locationGuardAction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setLocationGuardAction(null)}
+        >
+          <div
+            className="relative flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border-color bg-surface p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {locationLabel[memberHomeLocation]}の部員は含まれていません
+            </p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              このメニューは{locationLabel[selected?.location ?? memberHomeLocation]}のみで実施される練習のため、あなたの所属拠点（{locationLabel[memberHomeLocation]}）は対象に含まれていません。このまま提出しますか？それとも自分の拠点の掲示板に移動しますか？
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const action = locationGuardAction;
+                  setLocationGuardAction(null);
+                  if (action === "report") await performAddReport();
+                  else if (action === "absent") await performAddAbsent();
+                }}
+                className="rounded-lg bg-neutral-700 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-600"
+              >
+                このまま提出する
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationGuardAction(null);
+                  setSelectedId(null);
+                  setActiveLocation(memberHomeLocation);
+                }}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white active:bg-red-700"
+              >
+                自分の拠点（{locationLabel[memberHomeLocation]}）の掲示板に移動する
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocationGuardAction(null)}
+                className="rounded-lg px-4 py-2 text-xs font-medium text-neutral-500 active:bg-neutral-800/50"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
