@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProfile, useSubNav } from "../../components/shell/AppShell";
 import SubTabBar from "../../components/shell/SubTabBar";
+import TaskQueuePopup, {
+  type QueueTask,
+} from "../../components/TaskQueuePopup";
+import {
+  useMyEventPendingTasks,
+  type EventPendingTask,
+} from "../../components/shell/useMyEventPendingTasks";
 import { createClient } from "../../lib/supabase/client";
 import { Location, locationLabel, teamEventTypeLabel } from "../../lib/types";
 
@@ -1118,25 +1125,82 @@ function TeamEventCoachManagement({
   );
 }
 
-const eventSubTabItems = (Object.keys(tabLabel) as EventTab[]).map((t) => ({
-  value: t,
-  label: tabLabel[t],
-}));
+// イベントページ内のポップアップ用に、未提出のイベント1件をタスクの形に変換する
+function buildEventQueueTask(
+  type: EventTab,
+  task: EventPendingTask,
+  setTab: (t: EventTab) => void
+): QueueTask {
+  return {
+    key: `event-${type}-${task.id}`,
+    badgeLabel: `イベント：${tabLabel[type]} 未提出${
+      task.overdue ? "（期限切れ）" : ""
+    }`,
+    title: task.title || `〜${formatMonthDay(task.deadline)}`,
+    urgent: task.overdue,
+    content: (close: () => void) => (
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-neutral-400">
+          締切：{formatMonthDay(task.deadline)}
+        </p>
+        <button
+          onClick={() => {
+            setTab(type);
+            close();
+          }}
+          className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
+        >
+          {tabLabel[type]}タブへ移動して入力する
+        </button>
+      </div>
+    ),
+  };
+}
 
 export default function EventsPage() {
   const { profile } = useProfile();
   const [tab, setTab] = useState<EventTab>("weight_max");
   const isCoach = profile.role === "coach";
+  const pendingTasks = useMyEventPendingTasks(isCoach ? null : profile);
+
+  const pendingByTab: Record<EventTab, EventPendingTask | null> = {
+    weight_max: pendingTasks.weightMax,
+    body_composition: pendingTasks.bodyComposition,
+    match_reflection: pendingTasks.matchReflection,
+  };
+
+  const eventQueueTasks = useMemo(() => {
+    if (isCoach) return [];
+    const list: QueueTask[] = [];
+    (Object.keys(tabLabel) as EventTab[]).forEach((t) => {
+      const pending = pendingByTab[t];
+      if (pending) list.push(buildEventQueueTask(t, pending, setTab));
+    });
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCoach, pendingTasks]);
 
   // node は useMemo で安定させる（毎レンダー新しいJSXを渡すと無限ループの原因になる）
   const eventsSubNav = useMemo(
-    () => <SubTabBar items={eventSubTabItems} active={tab} onChange={setTab} />,
-    [tab]
+    () => (
+      <SubTabBar
+        items={(Object.keys(tabLabel) as EventTab[]).map((t) => ({
+          value: t,
+          label: tabLabel[t],
+          badge: !isCoach && pendingByTab[t] ? 1 : 0,
+        }))}
+        active={tab}
+        onChange={setTab}
+      />
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab, isCoach, pendingTasks]
   );
   useSubNav(eventsSubNav);
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
+      {!isCoach && <TaskQueuePopup tasks={eventQueueTasks} />}
       {isCoach && (
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />

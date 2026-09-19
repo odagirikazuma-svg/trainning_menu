@@ -7,7 +7,9 @@ export type QueueTask = {
   badgeLabel: string;
   title: string;
   urgent: boolean;
-  content: React.ReactNode;
+  // 通常はReactNodeをそのまま渡す。ポップアップを閉じる操作（closeを呼ぶ）を
+  // ボタン等に組み込みたい場合は関数形式で渡す（例：イベントページの「入力へ進む」）。
+  content: React.ReactNode | ((close: () => void) => React.ReactNode);
 };
 
 /**
@@ -90,7 +92,11 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
               )}
             </div>
 
-            <div className="flex flex-col gap-2">{current.content}</div>
+            <div className="flex flex-col gap-2">
+              {typeof current.content === "function"
+                ? current.content(handleCancel)
+                : current.content}
+            </div>
 
             <button
               onClick={handleCancel}
@@ -105,7 +111,10 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
       {!open && (
         <button
           onClick={handleReopen}
-          className="fixed inset-x-0 bottom-16 z-30 mx-auto w-[92%] max-w-md rounded-lg bg-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg active:bg-red-700"
+          // フッター（サブナビ＋フッターナビの2段、最大136px相当）より下に隠れないよう、
+          // それより高い位置にオフセットしつつ、フッターと同じz-30より上のz-40に置く。
+          style={{ bottom: "calc(136px + env(safe-area-inset-bottom) + 10px)" }}
+          className="fixed inset-x-0 z-40 mx-auto w-[92%] max-w-md rounded-lg bg-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg active:bg-red-700"
         >
           {tasks.length > 1
             ? `未提出のタスクが${tasks.length}件あります`

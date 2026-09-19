@@ -53,6 +53,9 @@ function AppShellInner({
 }) {
   const [subNav, setSubNav] = useState<React.ReactNode | null>(null);
   const hasSubNav = subNav != null;
+  // ヘッダーの実際の高さ（試合カウントダウンの有無などで変わりうるため、
+  // 決め打ちの数値ではなくHeaderからの実測値を使う。初期値は旧来の72px相当）
+  const [headerHeight, setHeaderHeight] = useState(72);
 
   // value をメモ化しないと、AppShellInner が再レンダーするたびに
   // ProfileContext / SubNavContext の value が新しいオブジェクトになり、
@@ -71,11 +74,11 @@ function AppShellInner({
     <ProfileContext.Provider value={profileValue}>
       <SubNavContext.Provider value={subNavValue}>
         <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-background text-foreground">
-          <Header profile={profile} />
+          <Header profile={profile} onHeightChange={setHeaderHeight} />
           <main
             className="flex-1"
             style={{
-              paddingTop: "calc(72px + env(safe-area-inset-top))",
+              paddingTop: `${headerHeight}px`,
               paddingBottom: hasSubNav
                 ? "calc(136px + env(safe-area-inset-bottom))"
                 : "calc(88px + env(safe-area-inset-bottom))",

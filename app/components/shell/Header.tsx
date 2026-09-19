@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { Location, locationLabel, locations } from "../../lib/types";
 import type { Profile } from "../AuthGate";
@@ -137,13 +137,25 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
   }, [profile.team_id, profile.id]);
 
   return (
-    <div className="flex flex-col">
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
       <span className="text-sm font-semibold text-foreground">
         {profile.display_name}
       </span>
-      {nextMatch && (
+      {nextMatch ? (
+        <div className="flex min-w-0 items-center gap-2 rounded-lg bg-red-600 px-2.5 py-1.5 shadow-sm">
+          <span className="shrink-0 text-[10px] font-semibold leading-none text-red-100">
+            次の試合まで
+          </span>
+          <span className="shrink-0 text-2xl font-extrabold leading-none text-white">
+            あと{daysUntil(nextMatch.date)}日
+          </span>
+          <span className="min-w-0 truncate text-xs font-semibold leading-none text-red-100">
+            【{nextMatch.name}】
+          </span>
+        </div>
+      ) : (
         <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-          次の試合【{nextMatch.name}】まであと{daysUntil(nextMatch.date)}日
+          次の試合の予定はまだありません
         </span>
       )}
     </div>
@@ -258,9 +270,30 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
   );
 }
 
-export default function Header({ profile }: { profile: Profile }) {
+export default function Header({
+  profile,
+  onHeightChange,
+}: {
+  profile: Profile;
+  // ヘッダーの実際の高さをAppShellに伝える（内容量に応じてヘッダーの高さが
+  // 変わっても、本文側のpaddingTopがズレて内容が隠れないようにするため）
+  onHeightChange?: (height: number) => void;
+}) {
+  const headerRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el || !onHeightChange) return;
+    const report = () => onHeightChange(el.offsetHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeightChange]);
+
   return (
     <header
+      ref={headerRef}
       className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-border-color bg-surface/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.12)] backdrop-blur dark:shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
       style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
