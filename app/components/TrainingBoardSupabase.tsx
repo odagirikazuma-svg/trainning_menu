@@ -788,55 +788,6 @@ export default function TrainingBoardSupabase({
 
   const practiceSection = (
     <div ref={practiceSectionRef}>
-        {isCoachView && (
-          <section className="mb-3 flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-neutral-400">
-                {locationLabel[activeLocation]}・{formatMonthDay(viewDate)}の時間割
-                {viewDateSchedule && !viewDateSchedule.is_off && (
-                  <span className="ml-1 font-normal text-neutral-500">
-                    （{dayTypeLabel[viewDateSchedule.day_type]}
-                    {viewDateSchedule.event_name
-                      ? `：${viewDateSchedule.event_name}`
-                      : ""}
-                    ）
-                  </span>
-                )}
-                {viewDateSchedule?.is_off && (
-                  <span className="ml-1 font-normal text-neutral-500">
-                    （オフ）
-                  </span>
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => setEditingViewDateSchedule((v) => !v)}
-                className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
-              >
-                {editingViewDateSchedule
-                  ? "閉じる"
-                  : viewDateSchedule
-                    ? "編集する"
-                    : "時間割を設定する"}
-              </button>
-            </div>
-            {editingViewDateSchedule && (
-              <ScheduleEditForm
-                teamId={profile.team_id}
-                authorId={profile.id}
-                location={activeLocation}
-                mode="single"
-                date={viewDate}
-                existingDay={viewDateSchedule as ScheduleDayPrefill | null}
-                onCancel={() => setEditingViewDateSchedule(false)}
-                onSaved={async () => {
-                  setEditingViewDateSchedule(false);
-                  await loadViewDateSchedule();
-                }}
-              />
-            )}
-          </section>
-        )}
         {/* メニュー一覧（横スクロール、スマホ向け） */}
         <div className="flex flex-col gap-2">
           {showNewForm && canCreateMenu(profile.role) && (
@@ -1352,17 +1303,61 @@ export default function TrainingBoardSupabase({
           </>
         ) : (
           <div className="rounded-lg border border-neutral-800 p-4">
-            <div className="mt-2 mb-1 text-xs text-neutral-500">
-              {locationLabel[activeLocation]}・{viewDate}
-              {matSessionForViewDate?.start_time &&
-                `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
+            <div className="mt-2 mb-1 flex items-center justify-between gap-2 text-xs text-neutral-500">
+              <span>
+                {locationLabel[activeLocation]}・{viewDate}
+                {matSessionForViewDate?.start_time &&
+                  `・${matSessionForViewDate.start_time.slice(0, 5)}〜`}
+                {viewDateSchedule && !viewDateSchedule.is_off && (
+                  <span className="ml-1">
+                    （{dayTypeLabel[viewDateSchedule.day_type]}
+                    {viewDateSchedule.event_name
+                      ? `：${viewDateSchedule.event_name}`
+                      : ""}
+                    ）
+                  </span>
+                )}
+                {viewDateSchedule?.is_off && <span className="ml-1">（オフ）</span>}
+              </span>
+              {isCoachView && (
+                <button
+                  type="button"
+                  onClick={() => setEditingViewDateSchedule((v) => !v)}
+                  className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
+                >
+                  {editingViewDateSchedule
+                    ? "閉じる"
+                    : viewDateSchedule
+                      ? "このセッションを編集する"
+                      : "時間割を設定する"}
+                </button>
+              )}
             </div>
-            {matSessionForViewDate ? (
-              <div>
-                <p className="mb-3 text-sm text-neutral-400">
-                  このセッションのメニューはまだ作成されていません
-                </p>
-                <div className="flex items-center gap-2">
+
+            {editingViewDateSchedule && (
+              <div className="mb-3">
+                <ScheduleEditForm
+                  teamId={profile.team_id}
+                  authorId={profile.id}
+                  location={activeLocation}
+                  mode="single"
+                  date={viewDate}
+                  existingDay={viewDateSchedule as ScheduleDayPrefill | null}
+                  onCancel={() => setEditingViewDateSchedule(false)}
+                  onSaved={async () => {
+                    setEditingViewDateSchedule(false);
+                    await loadViewDateSchedule();
+                  }}
+                />
+              </div>
+            )}
+
+            {!editingViewDateSchedule &&
+              (matSessionForViewDate ? (
+                <div>
+                  <p className="mb-3 text-sm text-neutral-400">
+                    このセッションのメニューはまだ作成されていません
+                  </p>
                   {canCreateMenu(profile.role) && (
                     <button
                       onClick={handleOpenNewForm}
@@ -1371,22 +1366,12 @@ export default function TrainingBoardSupabase({
                       このセッションのメニューを作成する
                     </button>
                   )}
-                  {isCoachView && (
-                    <button
-                      type="button"
-                      onClick={() => setEditingViewDateSchedule(true)}
-                      className="rounded-lg border border-neutral-700 px-3 py-2 text-xs font-medium text-neutral-400 active:bg-neutral-800"
-                    >
-                      このセッションを編集する
-                    </button>
-                  )}
                 </div>
-              </div>
-            ) : (
-              <p className="py-2 text-center text-sm text-neutral-500">
-                まだスケジュールは作成されていません。
-              </p>
-            )}
+              ) : (
+                <p className="py-2 text-center text-sm text-neutral-500">
+                  まだスケジュールは作成されていません。
+                </p>
+              ))}
           </div>
         )}
     </div>
