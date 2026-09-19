@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AuthGate, { type Profile } from "../AuthGate";
 import ThemeProvider from "./ThemeProvider";
 import CalendarViewPrefProvider from "./CalendarViewPrefProvider";
+import CalendarDisplayPrefProvider from "./CalendarDisplayPrefProvider";
 import Header from "./Header";
 import Footer from "./Footer";
 
@@ -96,13 +97,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <CalendarViewPrefProvider>
-        <AuthGate>
-          {(profile, signOut) => (
-            <AppShellInner profile={profile} signOut={signOut}>
-              {children}
-            </AppShellInner>
-          )}
-        </AuthGate>
+        <CalendarDisplayPrefProvider>
+          <AuthGate>
+            {(profile, signOut) => (
+              <AppShellInner profile={profile} signOut={signOut}>
+                {children}
+              </AppShellInner>
+            )}
+          </AuthGate>
+        </CalendarDisplayPrefProvider>
       </CalendarViewPrefProvider>
     </ThemeProvider>
   );

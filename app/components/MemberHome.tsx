@@ -10,7 +10,6 @@ import {
   Location,
   locationLabel,
   SessionType,
-  sessionTypeDotColor,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
@@ -21,6 +20,10 @@ import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
+import {
+  useCalendarDisplayPref,
+  type CalendarSlotOption,
+} from "./shell/CalendarDisplayPrefProvider";
 
 type TodoMenuRow = {
   id: string;
@@ -279,6 +282,15 @@ export default function MemberHome({
     []
   );
 
+  // マイページカレンダーの「一言メモ」（本人のみ閲覧、日付ごと1件・20文字まで）
+  const [todayMemoId, setTodayMemoId] = useState<string | null>(null);
+  const [todayMemoText, setTodayMemoText] = useState("");
+  const [loadingMemo, setLoadingMemo] = useState(true);
+  const [savingMemo, setSavingMemo] = useState(false);
+  const [calendarMemoDates, setCalendarMemoDates] = useState<Set<string>>(
+    new Set()
+  );
+
   // カレンダー用
   const [calendarCursor, setCalendarCursor] = useState(() => {
     const d = new Date();
@@ -353,6 +365,7 @@ export default function MemberHome({
     loadSelfTrainingTodo();
     loadNextMatch();
     loadLogForDate(todayStr);
+    loadMemoForDate(todayStr);
     loadTodayAbsent();
     loadTitleOptions();
     loadWeightMaxTodo();
@@ -1185,6 +1198,58 @@ export default function MemberHome({
     setLoadingLog(false);
   }
 
+  async function loadMemoForDate(date: string) {
+    setLoadingMemo(true);
+    const { data, error } = await supabase
+      .from("personal_memos")
+      .select("id, content")
+      .eq("author_id", profile.id)
+      .eq("date", date)
+      .maybeSingle();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else if (data) {
+      const row = data as { id: string; content: string };
+      setTodayMemoId(row.id);
+      setTodayMemoText(row.content);
+    } else {
+      setTodayMemoId(null);
+      setTodayMemoText("");
+    }
+    setLoadingMemo(false);
+  }
+
+  async function handleSaveMemo() {
+    setSavingMemo(true);
+    const trimmed = todayMemoText.slice(0, 20);
+    const { data, error } = await supabase
+      .from("personal_memos")
+      .upsert(
+        {
+          id: todayMemoId ?? undefined,
+          team_id: profile.team_id,
+          author_id: profile.id,
+          date: logDate,
+          content: trimmed,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "author_id,date" }
+      )
+      .select("id, content")
+      .single();
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      const row = data as { id: string; content: string };
+      setTodayMemoId(row.id);
+      setTodayMemoText(row.content);
+      await loadCalendarData();
+    }
+    setSavingMemo(false);
+  }
+
   async function loadTodayAbsent() {
     const { data, error } = await supabase
       .from("comments")
@@ -1277,6 +1342,25 @@ export default function MemberHome({
           type: TrainingType;
           title: string | null;
         }[]
+      );
+    }
+
+    const { data: memoData, error: memoError } = await supabase
+      .from("personal_memos")
+      .select("date, content")
+      .eq("author_id", profile.id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (memoError) {
+      setErrorMsg(memoError.message);
+    } else {
+      setCalendarMemoDates(
+        new Set(
+          ((memoData ?? []) as { date: string; content: string }[])
+            .filter((r) => r.content.trim().length > 0)
+            .map((r) => r.date)
+        )
       );
     }
 
@@ -1442,6 +1526,7 @@ export default function MemberHome({
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
     loadLogForDate(dateStr);
+    loadMemoForDate(dateStr);
   }
 
   const [homeSubTab, setHomeSubTab] = useState<"training" | "injury">(
@@ -1680,6 +1765,7 @@ export default function MemberHome({
           nextMatchDate={isManager ? null : (nextMatch?.date ?? null)}
           homeLocation={effectiveHomeLocation ?? "tama"}
           otherLocationOffDates={otherLocationOffDates}
+          memoDates={calendarMemoDates}
         />
       </section>
       )}
@@ -1700,13 +1786,44 @@ export default function MemberHome({
           </h2>
           {logDate !== todayStr && (
             <button
-              onClick={() => loadLogForDate(todayStr)}
+              onClick={() => {
+                loadLogForDate(todayStr);
+                loadMemoForDate(todayStr);
+              }}
               className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[11px] text-neutral-300 active:bg-neutral-800"
             >
               今日に戻る
             </button>
           )}
         </div>
+
+        {loadingMemo ? null : (
+          <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-semibold text-neutral-400">
+                一言メモ（自分だけが見られます・20文字まで）
+              </label>
+              <span className="shrink-0 text-[10px] text-neutral-500">
+                {todayMemoText.length}/20
+              </span>
+            </div>
+            <textarea
+              value={todayMemoText}
+              onChange={(e) => setTodayMemoText(e.target.value.slice(0, 20))}
+              maxLength={20}
+              rows={1}
+              placeholder="例：体調良好、右膝に違和感 など"
+              className="resize-none rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+            />
+            <button
+              onClick={handleSaveMemo}
+              disabled={savingMemo}
+              className="self-end rounded-lg bg-neutral-700 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-600 disabled:opacity-50"
+            >
+              {savingMemo ? "保存中…" : "メモを保存する"}
+            </button>
+          </div>
+        )}
 
         {logDate === todayStr &&
           todayAbsentRecords.map((r) => (
@@ -2145,6 +2262,7 @@ function UnifiedCalendar({
   nextMatchDate,
   homeLocation,
   otherLocationOffDates,
+  memoDates,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2174,8 +2292,10 @@ function UnifiedCalendar({
   nextMatchDate?: string | null;
   homeLocation: Location;
   otherLocationOffDates: Set<string>;
+  memoDates?: Set<string>;
 }) {
   const { defaultCalendarView } = useCalendarViewPref();
+  const { pref } = useCalendarDisplayPref();
   const [viewMode, setViewMode] = useState<"month" | "week">(
     defaultCalendarView
   );
@@ -2265,6 +2385,94 @@ function UnifiedCalendar({
     }
   }
 
+  // マス目の「スロット」1つ分の表示内容を組み立てる。
+  // マス目のスペースが限られているため、設定で選んだ最大2項目までしか表示しない
+  // （それ以外の詳しい情報は日付タップ後の詳細欄で確認する）。
+  function formatSessionSlot(
+    s: {
+      type: SessionType;
+      time: string | null;
+      locationNote: string | null;
+      isJoint: boolean;
+      jointLocation: Location | null;
+    },
+    schedule: { dayType: DayType } | undefined
+  ) {
+    const time = s.time ? s.time.slice(0, 5) : "各自";
+    let loc = "";
+    if (schedule?.dayType === "camp" || schedule?.dayType === "away") {
+      loc = s.locationNote ? `(${s.locationNote})` : "";
+    } else if (s.type === "mat") {
+      loc = `(${
+        locationLabel[s.isJoint ? (s.jointLocation ?? homeLocation) : homeLocation]
+      })`;
+    } else {
+      loc = s.locationNote ? `(${s.locationNote})` : "";
+    }
+    return `${time}${loc}`;
+  }
+
+  function renderSlot(
+    slot: CalendarSlotOption,
+    slotId: string,
+    key: string,
+    schedule:
+      | {
+          dayType: DayType;
+          sessions: {
+            type: SessionType;
+            time: string | null;
+            locationNote: string | null;
+            isJoint: boolean;
+            jointLocation: Location | null;
+          }[];
+        }
+      | undefined,
+    title: string | undefined
+  ) {
+    if (slot === "none") return null;
+    if (slot === "mat_time") {
+      const s = schedule?.sessions.find((s) => s.type === "mat");
+      if (!s) return null;
+      return (
+        <span key={slotId} className="max-w-full truncate">
+          {formatSessionSlot(s, schedule)}
+        </span>
+      );
+    }
+    if (slot === "training_time") {
+      const s = schedule?.sessions.find((s) => s.type !== "mat");
+      if (!s) return null;
+      return (
+        <span key={slotId} className="max-w-full truncate">
+          {formatSessionSlot(s, schedule)}
+        </span>
+      );
+    }
+    if (slot === "training_content") {
+      if (!title) return null;
+      const truncated = title.length > 6 ? `${title.slice(0, 6)}…` : title;
+      return (
+        <span key={slotId} className="max-w-full truncate">
+          {truncated}
+        </span>
+      );
+    }
+    if (slot === "memo_mark") {
+      if (!memoDates?.has(key)) return null;
+      return (
+        <span
+          key={slotId}
+          className="flex items-center gap-0.5 max-w-full truncate"
+        >
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+          メモ
+        </span>
+      );
+    }
+    return null;
+  }
+
   return (
     <div className="rounded-lg border border-border-color bg-surface p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -2332,7 +2540,8 @@ function UnifiedCalendar({
           const titleColor = title ? getTitleColor(title) : null;
           const isHighlighted = key === highlightDate;
           const isToday = key === todayDate;
-          const isMatchDay = !!nextMatchDate && key === nextMatchDate;
+          const isMatchDay =
+            pref.highlightMatch && !!nextMatchDate && key === nextMatchDate;
           const schedule = scheduleByDate.get(key);
           const isAway = schedule?.dayType === "away" && !schedule.isOff;
           const isCamp = schedule?.dayType === "camp" && !schedule.isOff;
@@ -2428,35 +2637,11 @@ function UnifiedCalendar({
                     : `${locationLabel[homeLocation]}のみオフ`}
                 </span>
               )}
-              {(schedule?.sessions ?? []).length > 0 && (
-                <span className="flex flex-col items-center gap-0.5">
-                  {(schedule?.sessions ?? []).map((s, idx) => (
-                    <span
-                      key={idx}
-                      className="flex items-center gap-0.5 text-[8px] leading-none text-neutral-500 dark:text-neutral-400"
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full border ${sessionTypeDotColor[s.type].replace("bg-", "border-")} bg-transparent`}
-                      />
-                      {s.time ? s.time.slice(0, 5) : "各自"}
-                      {schedule?.dayType === "camp" ||
-                      schedule?.dayType === "away"
-                        ? s.locationNote
-                          ? `(${s.locationNote})`
-                          : ""
-                        : s.type === "mat"
-                          ? `(${
-                              locationLabel[
-                                s.isJoint
-                                  ? (s.jointLocation ?? homeLocation)
-                                  : homeLocation
-                              ]
-                            })`
-                          : s.locationNote
-                            ? `(${s.locationNote})`
-                            : ""}
-                    </span>
-                  ))}
+              {(renderSlot(pref.slot1, "slot1", key, schedule, title) ||
+                renderSlot(pref.slot2, "slot2", key, schedule, title)) && (
+                <span className="flex flex-col items-center gap-0.5 text-[8px] leading-none text-neutral-500 dark:text-neutral-400">
+                  {renderSlot(pref.slot1, "slot1", key, schedule, title)}
+                  {renderSlot(pref.slot2, "slot2", key, schedule, title)}
                 </span>
               )}
               {isMatchDay && (

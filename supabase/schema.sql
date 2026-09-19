@@ -887,3 +887,31 @@ create policy "avatars_delete_own" on storage.objects
   for delete using (
     bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- ============================================
+-- 追加: マイページカレンダーの「一言メモ」
+-- 本人だけが閲覧・編集できる、日付ごと1件・20文字までの非公開メモ。
+-- ============================================
+create table if not exists personal_memos (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  date date not null,
+  content text not null default '' check (char_length(content) <= 20),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (author_id, date)
+);
+alter table personal_memos enable row level security;
+
+create policy "personal_memos_select_self" on personal_memos
+  for select using (author_id = auth.uid());
+
+create policy "personal_memos_insert_self" on personal_memos
+  for insert with check (author_id = auth.uid());
+
+create policy "personal_memos_update_self" on personal_memos
+  for update using (author_id = auth.uid());
+
+create policy "personal_memos_delete_self" on personal_memos
+  for delete using (author_id = auth.uid());
