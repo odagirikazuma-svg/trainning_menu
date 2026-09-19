@@ -22,6 +22,7 @@ import ScheduleEditForm, {
   ScheduleDayPrefill,
   ScheduleTimeSelect,
 } from "./ScheduleEditForm";
+import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
 // 合宿/試合/出稽古バッジ配色（ライト/ダーク両対応）
 const dayTypeFillColorDark: Record<DayType, string> = {
@@ -1997,7 +1998,15 @@ function MonthlyCalendar({
   isCoach: boolean;
   viewLocation: Location;
 }) {
-  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const { defaultCalendarView } = useCalendarViewPref();
+  const [viewMode, setViewMode] = useState<"month" | "week">(
+    defaultCalendarView
+  );
+  // 設定で初期表示（月/週）が変更された場合に反映する
+  useEffect(() => {
+    setViewMode(defaultCalendarView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCalendarView]);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();

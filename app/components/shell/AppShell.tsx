@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AuthGate, { type Profile } from "../AuthGate";
 import ThemeProvider from "./ThemeProvider";
+import CalendarViewPrefProvider from "./CalendarViewPrefProvider";
 import Header from "./Header";
 import Footer from "./Footer";
 
@@ -94,13 +95,15 @@ function AppShellInner({
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <AuthGate>
-        {(profile, signOut) => (
-          <AppShellInner profile={profile} signOut={signOut}>
-            {children}
-          </AppShellInner>
-        )}
-      </AuthGate>
+      <CalendarViewPrefProvider>
+        <AuthGate>
+          {(profile, signOut) => (
+            <AppShellInner profile={profile} signOut={signOut}>
+              {children}
+            </AppShellInner>
+          )}
+        </AuthGate>
+      </CalendarViewPrefProvider>
     </ThemeProvider>
   );
 }

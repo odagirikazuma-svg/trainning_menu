@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../components/shell/AppShell";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
+import {
+  useCalendarViewPref,
+  type CalendarViewPref,
+} from "../../components/shell/CalendarViewPrefProvider";
 import { createClient } from "../../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../../lib/push";
 
@@ -11,6 +15,41 @@ const themeOptions: { value: ThemePref; label: string }[] = [
   { value: "light", label: "ライトモード" },
   { value: "dark", label: "ダークモード" },
 ];
+
+const calendarViewOptions: { value: CalendarViewPref; label: string }[] = [
+  { value: "month", label: "月表示" },
+  { value: "week", label: "週表示" },
+];
+
+function CalendarViewSection() {
+  const { defaultCalendarView, setDefaultCalendarView } = useCalendarViewPref();
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+        カレンダーの初期表示
+      </h2>
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border-color bg-surface-2 p-1">
+        {calendarViewOptions.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setDefaultCalendarView(opt.value)}
+            className={`rounded-md px-3 py-2.5 text-left text-sm font-medium ${
+              defaultCalendarView === opt.value
+                ? "bg-red-600 text-white shadow"
+                : "text-neutral-500 dark:text-neutral-400"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        マイページ・チームページ・マット掲示板のカレンダーを開いたときに、月表示と週表示のどちらを最初に表示するか選べます。
+      </p>
+    </section>
+  );
+}
 
 function ThemeSection() {
   const { theme, setTheme } = useTheme();
@@ -525,6 +564,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex w-full flex-col gap-6 p-4 sm:p-5">
       <ThemeSection />
+      <CalendarViewSection />
       <IconSection />
       {profile.role !== "coach" && <NextMatchSection />}
       <NotificationSection />

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
@@ -21,6 +20,7 @@ import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
 import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
+import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
 type TodoMenuRow = {
   id: string;
@@ -133,7 +133,6 @@ export default function MemberHome({
   isManager?: boolean;
 }) {
   const supabase = createClient();
-  const router = useRouter();
   const logSectionRef = useRef<HTMLDivElement>(null);
   const isFirstRefresh = useRef(true);
   const isOb = profile.role === "ob";
@@ -1660,11 +1659,12 @@ export default function MemberHome({
         </>
       )}
 
-      {/* カレンダー */}
+      {/* カレンダー（トレーニングの記録） */}
+      {homeSubTab === "training" && (
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          カレンダー
+          トレーニングの記録
         </h2>
         <UnifiedCalendar
           cursor={calendarCursor}
@@ -1682,28 +1682,7 @@ export default function MemberHome({
           otherLocationOffDates={otherLocationOffDates}
         />
       </section>
-      <button
-        onClick={() => {
-          try {
-            sessionStorage.setItem(
-              "jumpTo",
-              JSON.stringify({
-                location: effectiveHomeLocation ?? "tama",
-                date: selectedCalendarDate ?? todayStr,
-              })
-            );
-          } catch {
-            // sessionStorageが使えなくても遷移自体は行う
-          }
-          router.push("/board");
-        }}
-        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left text-sm text-neutral-200 active:bg-neutral-800"
-      >
-        <span>
-          {formatMonthDay(selectedCalendarDate ?? todayStr)}のメニューをマット掲示板で見る
-        </span>
-        <span className="text-neutral-500">›</span>
-      </button>
+      )}
 
       {!isManager && (
         <>
@@ -2196,7 +2175,15 @@ function UnifiedCalendar({
   homeLocation: Location;
   otherLocationOffDates: Set<string>;
 }) {
-  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const { defaultCalendarView } = useCalendarViewPref();
+  const [viewMode, setViewMode] = useState<"month" | "week">(
+    defaultCalendarView
+  );
+  // 設定で初期表示（月/週）が変更された場合に反映する
+  useEffect(() => {
+    setViewMode(defaultCalendarView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCalendarView]);
 
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();

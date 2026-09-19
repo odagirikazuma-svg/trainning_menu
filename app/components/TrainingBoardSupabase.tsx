@@ -22,6 +22,7 @@ import type { Profile } from "./AuthGate";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
+import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
 const locationSubTabItems = locations.map((loc) => ({
   value: loc,
@@ -1893,11 +1894,19 @@ function MenuCalendar({
   location: Location;
 }) {
   const supabase = createClient();
-  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const { defaultCalendarView } = useCalendarViewPref();
+  const [viewMode, setViewMode] = useState<"month" | "week">(
+    defaultCalendarView
+  );
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  // 設定で初期表示（月/週）が変更された場合に反映する
+  useEffect(() => {
+    setViewMode(defaultCalendarView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCalendarView]);
 
   // 上部の◀▶で日付を移動して月・週をまたいだ場合や表示モード切替時、下のカレンダーの表示も追従させる
   // （週表示に切り替えたときは、選択中の日付（viewDate）を含む週を表示する）
