@@ -13,8 +13,9 @@ export type QueueTask = {
 /**
  * マイページの「練習タスク・怪我タスク」を1件ずつポップアップで提出させる仕組み。
  * - タスクがあれば自動でポップアップが開く
- * - 「キャンセル」を押すと、残りのタスクがあればすぐ次のタスクを表示する
- * - 全部キャンセルすると、下に赤いバナーが表示され、タップすると最初のタスクから再度ポップアップする
+ * - 「キャンセル」を押すと、残りタスクの有無に関わらずポップアップを閉じる
+ * - 閉じている間は下に赤いバナー（未提出タスク件数つき）が常に表示され、
+ *   タップすると最初のタスクから再度ポップアップする
  * - タスクを提出する（tasks配列からそのkeyが消える）と、自動で次のタスクに進む
  */
 export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
@@ -45,12 +46,11 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
   function handleCancel() {
     if (!current) return;
     setSkipped((prev) => new Set(prev).add(current.key));
-    // pending配列は次のレンダーで自動的に次のタスクになるので、開いたままにしておけば
-    // 「キャンセルしたらすぐ次のタスクが表示される」動きになる。
-    // 残りが無い場合だけ閉じてバナー表示にする。
-    if (pending.length <= 1) {
-      setOpen(false);
-    }
+    // キャンセルしたら残りタスクの有無に関わらず必ず閉じる。
+    // 次のタスクへ自動で進めてしまうと、複数件残っているときに
+    // キャンセルのたびにポップアップへ付き合わされることになるため、
+    // 1回キャンセルしたら常時表示のバナー（下記）からいつでも再開できる形にする。
+    setOpen(false);
   }
 
   function handleReopen() {
@@ -107,7 +107,9 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
           onClick={handleReopen}
           className="fixed inset-x-0 bottom-16 z-30 mx-auto w-[92%] max-w-md rounded-lg bg-red-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg active:bg-red-700"
         >
-          未提出のタスクがあります
+          {tasks.length > 1
+            ? `未提出のタスクが${tasks.length}件あります`
+            : "未提出のタスクがあります"}
         </button>
       )}
     </>
