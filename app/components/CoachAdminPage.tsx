@@ -10,8 +10,8 @@ import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 
 const adminSubTabItems: { value: "submissions" | "injuries"; label: string }[] = [
-  { value: "submissions", label: "提出状況の管理" },
-  { value: "injuries", label: "怪我の管理" },
+  { value: "submissions", label: "日報" },
+  { value: "injuries", label: "怪我" },
 ];
 
 type MemberRoleForEdit = "coach" | "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
@@ -910,11 +910,11 @@ export default function CoachAdminPage({
 
         {adminSubTab === "submissions" && (
         <>
-        {/* 提出状況一覧 */}
+        {/* 日報の提出状況 */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            提出状況一覧
+            日報の提出状況
           </h2>
 
           <ReportCalendar

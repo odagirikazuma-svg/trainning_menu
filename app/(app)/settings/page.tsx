@@ -51,7 +51,7 @@ function CalendarViewSection() {
         ))}
       </div>
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-        マイページ・チームページ・マット掲示板のカレンダーを開いたときに、月表示と週表示のどちらを最初に表示するか選べます。
+        マイページ・チームページ・練習予定表のカレンダーを開いたときに、月表示と週表示のどちらを最初に表示するか選べます。
       </p>
     </>
   );

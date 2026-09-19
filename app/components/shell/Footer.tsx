@@ -60,7 +60,7 @@ export default function Footer({ profile }: { profile: Profile }) {
   const items: TabItem[] = isCoach
     ? [
         { href: "/admin", label: "管理ページ", icon: "/icons/nav-admin.png" },
-        { href: "/board", label: "マット掲示板", icon: "/icons/nav-board.png" },
+        { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png" },
         { href: "/events", label: "イベント", icon: "/icons/nav-events.png" },
         { href: "/settings", label: "設定", icon: "/icons/nav-settings.png" },
       ]
@@ -73,7 +73,7 @@ export default function Footer({ profile }: { profile: Profile }) {
           badge: taskCount,
         },
         { href: "/team", label: "チーム", icon: "/icons/nav-team.png" },
-        { href: "/board", label: "マット掲示板", icon: "/icons/nav-board.png" },
+        { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png" },
         {
           href: "/events",
           label: "イベント",

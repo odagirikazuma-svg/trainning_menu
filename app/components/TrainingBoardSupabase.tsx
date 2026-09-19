@@ -2065,28 +2065,6 @@ function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900 dark:bg-white" />
-          今日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded ring-2 ring-blue-500" />
-          表示中の日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-          未提出の部員がいる日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-purple-100 dark:bg-purple-950/40" />
-          全体練習（別拠点）
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-neutral-200 dark:bg-neutral-800" />
-          オフ
-        </span>
-      </p>
     </div>
   );
 }

@@ -1053,7 +1053,7 @@ export default function TeamPage({
                             ) : matMenuDetail === null ? (
                               <div className="flex flex-col items-start gap-2">
                                 <p className="text-xs text-neutral-500">
-                                  このセッションの練習メニューはまだ掲示板に投稿されていません
+                                  このセッションの練習メニューはまだ練習予定表に投稿されていません
                                 </p>
                                 {canEditMatMenu && (
                                   <button
@@ -1083,7 +1083,7 @@ export default function TeamPage({
                                       onClick={() => handleGoToMatMenu()}
                                       className="mt-2 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
                                     >
-                                      掲示板で編集する
+                                      練習予定表で編集する
                                     </button>
                                   )}
                               </div>

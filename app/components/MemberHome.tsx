@@ -2471,38 +2471,6 @@ function UnifiedCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded ring-1 ring-neutral-400" />
-          今日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded ring-2 ring-red-400" />
-          次の試合日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded bg-purple-100 dark:bg-purple-950/40" />
-          出稽古
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
-          合宿
-        </span>
-        {!disablePendingIndicator && (
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-400" />
-            未提出あり
-          </span>
-        )}
-        {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
-          <span key={t} className="flex items-center gap-1">
-            <span
-              className={`inline-block h-1.5 w-1.5 rounded-full ${trainingTypeDotColor[t]}`}
-            />
-            {trainingTypeLabel[t]}
-          </span>
-        ))}
-      </p>
     </div>
   );
 }

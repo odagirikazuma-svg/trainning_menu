@@ -26,6 +26,9 @@ function formatMonthDay(dateStr: string) {
 
 type MemberRow = { id: string; role: string; home_location: Location | null };
 
+// member_rosterテーブルのroleカラムに入り得る値（coach/manager/obは除外対象なので合わせて絞る）
+type RosterRoleForHeader = "captain" | "vice_captain" | "coach" | "member";
+
 async function countSubmission(
   supabase: ReturnType<typeof createClient>,
   teamId: string,
@@ -163,7 +166,28 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
         .from("profiles")
         .select("id, role, home_location")
         .eq("team_id", profile.team_id);
-      const members = (memberData ?? []) as MemberRow[];
+      const realMembers = (memberData ?? []) as MemberRow[];
+
+      // まだ本人がサインアップ（メアド登録）していない部員も、
+      // 母数（total）にはカウントする
+      const { data: rosterData } = await supabase
+        .from("member_roster")
+        .select("id, role, home_location")
+        .eq("team_id", profile.team_id)
+        .is("claimed_by", null);
+      const pendingMembers: MemberRow[] = (
+        (rosterData ?? []) as {
+          id: string;
+          role: RosterRoleForHeader;
+          home_location: Location | null;
+        }[]
+      ).map((r) => ({
+        id: `pending:${r.id}`,
+        role: r.role === "vice_captain" ? "vice_leader" : r.role,
+        home_location: r.home_location,
+      }));
+
+      const members = [...realMembers, ...pendingMembers];
 
       const today = toDateKey(new Date());
       const y = new Date();
