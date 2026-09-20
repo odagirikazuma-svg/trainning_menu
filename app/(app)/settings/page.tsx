@@ -860,11 +860,11 @@ export default function SettingsPage() {
             </CollapsibleSection>
           </SettingsGroup>
 
-          <SettingsGroup icon="/icons/nav-events.png" iconAlt="イベント" title="イベント">
-            <p className="rounded-lg border border-border-color bg-surface-2 px-3 py-2.5 text-[11px] text-neutral-500 dark:text-neutral-400">
-              管理者にはウェイトMAX・体組成のイベント結果を常に「全員の数値」で、学年ごとに折りたたんで表示します。
-            </p>
-          </SettingsGroup>
+          <SettingsGroup
+            icon="/icons/nav-events.png"
+            iconAlt="イベント"
+            title="イベント"
+          />
         </>
       ) : (
         <>

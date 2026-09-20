@@ -374,6 +374,7 @@ type TeamEventRow = {
 };
 
 type SubmissionRow = {
+  id: string;
   event_id: string;
   updated_at: string;
   match_result: string | null;
@@ -393,7 +394,145 @@ type SubmissionRow = {
   lean_body_mass_kg: number | null;
 };
 
+type EventCommentRow = {
+  id: string;
+  submission_id: string;
+  author_id: string;
+  text: string;
+  created_at: string;
+};
+
+// イベントの提出内容（試合の振り返りなど）に対するコメントスレッド。
+// コーチ・本人どちらからもコメントでき、お互いのフィードバックに使える。
+function CommentThread({
+  submissionId,
+  profile,
+  members,
+}: {
+  submissionId: string;
+  profile: ReturnType<typeof useProfile>["profile"];
+  members: EventMemberRow[];
+}) {
+  const supabase = createClient();
+  const [comments, setComments] = useState<EventCommentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("team_event_comments")
+      .select("id, submission_id, author_id, text, created_at")
+      .eq("submission_id", submissionId)
+      .order("created_at", { ascending: true });
+    if (error) setErrorMsg(error.message);
+    setComments((data ?? []) as EventCommentRow[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissionId]);
+
+  async function handlePost() {
+    if (!text.trim()) return;
+    setPosting(true);
+    const { error } = await supabase.from("team_event_comments").insert({
+      submission_id: submissionId,
+      team_id: profile.team_id,
+      author_id: profile.id,
+      text: text.trim(),
+    });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setText("");
+      await load();
+    }
+    setPosting(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border-color pt-2">
+      <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+        コメント
+      </p>
+      {loading ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-neutral-500">まだコメントはありません。</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {comments.map((c) => {
+            const name =
+              c.author_id === profile.id
+                ? "自分"
+                : members.find((m) => m.id === c.author_id)?.display_name ??
+                  "（不明な部員）";
+            return (
+              <div
+                key={c.id}
+                className="rounded-lg border border-border-color bg-background p-2 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{name}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    {formatMonthDay(c.created_at.slice(0, 10))}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">
+                  {c.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">
+          {errorMsg}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="コメントを入力"
+          className="flex-1 rounded-lg border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+        />
+        <button
+          onClick={handlePost}
+          disabled={posting || !text.trim()}
+          className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          送信
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type BodyCompositionSubmissionRow = SubmissionRow & { author_id: string };
+
+type MatchSubmissionRow = {
+  id: string;
+  author_id: string;
+  updated_at: string;
+  match_result: string | null;
+  match_title: string | null;
+  match_count: number | null;
+  win_count: number | null;
+  loss_count: number | null;
+  reflection: string | null;
+  good_points: string | null;
+  challenges: string | null;
+  improvement_plan: string | null;
+  team_challenges: string | null;
+};
 
 // 体組成専用のタブ。体組成は「前回比」を表示しない代わりに、記録が増えても
 // 見づらくならないよう計測日ごとにまとめ、タップで詳細を開閉できるようにする。
@@ -747,6 +886,7 @@ function TeamEventTab({
   profile: ReturnType<typeof useProfile>["profile"];
 }) {
   const supabase = createClient();
+  const members = useEventMembers(profile.team_id);
   const [events, setEvents] = useState<TeamEventRow[]>([]);
   const [mine, setMine] = useState<Map<string, SubmissionRow>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -790,7 +930,7 @@ function TeamEventTab({
     const { data: subData } = await supabase
       .from("team_event_submissions")
       .select(
-        "event_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, measurement_date, weight_kg, body_fat_pct, muscle_mass_kg, lean_body_mass_kg"
+        "id, event_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, measurement_date, weight_kg, body_fat_pct, muscle_mass_kg, lean_body_mass_kg"
       )
       .eq("author_id", profile.id)
       .in(
@@ -942,6 +1082,13 @@ function TeamEventTab({
                       {submitted.lean_body_mass_kg ?? "―"}kg
                     </p>
                   </>
+                )}
+                {type === "match_reflection" && (
+                  <CommentThread
+                    submissionId={submitted.id}
+                    profile={profile}
+                    members={members}
+                  />
                 )}
               </div>
             )}
@@ -1506,9 +1653,6 @@ function WeightMaxCoachManagement({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-        締切日を設定すると、部員のマイページの「タスク一覧」に提出タスクが表示されます(期日を過ぎると赤く強調され、提出すると一覧から消えます)。提出内容はチームページで確認できます。
-      </p>
       {errorMsg && (
         <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
           {errorMsg}
@@ -1700,6 +1844,12 @@ function TeamEventCoachManagement({
     }[]
   >([]);
   const [expandedBodyKey, setExpandedBodyKey] = useState<string | null>(null);
+  const [matchSubmissions, setMatchSubmissions] = useState<
+    MatchSubmissionRow[]
+  >([]);
+  const [expandedMatchAuthorId, setExpandedMatchAuthorId] = useState<
+    string | null
+  >(null);
   const [newDeadline, setNewDeadline] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(
@@ -1733,11 +1883,24 @@ function TeamEventCoachManagement({
     const ev = (data as TeamEventRow | null) ?? null;
     setEvent(ev);
     if (ev) {
-      const { data: subData } = await supabase
-        .from("team_event_submissions")
-        .select("author_id")
-        .eq("event_id", ev.id);
-      setSubmittedCount((subData ?? []).length);
+      if (type === "match_reflection") {
+        const { data: subData } = await supabase
+          .from("team_event_submissions")
+          .select(
+            "id, author_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges"
+          )
+          .eq("event_id", ev.id);
+        const rows = (subData ?? []) as MatchSubmissionRow[];
+        setSubmittedCount(rows.length);
+        setMatchSubmissions(rows);
+      } else {
+        const { data: subData } = await supabase
+          .from("team_event_submissions")
+          .select("author_id")
+          .eq("event_id", ev.id);
+        setSubmittedCount((subData ?? []).length);
+        setMatchSubmissions([]);
+      }
 
       const { data: targetData } = await supabase
         .from("team_event_targets")
@@ -1748,6 +1911,7 @@ function TeamEventCoachManagement({
       );
     } else {
       setTargetCount(null);
+      setMatchSubmissions([]);
     }
 
     if (type === "body_composition") {
@@ -1870,9 +2034,6 @@ function TeamEventCoachManagement({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-        締切日を設定すると、部員のマイページの「タスク一覧」に提出タスクが表示されます(期日を過ぎると赤く強調され、提出すると一覧から消えます)。提出内容はチームページで確認できます。
-      </p>
       {errorMsg && (
         <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
           {errorMsg}
@@ -1899,6 +2060,89 @@ function TeamEventCoachManagement({
             人
             {targetCount != null && "（対象者を限定しています）"}
           </p>
+
+          {type === "match_reflection" && matchSubmissions.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {matchSubmissions
+                .map((s) => ({
+                  ...s,
+                  name:
+                    members.find((m) => m.id === s.author_id)?.display_name ??
+                    "（不明な部員）",
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+                .map((s) => {
+                  const isExpanded = expandedMatchAuthorId === s.author_id;
+                  return (
+                    <div
+                      key={s.author_id}
+                      className="overflow-hidden rounded-lg border border-border-color bg-background"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedMatchAuthorId(
+                            isExpanded ? null : s.author_id
+                          )
+                        }
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+                      >
+                        <span className="font-medium text-foreground">
+                          {s.name}
+                        </span>
+                        <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                          {s.match_result ?? ""}
+                          {isExpanded ? " ▲" : " ▼"}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="flex flex-col gap-1.5 border-t border-border-color p-2.5 text-xs text-neutral-700 dark:text-neutral-200">
+                          {s.match_title && <p>試合名：{s.match_title}</p>}
+                          {s.match_result && <p>結果：{s.match_result}</p>}
+                          {s.match_count != null && (
+                            <p>
+                              {s.match_count}試合（{s.win_count ?? 0}勝{" "}
+                              {s.loss_count ?? 0}敗）
+                            </p>
+                          )}
+                          {s.reflection && (
+                            <p className="whitespace-pre-wrap">
+                              反省：{s.reflection}
+                            </p>
+                          )}
+                          {s.good_points && (
+                            <p className="whitespace-pre-wrap">
+                              良かった点：{s.good_points}
+                            </p>
+                          )}
+                          {s.challenges && (
+                            <p className="whitespace-pre-wrap">
+                              課題：{s.challenges}
+                            </p>
+                          )}
+                          {s.improvement_plan && (
+                            <p className="whitespace-pre-wrap">
+                              今後の改善策：{s.improvement_plan}
+                            </p>
+                          )}
+                          {s.team_challenges && (
+                            <p className="whitespace-pre-wrap">
+                              チームとしての課題：{s.team_challenges}
+                            </p>
+                          )}
+                          <CommentThread
+                            submissionId={s.id}
+                            profile={profile}
+                            members={members}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
           <button
             onClick={handleEnd}
             className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"

@@ -915,3 +915,28 @@ create policy "personal_memos_update_self" on personal_memos
 
 create policy "personal_memos_delete_self" on personal_memos
   for delete using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: イベント提出（試合の振り返り等）へのコメント機能
+-- コーチが部員の提出内容にコメントを残せるようにする（部員側からの返信も可）。
+-- ============================================
+create table if not exists team_event_comments (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references team_event_submissions(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+alter table team_event_comments enable row level security;
+
+create policy "team_event_comments_select_same_team" on team_event_comments
+  for select using (team_id = get_my_team_id());
+
+create policy "team_event_comments_insert_same_team" on team_event_comments
+  for insert with check (
+    author_id = auth.uid() and team_id = get_my_team_id()
+  );
+
+create policy "team_event_comments_delete_self" on team_event_comments
+  for delete using (author_id = auth.uid());

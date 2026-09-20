@@ -72,7 +72,7 @@ export default function Footer({ profile }: { profile: Profile }) {
           isPhotoIcon: true,
           badge: taskCount,
         },
-        { href: "/team", label: "チーム", icon: "/icons/nav-team.png" },
+        { href: "/team", label: "チーム", icon: "/icons/nav-team-chuo.png" },
         { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png" },
         {
           href: "/events",
