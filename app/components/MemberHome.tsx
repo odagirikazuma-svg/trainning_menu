@@ -11,6 +11,8 @@ import {
   locationLabel,
   MAX_SAVED_TITLES,
   SessionType,
+  sessionTypeDotColor,
+  sessionTypeLabel,
   TitleColor,
   TrainingType,
   trainingTypeDotColor,
@@ -2535,8 +2537,14 @@ function UnifiedCalendar({
       const s = schedule?.sessions.find((s) => s.type !== "mat");
       if (!s) return null;
       return (
-        <span key={slotId} className="max-w-full truncate">
-          {formatSessionSlot(s, schedule)}
+        <span
+          key={slotId}
+          className="flex items-center gap-0.5 max-w-full truncate"
+        >
+          <span
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.type]}`}
+          />
+          {sessionTypeLabel[s.type]} {formatSessionSlot(s, schedule)}
         </span>
       );
     }

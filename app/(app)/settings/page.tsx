@@ -13,6 +13,10 @@ import {
   calendarSlotOptionLabel,
   type CalendarSlotOption,
 } from "../../components/shell/CalendarDisplayPrefProvider";
+import {
+  useEventResultsPref,
+  type EventResultsViewMode,
+} from "../../components/shell/EventResultsPrefProvider";
 import { createClient } from "../../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../../lib/push";
 import {
@@ -121,6 +125,52 @@ function MyPageCalendarDisplaySection() {
       </label>
       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
         マイページのカレンダーのマス目は小さいため、直接表示できる項目は最大2つ（スロット1・スロット2）です。行った種目の内容や一言メモの全文など、詳しい情報は日付をタップした下の欄でいつでも確認できます。一言メモは自分だけが閲覧・編集できます（20文字まで）。
+      </p>
+    </div>
+  );
+}
+
+const eventResultsViewOptions: { value: EventResultsViewMode; label: string }[] = [
+  { value: "self", label: "自分の数値のみ" },
+  { value: "all", label: "全員の数値" },
+];
+
+function EventResultsSection() {
+  const { pref, setPref } = useEventResultsPref();
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border-color bg-surface-2 p-1">
+        {eventResultsViewOptions.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setPref({ ...pref, viewMode: opt.value })}
+            className={`rounded-md px-3 py-2.5 text-left text-sm font-medium ${
+              pref.viewMode === opt.value
+                ? "bg-red-600 text-white shadow"
+                : "text-neutral-500 dark:text-neutral-400"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {pref.viewMode === "all" && (
+        <label className="flex items-center justify-between gap-2 rounded-lg border border-border-color bg-surface-2 px-3 py-2.5">
+          <span className="text-sm font-medium text-foreground">
+            学年ごとに折りたたんで表示する
+          </span>
+          <input
+            type="checkbox"
+            checked={pref.collapseByGrade}
+            onChange={(e) =>
+              setPref({ ...pref, collapseByGrade: e.target.checked })
+            }
+            className="h-5 w-5 accent-red-600"
+          />
+        </label>
+      )}
+      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        ウェイトMAX・体組成のイベントを開いた時に、自分の数値だけを見るか、チーム全員の数値を見られるようにするかを選べます。「全員の数値」を選ぶと、一番上に自分、その下は学年が上の人から（同学年内は多摩→大塚の順）で並びます。「学年ごとに折りたたんで表示する」をオンにすると、学年をタップするまで詳細が隠れます。
       </p>
     </div>
   );
@@ -751,6 +801,13 @@ export default function SettingsPage() {
         <div className="py-3">
           <CollapsibleSection title="マイページカレンダーの表示項目">
             <MyPageCalendarDisplaySection />
+          </CollapsibleSection>
+        </div>
+      )}
+      {!isCoach && (
+        <div className="py-3">
+          <CollapsibleSection title="イベント結果の表示">
+            <EventResultsSection />
           </CollapsibleSection>
         </div>
       )}

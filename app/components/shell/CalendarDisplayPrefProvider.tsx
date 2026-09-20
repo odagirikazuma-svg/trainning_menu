@@ -13,7 +13,7 @@ export type CalendarSlotOption =
 
 export const calendarSlotOptionLabel: Record<CalendarSlotOption, string> = {
   none: "表示しない",
-  training_time: "トレーニング開始時刻（予定）",
+  training_time: "開始時刻・種目（予定。ラン/ウェイト）",
   actual_type: "実際に行った種目（ラン/ウェイト/その他）",
   training_content: "メニューのタイトル",
   memo_mark: "一言メモの内容（先頭数文字）",
