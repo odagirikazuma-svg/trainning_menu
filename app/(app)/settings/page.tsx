@@ -780,77 +780,141 @@ function SectionRegistrationSection({
   );
 }
 
+// 設定ページの大分類。アイコン＋タイトルを常に表示するヘッダーの下に、
+// その分類に属する設定項目（CollapsibleSection）をまとめる。
+// childrenを渡さない場合は「表示だけ」の分類として、準備中である旨を表示する。
+function SettingsGroup({
+  icon,
+  iconAlt,
+  title,
+  children,
+  placeholder,
+}: {
+  icon: string;
+  iconAlt: string;
+  title: string;
+  children?: React.ReactNode;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 rounded-xl border border-border-color bg-surface p-3 shadow-sm">
+      <div className="flex items-center gap-2 px-0.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={icon}
+          alt={iconAlt}
+          className="h-6 w-6 shrink-0 rounded-md object-cover"
+        />
+        <h2 className="text-sm font-bold text-foreground">{title}</h2>
+      </div>
+      {children ? (
+        <div className="flex flex-col gap-2">{children}</div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-neutral-400 px-3 py-3 text-center text-[11px] text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          {placeholder ?? "設定できる項目は準備中です。"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { profile, signOut } = useProfile();
   const isCoach = profile.role === "coach";
   const pushSupported = isPushSupported();
+  const myPageIcon = profile.icon_url || "/icons/nav-default-avatar.png";
 
   return (
-    <div className="mx-auto flex w-full flex-col divide-y divide-border-color p-4 sm:p-5">
-      <div className="pb-3">
-        <CollapsibleSection title="表示モード">
-          <ThemeSection />
-        </CollapsibleSection>
-      </div>
-      <div className="py-3">
-        <CollapsibleSection title="カレンダーの初期表示">
-          <CalendarViewSection />
-        </CollapsibleSection>
-      </div>
-      {!isCoach && (
-        <div className="py-3">
-          <CollapsibleSection title="マイページカレンダーの表示項目">
-            <MyPageCalendarDisplaySection />
-          </CollapsibleSection>
-        </div>
-      )}
-      {!isCoach && (
-        <div className="py-3">
-          <CollapsibleSection title="イベント結果の表示">
-            <EventResultsSection />
-          </CollapsibleSection>
-        </div>
-      )}
-      <div className="py-3">
-        <CollapsibleSection title="プロフィールアイコン">
-          <IconSection />
-        </CollapsibleSection>
-      </div>
-      {!isCoach && (
-        <div className="py-3">
-          <CollapsibleSection title="次の試合">
-            <NextMatchSection />
-          </CollapsibleSection>
-        </div>
-      )}
-      {pushSupported && (
-        <div className="py-3">
-          <CollapsibleSection title="通知設定">
-            <NotificationSection />
-          </CollapsibleSection>
-        </div>
-      )}
-      {isCoach && (
+    <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
+      {isCoach ? (
         <>
-          <div className="py-3">
+          <SettingsGroup icon="/icons/nav-settings.png" iconAlt="通常" title="通常">
+            {pushSupported && (
+              <CollapsibleSection title="通知設定">
+                <NotificationSection />
+              </CollapsibleSection>
+            )}
+            <CollapsibleSection title="デザイン設定">
+              <ThemeSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="カレンダー表示設定">
+              <CalendarViewSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="プロフィールアイコンの設定">
+              <IconSection />
+            </CollapsibleSection>
+          </SettingsGroup>
+
+          <SettingsGroup icon="/icons/nav-admin.png" iconAlt="管理設定" title="管理設定">
             <CollapsibleSection title="メンバー情報の編集">
               <MemberRoleEditSection profile={profile} />
             </CollapsibleSection>
-          </div>
-          <div className="py-3">
             <CollapsibleSection title="新規メンバー登録">
               <NewMemberRegistrationSection profile={profile} />
             </CollapsibleSection>
-          </div>
-          <div className="py-3">
+          </SettingsGroup>
+
+          <SettingsGroup icon="/icons/nav-board.png" iconAlt="練習予定表" title="練習予定表">
             <CollapsibleSection title="セクション登録">
               <SectionRegistrationSection profile={profile} />
             </CollapsibleSection>
-          </div>
+          </SettingsGroup>
+
+          <SettingsGroup icon="/icons/nav-events.png" iconAlt="イベント" title="イベント">
+            <p className="rounded-lg border border-border-color bg-surface-2 px-3 py-2.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+              管理者にはウェイトMAX・体組成のイベント結果を常に「全員の数値」で、学年ごとに折りたたんで表示します。
+            </p>
+          </SettingsGroup>
+        </>
+      ) : (
+        <>
+          <SettingsGroup icon="/icons/nav-settings.png" iconAlt="一般" title="一般">
+            {pushSupported && (
+              <CollapsibleSection title="通知設定">
+                <NotificationSection />
+              </CollapsibleSection>
+            )}
+            <CollapsibleSection title="デザイン設定">
+              <ThemeSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="カレンダー表示設定">
+              <CalendarViewSection />
+            </CollapsibleSection>
+          </SettingsGroup>
+
+          <SettingsGroup icon={myPageIcon} iconAlt="マイページ" title="マイページ">
+            <CollapsibleSection title="プロフィールアイコンの設定">
+              <IconSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="次の試合">
+              <NextMatchSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="マイページカレンダーの表示設定">
+              <MyPageCalendarDisplaySection />
+            </CollapsibleSection>
+          </SettingsGroup>
+
+          <SettingsGroup
+            icon="/icons/nav-team-chuo.png"
+            iconAlt="チームページ"
+            title="チームページ"
+          />
+
+          <SettingsGroup
+            icon="/icons/nav-board.png"
+            iconAlt="練習予定表"
+            title="練習予定表"
+          />
+
+          <SettingsGroup icon="/icons/nav-events.png" iconAlt="イベント" title="イベント">
+            <CollapsibleSection title="結果の表示">
+              <EventResultsSection />
+            </CollapsibleSection>
+          </SettingsGroup>
         </>
       )}
 
-      <div className="pt-4">
+      <div className="pt-2">
         <button
           onClick={signOut}
           className="w-full rounded-lg border border-neutral-400 py-3 text-sm font-medium text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
