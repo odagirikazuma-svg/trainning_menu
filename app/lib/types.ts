@@ -133,3 +133,12 @@ export type TitleColor = (typeof titleColorPalette)[number];
 export function getTitleColorBySlot(slot: number): TitleColor {
   return titleColorPalette[((slot % titleColorPalette.length) + titleColorPalette.length) % titleColorPalette.length];
 }
+
+// 互換用：文字列のハッシュ値から色を決める簡易版（登録順を持たない古い画面向け）
+export function getTitleColor(title: string): TitleColor {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = (hash * 31 + title.charCodeAt(i)) % 997;
+  }
+  return titleColorPalette[hash % titleColorPalette.length];
+}
