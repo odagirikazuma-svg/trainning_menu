@@ -13,8 +13,8 @@ export type EventResultsPref = {
 };
 
 const DEFAULT_PREF: EventResultsPref = {
-  viewMode: "self",
-  collapseByGrade: false,
+  viewMode: "all",
+  collapseByGrade: true,
 };
 
 const STORAGE_KEY = "event-results-pref";

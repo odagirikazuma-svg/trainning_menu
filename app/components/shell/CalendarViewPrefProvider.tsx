@@ -10,7 +10,7 @@ const CalendarViewPrefContext = createContext<{
   defaultCalendarView: CalendarViewPref;
   setDefaultCalendarView: (v: CalendarViewPref) => void;
 }>({
-  defaultCalendarView: "month",
+  defaultCalendarView: "week",
   setDefaultCalendarView: () => {},
 });
 
@@ -23,9 +23,9 @@ export default function CalendarViewPrefProvider({
 }: {
   children: React.ReactNode;
 }) {
-  // デフォルトは「月表示」
+  // デフォルトは「週表示」
   const [defaultCalendarView, setDefaultCalendarViewState] =
-    useState<CalendarViewPref>("month");
+    useState<CalendarViewPref>("week");
 
   useEffect(() => {
     try {
