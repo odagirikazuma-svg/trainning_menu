@@ -613,7 +613,10 @@ function MemberDayView({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-background text-foreground">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border-color bg-surface/95 px-4 py-3 backdrop-blur">
+      <header
+        className="sticky z-10 flex items-center justify-between gap-2 border-b border-border-color bg-surface/95 px-4 py-3 backdrop-blur"
+        style={{ top: "var(--app-header-height, 0px)" }}
+      >
         <h1 className="flex items-center gap-2 text-base font-bold text-foreground sm:text-lg">
           <span className="inline-block h-4 w-1 rounded-full bg-red-600" />
           {member?.display_name}のマイページ(閲覧)

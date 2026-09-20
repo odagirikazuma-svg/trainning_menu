@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { TrainingType, trainingTypeLabel } from "../lib/types";
+import { TitleColor, TrainingType, trainingTypeLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
 
 type TodoMenuRow = {
@@ -198,6 +198,7 @@ export function SelfTrainingInlineForm({
   profile,
   supabase,
   titleOptions,
+  titleColors,
   onSubmitted,
   onError,
 }: {
@@ -205,6 +206,7 @@ export function SelfTrainingInlineForm({
   profile: Profile;
   supabase: ReturnType<typeof createClient>;
   titleOptions: Record<TrainingType, string[]>;
+  titleColors?: Record<TrainingType, Map<string, TitleColor>>;
   onSubmitted: () => void | Promise<void>;
   onError: (msg: string) => void;
 }) {
@@ -288,6 +290,33 @@ export function SelfTrainingInlineForm({
               <option key={t} value={t} />
             ))}
           </datalist>
+          {titleOptions[type].length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {titleOptions[type].map((t) => {
+                const c = titleColors?.[type].get(t);
+                const selected = title.trim() === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTitle(t)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                      selected
+                        ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
+                        : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                    }`}
+                  >
+                    {c && (
+                      <span
+                        className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${c.dot}`}
+                      />
+                    )}
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </label>
       )}
       <textarea

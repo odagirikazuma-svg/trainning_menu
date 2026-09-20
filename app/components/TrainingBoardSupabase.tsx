@@ -1390,7 +1390,8 @@ export default function TrainingBoardSupabase({
 
         {/* 練習スケジュール */}
         <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold text-neutral-400">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             練習スケジュール
           </h3>
           <MenuCalendar

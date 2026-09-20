@@ -102,10 +102,11 @@ export const canCreateMenu = (role: Role) =>
   role === "captain" ||
   role === "coach";
 
-// ウェイトのトレーニングタイトルごとに、常に同じ色を割り当てるためのパレット。
-// 文字列をハッシュ化してパレットのインデックスを決めるので、
-// 同じタイトルは常に同じ色になる（DBに色を保存する必要がない）。
-const titleColorPalette: {
+// トレーニングタイトルごとに割り当てる色のパレット（最大10個まで保存できるタイトルと対応）。
+// 「何番目に登録されたタイトルか」（スロット番号 0〜9）によって色を決める。
+// 11個目のタイトルを登録すると1個目のタイトルの登録が外れ、
+// 11個目は1個目と同じスロット（＝同じ色）を引き継ぐ（10個周期でスロットを使い回す）。
+export const titleColorPalette: {
   border: string;
   text: string;
   dot: string;
@@ -119,12 +120,16 @@ const titleColorPalette: {
   { border: "border-cyan-500", text: "text-cyan-400", dot: "bg-cyan-500", fill: "bg-cyan-950/40" },
   { border: "border-orange-500", text: "text-orange-400", dot: "bg-orange-500", fill: "bg-orange-950/40" },
   { border: "border-lime-500", text: "text-lime-400", dot: "bg-lime-500", fill: "bg-lime-950/40" },
+  { border: "border-indigo-500", text: "text-indigo-400", dot: "bg-indigo-500", fill: "bg-indigo-950/40" },
+  { border: "border-rose-500", text: "text-rose-400", dot: "bg-rose-500", fill: "bg-rose-950/40" },
 ];
 
-export function getTitleColor(title: string) {
-  let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = (hash * 31 + title.charCodeAt(i)) % 997;
-  }
-  return titleColorPalette[hash % titleColorPalette.length];
+// 保存できるタイトルの最大数（種目＝ラン/ウェイト/その他ごとに10個まで）
+export const MAX_SAVED_TITLES = 10;
+
+export type TitleColor = (typeof titleColorPalette)[number];
+
+// スロット番号（登録された順番を10で割った余り）から色を取得する
+export function getTitleColorBySlot(slot: number): TitleColor {
+  return titleColorPalette[((slot % titleColorPalette.length) + titleColorPalette.length) % titleColorPalette.length];
 }

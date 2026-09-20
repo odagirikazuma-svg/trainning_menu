@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { Profile } from "../AuthGate";
+import { useTasksChangedSignal } from "./taskRefreshBus";
 
 export type EventPendingTask = {
   id: string;
@@ -32,6 +33,7 @@ export function useMyEventPendingTasks(
   profile: Profile | null
 ): EventPendingTasks {
   const [tasks, setTasks] = useState<EventPendingTasks>(EMPTY);
+  const refreshSignal = useTasksChangedSignal();
 
   useEffect(() => {
     if (
@@ -132,7 +134,7 @@ export function useMyEventPendingTasks(
     return () => {
       cancelled = true;
     };
-  }, [profile]);
+  }, [profile, refreshSignal]);
 
   return tasks;
 }

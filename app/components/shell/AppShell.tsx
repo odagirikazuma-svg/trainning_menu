@@ -79,6 +79,16 @@ function AppShellInner({
   const [headerHeight, setHeaderHeight] = useState(72);
   const [headerExtra, setHeaderExtra] = useState<React.ReactNode | null>(null);
 
+  // ヘッダーの実測高さをCSS変数としても公開しておく。ページ側で独自に
+  // sticky（追従）表示したい要素があるとき、top-0だとヘッダー（position: fixed）の
+  // 裏に隠れてしまうため、top: var(--app-header-height) を指定して逃がせるようにする。
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--app-header-height",
+      `${headerHeight}px`
+    );
+  }, [headerHeight]);
+
   // value をメモ化しないと、AppShellInner が再レンダーするたびに
   // ProfileContext / SubNavContext の value が新しいオブジェクトになり、
   // useProfile() / useSubNav() を呼んでいるページ側（マイページ／イベントなど）が

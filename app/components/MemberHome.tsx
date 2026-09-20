@@ -6,10 +6,12 @@ import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
   DayType,
   dayTypeLabel,
-  getTitleColor,
+  getTitleColorBySlot,
   Location,
   locationLabel,
+  MAX_SAVED_TITLES,
   SessionType,
+  TitleColor,
   TrainingType,
   trainingTypeDotColor,
   trainingTypeLabel,
@@ -19,6 +21,7 @@ import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
 import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
+import { notifyTasksChanged } from "./shell/taskRefreshBus";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 import {
   useCalendarDisplayPref,
@@ -275,10 +278,14 @@ export default function MemberHome({
   const [todayLogType, setTodayLogType] = useState<TrainingType | null>(null);
   const [todayLogTitle, setTodayLogTitle] = useState("");
   const [todayLogStartTime, setTodayLogStartTime] = useState("");
-  // 種目（ラン/ウェイト/その他）ごとに、過去に入力したタイトルの候補一覧
+  // 種目（ラン/ウェイト/その他）ごとに、保存されているタイトルの候補一覧（最大10個ずつ）
   const [titleOptionsByType, setTitleOptionsByType] = useState<
     Record<TrainingType, string[]>
   >({ running: [], weight: [], other: [] });
+  // 種目ごとの「タイトル→色」マップ（保存枠(10個)から外れたタイトルは含まれない＝無色になる）
+  const [titleColorByType, setTitleColorByType] = useState<
+    Record<TrainingType, Map<string, TitleColor>>
+  >({ running: new Map(), weight: new Map(), other: new Map() });
   const [loadingLog, setLoadingLog] = useState(true);
   const [savingLog, setSavingLog] = useState(false);
   const [todayAbsentRecords, setTodayAbsentRecords] = useState<RecentRecord[]>(
@@ -1147,37 +1154,74 @@ export default function MemberHome({
     } else {
       setProgressInjuryId(null);
       await loadInjuries();
+      notifyTasksChanged();
     }
     setSavingProgress(false);
   }
 
   async function loadTitleOptions() {
+    // 登録された順番（初めて使われた日時=created_at昇順）を知るためにcreated_atも取得する
     const { data, error } = await supabase
       .from("weight_logs")
-      .select("type, title")
+      .select("type, title, created_at")
       .eq("author_id", profile.id)
-      .not("title", "is", null);
+      .not("title", "is", null)
+      .order("created_at", { ascending: true });
 
     if (error) {
       setErrorMsg(error.message);
       return;
     }
-    const byType: Record<TrainingType, Set<string>> = {
-      running: new Set(),
-      weight: new Set(),
-      other: new Set(),
+
+    // 種目ごとに、タイトルが最初に使われた時刻（created_at昇順で最初に出てきたもの）を記録する
+    const firstSeenByType: Record<TrainingType, Map<string, string>> = {
+      running: new Map(),
+      weight: new Map(),
+      other: new Map(),
     };
     for (const r of (data ?? []) as {
       type: TrainingType;
       title: string | null;
+      created_at: string;
     }[]) {
-      if (r.title && r.title.trim() !== "") byType[r.type].add(r.title);
+      if (!r.title || r.title.trim() === "") continue;
+      const m = firstSeenByType[r.type];
+      if (!m.has(r.title)) m.set(r.title, r.created_at);
     }
-    setTitleOptionsByType({
-      running: Array.from(byType.running).sort((a, b) => a.localeCompare(b, "ja")),
-      weight: Array.from(byType.weight).sort((a, b) => a.localeCompare(b, "ja")),
-      other: Array.from(byType.other).sort((a, b) => a.localeCompare(b, "ja")),
+
+    const nextOptions: Record<TrainingType, string[]> = {
+      running: [],
+      weight: [],
+      other: [],
+    };
+    const nextColors: Record<TrainingType, Map<string, TitleColor>> = {
+      running: new Map(),
+      weight: new Map(),
+      other: new Map(),
+    };
+
+    (Object.keys(firstSeenByType) as TrainingType[]).forEach((type) => {
+      // 登録された順（古い→新しい）に並べる
+      const ordered = Array.from(firstSeenByType[type].entries())
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([title]) => title);
+      const total = ordered.length;
+      // 直近MAX_SAVED_TITLES個だけを「保存枠」として残す（古いものは保存枠から外れる＝無色になる）
+      const active = ordered.slice(Math.max(0, total - MAX_SAVED_TITLES));
+      const dropped = total - active.length;
+      const colorMap = new Map<string, TitleColor>();
+      active.forEach((title, i) => {
+        // 全体の中での登録順（0始まり）。10個周期でスロット（＝色）を使い回すことで、
+        // 11個目が1個目と同じ色を引き継ぐ、という挙動になる
+        const overallRank = dropped + i;
+        colorMap.set(title, getTitleColorBySlot(overallRank));
+      });
+      nextColors[type] = colorMap;
+      nextOptions[type] = active.slice().sort((a, b) => a.localeCompare(b, "ja"));
     });
+
+    setTitleOptionsByType(nextOptions);
+    setTitleColorByType(nextColors);
   }
 
   async function loadLogForDate(date: string) {
@@ -1327,6 +1371,7 @@ export default function MemberHome({
       await loadSelfTrainingTodo();
       await loadTitleOptions();
       await loadCalendarData();
+      notifyTasksChanged();
     }
     setSavingLog(false);
   }
@@ -1563,6 +1608,13 @@ export default function MemberHome({
   );
   useSubNav(homeSubNav);
 
+  // タイトル入力欄の下の詳細ボックスは、入力途中の文字列そのままでは色を変えない
+  // （キー入力のたびに色がコロコロ変わって分かりにくいため）。
+  // 既に保存されている（保存枠に入っている）タイトルと完全一致した時だけ、その色を使う。
+  const activeTitleColor = todayLogType
+    ? titleColorByType[todayLogType].get(todayLogTitle.trim())
+    : undefined;
+
   return (
     <>
       {errorMsg && (
@@ -1718,6 +1770,7 @@ export default function MemberHome({
                 menu={m}
                 onSubmitted={async () => {
                   await loadTodo();
+                  notifyTasksChanged();
                 }}
                 onError={setErrorMsg}
                 profileId={profile.id}
@@ -1740,11 +1793,13 @@ export default function MemberHome({
                 profile={profile}
                 supabase={supabase}
                 titleOptions={titleOptionsByType}
+                titleColors={titleColorByType}
                 onSubmitted={async () => {
                   await loadSelfTrainingTodo();
                   await loadTitleOptions();
                   await loadCalendarData();
                   if (logDate === date) await loadLogForDate(date);
+                  notifyTasksChanged();
                 }}
                 onError={setErrorMsg}
               />
@@ -1779,6 +1834,7 @@ export default function MemberHome({
           homeLocation={effectiveHomeLocation ?? "tama"}
           otherLocationOffDates={otherLocationOffDates}
           memoPreviews={calendarMemoPreviews}
+          titleColorByType={titleColorByType}
         />
       </section>
       )}
@@ -1908,6 +1964,33 @@ export default function MemberHome({
                     <option key={t} value={t} />
                   ))}
                 </datalist>
+                {titleOptionsByType[todayLogType].length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {titleOptionsByType[todayLogType].map((t) => {
+                      const c = titleColorByType[todayLogType].get(t);
+                      const selected = todayLogTitle.trim() === t;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTodayLogTitle(t)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                            selected
+                              ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
+                              : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                          }`}
+                        >
+                          {c && (
+                            <span
+                              className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${c.dot}`}
+                            />
+                          )}
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </label>
             )}
             <textarea
@@ -1920,8 +2003,8 @@ export default function MemberHome({
               className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
                 !todayLog
                   ? "border-neutral-700 bg-neutral-900"
-                  : todayLogTitle.trim()
-                    ? `${getTitleColor(todayLogTitle.trim()).border} ${getTitleColor(todayLogTitle.trim()).fill}`
+                  : activeTitleColor
+                    ? `${activeTitleColor.border} ${activeTitleColor.fill}`
                     : "border-emerald-800 bg-emerald-950/40"
               }`}
             />
@@ -2276,6 +2359,7 @@ function UnifiedCalendar({
   homeLocation,
   otherLocationOffDates,
   memoPreviews,
+  titleColorByType,
 }: {
   cursor: Date;
   onCursorChange: (d: Date) => void;
@@ -2306,6 +2390,7 @@ function UnifiedCalendar({
   homeLocation: Location;
   otherLocationOffDates: Set<string>;
   memoPreviews?: Map<string, string>;
+  titleColorByType: Record<TrainingType, Map<string, TitleColor>>;
 }) {
   const { defaultCalendarView } = useCalendarViewPref();
   const { pref } = useCalendarDisplayPref();
@@ -2337,6 +2422,7 @@ function UnifiedCalendar({
 
   const dotsByDate = new Map<string, TrainingType[]>();
   const titleByDate = new Map<string, string>();
+  const titleTypeByDate = new Map<string, TrainingType>();
   const selfLoggedDates = new Set<string>();
   for (const row of weightLogs) {
     selfLoggedDates.add(row.date);
@@ -2347,6 +2433,7 @@ function UnifiedCalendar({
     dotsByDate.set(row.date, list);
     if (row.title && !titleByDate.has(row.date)) {
       titleByDate.set(row.date, row.title);
+      titleTypeByDate.set(row.date, row.type);
     }
   }
 
@@ -2560,7 +2647,12 @@ function UnifiedCalendar({
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
           const title = titleByDate.get(key);
-          const titleColor = title ? getTitleColor(title) : null;
+          const titleType = titleTypeByDate.get(key);
+          // 保存枠（最大10個）から外れた古いタイトルは、内容はカレンダーに残るが無色になる
+          const titleColor =
+            title && titleType
+              ? (titleColorByType[titleType].get(title) ?? null)
+              : null;
           const isHighlighted = key === highlightDate;
           const isToday = key === todayDate;
           const isMatchDay =

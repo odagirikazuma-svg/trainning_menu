@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { Profile } from "../AuthGate";
 import type { Location, SessionType } from "../../lib/types";
+import { useTasksChangedSignal } from "./taskRefreshBus";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -40,6 +41,8 @@ function injuryNeedsProgressUpdate(inj: InjuryRow, todayStr: string): boolean {
  */
 export function useMyTaskCount(profile: Profile | null): number {
   const [count, setCount] = useState(0);
+  // 提出・キャンセルなど、タスク件数に影響しうる操作があった後に再計算するための合図
+  const refreshSignal = useTasksChangedSignal();
 
   useEffect(() => {
     if (!profile) {
@@ -184,7 +187,7 @@ export function useMyTaskCount(profile: Profile | null): number {
     return () => {
       cancelled = true;
     };
-  }, [profile]);
+  }, [profile, refreshSignal]);
 
   return count;
 }

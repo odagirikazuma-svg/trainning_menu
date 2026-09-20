@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProfile, useSubNav } from "../../components/shell/AppShell";
 import SubTabBar from "../../components/shell/SubTabBar";
+import { notifyTasksChanged } from "../../components/shell/taskRefreshBus";
 import TaskQueuePopup, {
   type QueueTask,
 } from "../../components/TaskQueuePopup";
@@ -124,6 +125,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
       setSquat("");
       setDeadlift("");
       await load();
+      notifyTasksChanged();
     }
     setSaving(false);
   }
@@ -374,6 +376,7 @@ function TeamEventTab({
     } else {
       setOpenEventId(null);
       await load();
+      notifyTasksChanged();
     }
     setSaving(false);
   }

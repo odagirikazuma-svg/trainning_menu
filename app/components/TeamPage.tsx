@@ -823,11 +823,11 @@ export default function TeamPage({
           </p>
         )}
 
-        {/* 月間の練習スケジュール */}
+        {/* 日報の提出状況（カレンダー） */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            月間の練習スケジュール
+            日報の提出状況
           </h2>
           {isCoach && (
             <div className="flex gap-2">
