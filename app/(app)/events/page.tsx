@@ -1853,18 +1853,24 @@ function WeightMaxCoachManagement({
               };
               return (
                 <div className="overflow-x-auto rounded-lg border border-border-color">
-                  <table className="w-full min-w-[360px] text-xs">
+                  <table className="w-full table-fixed text-[11px]">
+                    <colgroup>
+                      <col className="w-[34%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[22%]" />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-border-color bg-background text-neutral-500 dark:text-neutral-400">
-                        <th className="px-2 py-1.5 text-left font-medium">氏名</th>
-                        <th className="px-2 py-1.5 text-right font-medium">
+                        <th className="px-1.5 py-1.5 text-left font-medium">氏名</th>
+                        <th className="px-1 py-1.5 text-right font-medium">
                           ベンチ
                         </th>
-                        <th className="px-2 py-1.5 text-right font-medium">
+                        <th className="px-1 py-1.5 text-right font-medium">
                           スクワット
                         </th>
-                        <th className="px-2 py-1.5 text-right font-medium">
-                          デッドリフト
+                        <th className="px-1 py-1.5 text-right font-medium">
+                          デッド
                         </th>
                       </tr>
                     </thead>
@@ -1874,10 +1880,10 @@ function WeightMaxCoachManagement({
                           key={r.id}
                           className="border-b border-border-color last:border-b-0"
                         >
-                          <td className="px-2 py-1.5 text-foreground">
+                          <td className="truncate px-1.5 py-1.5 text-foreground">
                             {r.display_name}
                           </td>
-                          <td className="px-2 py-1.5 text-right text-foreground">
+                          <td className="px-1 py-1.5 text-right text-foreground">
                             {r.bench ?? "―"}
                             {r.bench != null && (
                               <span className="text-neutral-500 dark:text-neutral-400">
@@ -1886,7 +1892,7 @@ function WeightMaxCoachManagement({
                             )}
                             {diffSpan(r.bench, r.id, "bench")}
                           </td>
-                          <td className="px-2 py-1.5 text-right text-foreground">
+                          <td className="px-1 py-1.5 text-right text-foreground">
                             {r.squat ?? "―"}
                             {r.squat != null && (
                               <span className="text-neutral-500 dark:text-neutral-400">
@@ -1895,7 +1901,7 @@ function WeightMaxCoachManagement({
                             )}
                             {diffSpan(r.squat, r.id, "squat")}
                           </td>
-                          <td className="px-2 py-1.5 text-right text-foreground">
+                          <td className="px-1 py-1.5 text-right text-foreground">
                             {r.deadlift ?? "―"}
                             {r.deadlift != null && (
                               <span className="text-neutral-500 dark:text-neutral-400">
@@ -2375,19 +2381,25 @@ function TeamEventCoachManagement({
                 </button>
                 {isExpanded && (
                   <div className="overflow-x-auto border-t border-border-color">
-                    <table className="w-full min-w-[360px] text-xs">
+                    <table className="w-full table-fixed text-[11px]">
+                      <colgroup>
+                        <col className="w-[34%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[22%]" />
+                      </colgroup>
                       <thead>
                         <tr className="border-b border-border-color bg-background text-neutral-500 dark:text-neutral-400">
-                          <th className="px-2 py-1.5 text-left font-medium">
+                          <th className="px-1.5 py-1.5 text-left font-medium">
                             氏名
                           </th>
-                          <th className="px-2 py-1.5 text-right font-medium">
+                          <th className="px-1 py-1.5 text-right font-medium">
                             体重
                           </th>
-                          <th className="px-2 py-1.5 text-right font-medium">
+                          <th className="px-1 py-1.5 text-right font-medium">
                             体脂肪率
                           </th>
-                          <th className="px-2 py-1.5 text-right font-medium">
+                          <th className="px-1 py-1.5 text-right font-medium">
                             筋肉量
                           </th>
                         </tr>
@@ -2400,10 +2412,10 @@ function TeamEventCoachManagement({
                               key={r.authorId}
                               className="border-b border-border-color last:border-b-0"
                             >
-                              <td className="px-2 py-1.5 text-foreground">
+                              <td className="truncate px-1.5 py-1.5 text-foreground">
                                 {r.name}
                               </td>
-                              <td className="px-2 py-1.5 text-right text-foreground">
+                              <td className="px-1 py-1.5 text-right text-foreground">
                                 {r.weightKg ?? "―"}
                                 {r.weightKg != null && (
                                   <span className="text-neutral-500 dark:text-neutral-400">
@@ -2411,7 +2423,7 @@ function TeamEventCoachManagement({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-1.5 text-right text-foreground">
+                              <td className="px-1 py-1.5 text-right text-foreground">
                                 {r.bodyFatPct ?? "―"}
                                 {r.bodyFatPct != null && (
                                   <span className="text-neutral-500 dark:text-neutral-400">
@@ -2419,7 +2431,7 @@ function TeamEventCoachManagement({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-1.5 text-right text-foreground">
+                              <td className="px-1 py-1.5 text-right text-foreground">
                                 {r.muscleMassKg ?? "―"}
                                 {r.muscleMassKg != null && (
                                   <span className="text-neutral-500 dark:text-neutral-400">
