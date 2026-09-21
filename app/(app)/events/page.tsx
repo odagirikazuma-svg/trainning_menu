@@ -1852,7 +1852,7 @@ function WeightMaxCoachManagement({
                 );
               };
               return (
-                <div className="overflow-x-auto rounded-lg border border-border-color">
+                <div className="max-w-md overflow-x-auto rounded-lg border border-border-color">
                   <table className="w-full table-fixed text-[11px]">
                     <colgroup>
                       <col className="w-[34%]" />
@@ -1984,7 +1984,9 @@ function TeamEventCoachManagement({
       }[];
     }[]
   >([]);
-  const [expandedBodyKey, setExpandedBodyKey] = useState<string | null>(null);
+  const [expandedBodyKeys, setExpandedBodyKeys] = useState<Set<string>>(
+    new Set()
+  );
   const [matchSubmissions, setMatchSubmissions] = useState<
     MatchSubmissionRow[]
   >([]);
@@ -2358,16 +2360,21 @@ function TeamEventCoachManagement({
             計測記録
           </h3>
           {bodyGroups.map((g) => {
-            const isExpanded = expandedBodyKey === g.key;
+            const isExpanded = expandedBodyKeys.has(g.key);
             return (
               <div
                 key={g.key}
-                className="overflow-hidden rounded-lg border border-border-color bg-surface-2"
+                className="max-w-md overflow-hidden rounded-lg border border-border-color bg-surface-2"
               >
                 <button
                   type="button"
                   onClick={() =>
-                    setExpandedBodyKey(isExpanded ? null : g.key)
+                    setExpandedBodyKeys((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(g.key)) next.delete(g.key);
+                      else next.add(g.key);
+                      return next;
+                    })
                   }
                   className="flex w-full items-center justify-between px-3 py-2 text-left text-sm"
                 >
