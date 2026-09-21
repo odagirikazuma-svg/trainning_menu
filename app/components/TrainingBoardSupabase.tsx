@@ -171,8 +171,8 @@ export default function TrainingBoardSupabase({
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAltType, setAbsentAltType] = useState<
-    "running" | "weight" | "other"
-  >("running");
+    "running" | "weight" | "other" | ""
+  >("");
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
@@ -707,7 +707,12 @@ export default function TrainingBoardSupabase({
 
   async function handleAddAbsent(e: React.FormEvent) {
     e.preventDefault();
-    if (!absentReason.trim() || !absentAlternative.trim()) return;
+    if (
+      !absentReason.trim() ||
+      !absentAlternative.trim() ||
+      !absentAltType
+    )
+      return;
     const altTypeLabel =
       absentAltType === "running"
         ? "ランニング"
@@ -717,7 +722,7 @@ export default function TrainingBoardSupabase({
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
     await submitComment("absent", combined, null, absentAltType);
     setAbsentReason("");
-    setAbsentAltType("running");
+    setAbsentAltType("");
     setAbsentAlternative("");
   }
 
@@ -1300,11 +1305,12 @@ export default function TrainingBoardSupabase({
                     value={absentAltType}
                     onChange={(e) =>
                       setAbsentAltType(
-                        e.target.value as "running" | "weight" | "other"
+                        e.target.value as "running" | "weight" | "other" | ""
                       )
                     }
                     className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
                   >
+                    <option value="">選択してください</option>
                     <option value="running">ランニング</option>
                     <option value="weight">ウェイト</option>
                     <option value="other">その他</option>
@@ -1324,7 +1330,12 @@ export default function TrainingBoardSupabase({
                 </label>
                 <button
                   type="submit"
-                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700"
+                  disabled={
+                    !absentReason.trim() ||
+                    !absentAlternative.trim() ||
+                    !absentAltType
+                  }
+                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 active:bg-neutral-700"
                 >
                   未実施報告を提出する
                 </button>

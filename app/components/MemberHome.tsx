@@ -298,6 +298,7 @@ export default function MemberHome({
   const [todayMemoText, setTodayMemoText] = useState("");
   const [loadingMemo, setLoadingMemo] = useState(true);
   const [savingMemo, setSavingMemo] = useState(false);
+  const [showMemoEditor, setShowMemoEditor] = useState(false);
   // 日付 → メモ内容（カレンダーのマス目にプレビュー表示するため、有無だけでなく内容も持つ）
   const [calendarMemoPreviews, setCalendarMemoPreviews] = useState<
     Map<string, string>
@@ -1867,34 +1868,6 @@ export default function MemberHome({
           )}
         </div>
 
-        {loadingMemo ? null : (
-          <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-semibold text-neutral-400">
-                一言メモ（自分だけが見られます・20文字まで）
-              </label>
-              <span className="shrink-0 text-[10px] text-neutral-500">
-                {todayMemoText.length}/20
-              </span>
-            </div>
-            <textarea
-              value={todayMemoText}
-              onChange={(e) => setTodayMemoText(e.target.value.slice(0, 20))}
-              maxLength={20}
-              rows={1}
-              placeholder="例：体調良好、右膝に違和感 など"
-              className="resize-none rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
-            />
-            <button
-              onClick={handleSaveMemo}
-              disabled={savingMemo}
-              className="self-end rounded-lg bg-neutral-700 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-600 disabled:opacity-50"
-            >
-              {savingMemo ? "保存中…" : "メモを保存する"}
-            </button>
-          </div>
-        )}
-
         {logDate === todayStr &&
           todayAbsentRecords.map((r) => (
           <div
@@ -2009,17 +1982,63 @@ export default function MemberHome({
                     : "border-emerald-800 bg-emerald-950/40"
               }`}
             />
-            <button
-              onClick={handleSaveLog}
-              disabled={savingLog || !todayLogType}
-              className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
-            >
-              {todayLog ? "更新する" : "保存する"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSaveLog}
+                disabled={savingLog || !todayLogType}
+                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+              >
+                {todayLog ? "更新する" : "保存する"}
+              </button>
+              {!loadingMemo && (
+                <button
+                  type="button"
+                  onClick={() => setShowMemoEditor((v) => !v)}
+                  title="一言メモ"
+                  aria-label="一言メモを書く"
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-sm active:bg-neutral-800 ${
+                    showMemoEditor || todayMemoText
+                      ? "border-amber-700 bg-amber-950/40 text-amber-400"
+                      : "border-neutral-700 bg-neutral-900 text-neutral-400"
+                  }`}
+                >
+                  ✎
+                </button>
+              )}
+            </div>
             {todayLog && (
               <p className="text-[11px] text-emerald-400">
                 保存済みです。内容を変えてから「更新する」を押すと上書きされます。
               </p>
+            )}
+            {showMemoEditor && !loadingMemo && (
+              <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-neutral-400">
+                    一言メモ（自分だけが見られます・20文字まで）
+                  </label>
+                  <span className="shrink-0 text-[10px] text-neutral-500">
+                    {todayMemoText.length}/20
+                  </span>
+                </div>
+                <textarea
+                  value={todayMemoText}
+                  onChange={(e) =>
+                    setTodayMemoText(e.target.value.slice(0, 20))
+                  }
+                  maxLength={20}
+                  rows={1}
+                  placeholder="例：体調良好、右膝に違和感 など"
+                  className="resize-none rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+                />
+                <button
+                  onClick={handleSaveMemo}
+                  disabled={savingMemo}
+                  className="self-end rounded-lg bg-neutral-700 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-600 disabled:opacity-50"
+                >
+                  {savingMemo ? "保存中…" : "メモを保存する"}
+                </button>
+              </div>
             )}
 
             {todayLogType === "running" && !todayLogTitle.trim() && (

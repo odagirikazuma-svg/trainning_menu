@@ -36,9 +36,9 @@ export function MatReportInlineForm({
   const [mode, setMode] = useState<"select" | "report" | "absent">("select");
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
-  const [absentAltType, setAbsentAltType] = useState<
-    "running" | "weight" | "other"
-  >("running");
+  const [absentAltType, setAbsentAltType] = useState<TrainingType | null>(
+    null
+  );
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -64,7 +64,8 @@ export function MatReportInlineForm({
 
   async function submitAbsent(e: React.FormEvent) {
     e.preventDefault();
-    if (!absentReason.trim() || !absentAlternative.trim()) return;
+    if (!absentReason.trim() || !absentAlternative.trim() || !absentAltType)
+      return;
     setSubmitting(true);
     const altTypeLabel = trainingTypeLabel[absentAltType];
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
@@ -177,7 +178,10 @@ export function MatReportInlineForm({
           <button
             type="submit"
             disabled={
-              submitting || !absentReason.trim() || !absentAlternative.trim()
+              submitting ||
+              !absentReason.trim() ||
+              !absentAlternative.trim() ||
+              !absentAltType
             }
             className="self-start rounded-lg bg-neutral-600 px-4 py-2 text-xs font-medium text-white active:bg-neutral-700 disabled:opacity-50"
           >
