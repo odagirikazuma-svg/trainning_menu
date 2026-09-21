@@ -1341,6 +1341,10 @@ export default function MemberHome({
 
   async function handleSaveLog() {
     if (!todayLogType) return;
+    if (logDate > todayStr) {
+      setErrorMsg("まだ来ていない日のトレーニングは記録できません。");
+      return;
+    }
     if (todayLogStartTime && todayLogStartTime < "06:00") {
       setErrorMsg("開始時間はその日の6時以降で入力してください。");
       return;
@@ -1891,6 +1895,10 @@ export default function MemberHome({
 
         {loadingLog ? (
           <p className="text-xs text-neutral-500">読み込み中…</p>
+        ) : logDate > todayStr ? (
+          <p className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-500">
+            まだ来ていない日のトレーニングは記録できません。当日以降にこの画面から記録してください。
+          </p>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
