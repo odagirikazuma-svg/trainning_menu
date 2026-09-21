@@ -74,11 +74,11 @@ type DetailState = {
   selfTitle: string | null;
 };
 
-// 週カレンダーのマス目に出す簡易ステータス（提出済み/未提出/オフをひと目で分かるようにする）
+// カレンダーのマス目に出す表示内容（実施したトレーニングの種類とタイトルのみ）
 type DayMark = {
   isOff: boolean;
-  matStatus: "not_required" | "report" | "absent" | "missing";
-  selfStatus: "not_required" | "done" | "missing";
+  type: TrainingType | null;
+  title: string | null;
 };
 
 function toDateKey(d: Date) {
@@ -108,43 +108,70 @@ function startOfWeek(dateStr: string): Date {
   return date;
 }
 
-// 部員の週カレンダー（常に週表示のみ。設定の月/週表示切り替えとは独立）
-function MemberWeekStrip({
-  weekCursor,
-  onWeekCursorChange,
+// 部員のカレンダー（月間/週間を切り替えられる。表示内容は実施したトレーニングとタイトルのみ）
+function MemberCalendar({
+  viewMode,
+  onViewModeChange,
+  cursor,
+  onCursorChange,
   selectedDate,
   onSelectDate,
   todayDate,
   marks,
 }: {
-  weekCursor: Date;
-  onWeekCursorChange: (d: Date) => void;
+  viewMode: "month" | "week";
+  onViewModeChange: (v: "month" | "week") => void;
+  cursor: Date;
+  onCursorChange: (d: Date) => void;
   selectedDate: string;
   onSelectDate: (dateStr: string) => void;
   todayDate: string;
   marks: Map<string, DayMark>;
 }) {
-  const start = startOfWeek(toDateKey(weekCursor));
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
-  const weekEnd = days[6];
-  const headerLabel =
-    start.getMonth() === weekEnd.getMonth()
-      ? `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日〜${weekEnd.getDate()}日`
-      : `${start.getMonth() + 1}月${start.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+
+  let cells: (Date | null)[];
+  let headerLabel: string;
+  if (viewMode === "month") {
+    const firstDay = new Date(year, month, 1);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    headerLabel = `${year}年${month + 1}月`;
+  } else {
+    const start = startOfWeek(toDateKey(cursor));
+    cells = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+    const weekEnd = cells[6] as Date;
+    headerLabel =
+      start.getMonth() === weekEnd.getMonth()
+        ? `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日〜${weekEnd.getDate()}日`
+        : `${start.getMonth() + 1}月${start.getDate()}日〜${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  }
 
   function handlePrev() {
-    const d = new Date(weekCursor);
-    d.setDate(d.getDate() - 7);
-    onWeekCursorChange(d);
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month - 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() - 7);
+      onCursorChange(d);
+    }
   }
   function handleNext() {
-    const d = new Date(weekCursor);
-    d.setDate(d.getDate() + 7);
-    onWeekCursorChange(d);
+    if (viewMode === "month") {
+      onCursorChange(new Date(year, month + 1, 1));
+    } else {
+      const d = new Date(cursor);
+      d.setDate(d.getDate() + 7);
+      onCursorChange(d);
+    }
   }
 
   return (
@@ -166,6 +193,29 @@ function MemberWeekStrip({
           ＞
         </button>
       </div>
+      <div className="mb-2 flex justify-center">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+          {(
+            [
+              { v: "month", label: "月表示" },
+              { v: "week", label: "週表示" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => onViewModeChange(opt.v)}
+              className={`rounded-md px-3 py-1 font-medium ${
+                viewMode === opt.v
+                  ? "bg-red-600 text-white shadow"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
           <div
@@ -183,18 +233,12 @@ function MemberWeekStrip({
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {days.map((d, i) => {
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
           const key = toDateKey(d);
           const mark = marks.get(key);
           const isSelected = key === selectedDate;
           const isToday = key === todayDate;
-          const hasMissing =
-            !!mark &&
-            (mark.matStatus === "missing" || mark.selfStatus === "missing");
-          const hasAny =
-            !!mark &&
-            (mark.matStatus !== "not_required" ||
-              mark.selfStatus !== "not_required");
 
           let bgClass = "bg-surface-2 text-foreground";
           if (isSelected) {
@@ -202,14 +246,16 @@ function MemberWeekStrip({
               "bg-amber-100 dark:bg-amber-950/40 font-bold text-amber-700 dark:text-amber-400";
           } else if (mark?.isOff) {
             bgClass =
-              "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-500";
+              "bg-neutral-300 dark:bg-neutral-950 text-neutral-500 dark:text-neutral-600";
           }
 
           return (
             <button
               key={i}
               onClick={() => onSelectDate(key)}
-              className={`relative flex min-h-[56px] flex-col items-center justify-start gap-1 rounded-lg border pt-1 text-xs active:bg-neutral-200 dark:active:bg-neutral-700 ${bgClass} ${
+              className={`relative flex ${
+                viewMode === "week" ? "min-h-[64px]" : "min-h-[52px]"
+              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs active:bg-neutral-200 dark:active:bg-neutral-700 ${bgClass} ${
                 isSelected
                   ? "ring-2 ring-amber-400"
                   : isToday
@@ -222,10 +268,11 @@ function MemberWeekStrip({
                 <span className="text-[8px] text-neutral-500 dark:text-neutral-400">
                   オフ
                 </span>
-              ) : hasMissing ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-              ) : hasAny ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              ) : mark?.type ? (
+                <span className="max-w-full truncate px-0.5 text-[8px] leading-none text-neutral-500 dark:text-neutral-400">
+                  {trainingTypeLabel[mark.type]}
+                  {mark.title ? `・${mark.title}` : ""}
+                </span>
               ) : null}
             </button>
           );
@@ -245,14 +292,19 @@ function MemberDayView({
   const router = useRouter();
   const supabase = createClient();
   const [date, setDate] = useState(initialDate);
-  const [weekCursor, setWeekCursor] = useState(() => {
+  const [calendarViewMode, setCalendarViewMode] = useState<"month" | "week">(
+    "week"
+  );
+  const [calendarCursor, setCalendarCursor] = useState(() => {
     const [y, m, d] = initialDate.split("-").map(Number);
     return new Date(y, m - 1, d);
   });
   const [member, setMember] = useState<MemberInfo | null | undefined>(undefined);
   const [nextMatch, setNextMatch] = useState<NextMatchInfo | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
-  const [weekMarks, setWeekMarks] = useState<Map<string, DayMark>>(new Map());
+  const [calendarMarks, setCalendarMarks] = useState<Map<string, DayMark>>(
+    new Map()
+  );
   const [injuries, setInjuries] = useState<InjuryInfo[]>([]);
   const [matchReflections, setMatchReflections] = useState<
     MatchReflectionInfo[]
@@ -487,110 +539,69 @@ function MemberDayView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, date, member]);
 
-  // 週カレンダーのマス目に出す簡易ステータス（週替わり・本人情報のロード完了時に取得）
+  // カレンダーのマス目に出す表示内容（実施したトレーニングの種類とタイトルのみ）
+  // 月表示/週表示の切り替え・カーソル移動・本人情報のロード完了時に取得
   useEffect(() => {
     if (!member) return;
     let cancelled = false;
     (async () => {
-      const start = startOfWeek(toDateKey(weekCursor));
-      const weekStartStr = toDateKey(start);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 6);
-      const weekEndStr = toDateKey(end);
+      let rangeStartStr: string;
+      let rangeEndStr: string;
+      if (calendarViewMode === "month") {
+        const y = calendarCursor.getFullYear();
+        const m = calendarCursor.getMonth();
+        rangeStartStr = toDateKey(new Date(y, m, 1));
+        rangeEndStr = toDateKey(new Date(y, m + 1, 0));
+      } else {
+        const start = startOfWeek(toDateKey(calendarCursor));
+        rangeStartStr = toDateKey(start);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        rangeEndStr = toDateKey(end);
+      }
 
       const { data: dayData } = await supabase
         .from("schedule_days")
-        .select("date, is_off, sessions:schedule_sessions(session_type)")
+        .select("date, is_off")
         .eq("team_id", member.team_id)
         .eq("location", member.home_location ?? "tama")
-        .gte("date", weekStartStr)
-        .lte("date", weekEndStr);
-
-      const scheduleRows = (dayData ?? []) as unknown as {
-        date: string;
-        is_off: boolean;
-        sessions: { session_type: string }[];
-      }[];
+        .gte("date", rangeStartStr)
+        .lte("date", rangeEndStr);
 
       const marks = new Map<string, DayMark>();
-      const matDatesNeeded: string[] = [];
-      const selfDatesNeeded: string[] = [];
-      for (const row of scheduleRows) {
-        const hasMat =
-          !row.is_off && row.sessions.some((s) => s.session_type === "mat");
-        const hasNonMat =
-          !row.is_off && row.sessions.some((s) => s.session_type !== "mat");
+      for (const row of (dayData ?? []) as {
+        date: string;
+        is_off: boolean;
+      }[]) {
+        marks.set(row.date, { isOff: row.is_off, type: null, title: null });
+      }
+
+      const { data: logData } = await supabase
+        .from("weight_logs")
+        .select("date, type, title")
+        .eq("author_id", memberId)
+        .gte("date", rangeStartStr)
+        .lte("date", rangeEndStr);
+      for (const row of (logData ?? []) as {
+        date: string;
+        type: TrainingType;
+        title: string | null;
+      }[]) {
+        const existing = marks.get(row.date);
         marks.set(row.date, {
-          isOff: row.is_off,
-          matStatus: hasMat ? "missing" : "not_required",
-          selfStatus: hasNonMat ? "missing" : "not_required",
+          isOff: existing?.isOff ?? false,
+          type: row.type,
+          title: row.title,
         });
-        if (hasMat) matDatesNeeded.push(row.date);
-        if (hasNonMat) selfDatesNeeded.push(row.date);
       }
 
-      if (matDatesNeeded.length > 0) {
-        const { data: ownMenus } = await supabase
-          .from("menus")
-          .select("id, date")
-          .eq("team_id", member.team_id)
-          .eq("location", member.home_location ?? "tama")
-          .eq("is_off", false)
-          .in("date", matDatesNeeded);
-        const { data: jointMenus } = await supabase
-          .from("menus")
-          .select("id, date")
-          .eq("team_id", member.team_id)
-          .eq("is_joint", true)
-          .eq("is_off", false)
-          .in("date", matDatesNeeded);
-        const menuRows = [
-          ...((ownMenus ?? []) as { id: string; date: string }[]),
-          ...((jointMenus ?? []) as { id: string; date: string }[]),
-        ];
-        const menuIdToDate = new Map(menuRows.map((m) => [m.id, m.date]));
-        const menuIds = menuRows.map((m) => m.id);
-        if (menuIds.length > 0) {
-          const { data: commentData } = await supabase
-            .from("comments")
-            .select("menu_id, kind")
-            .in("menu_id", menuIds)
-            .eq("author_id", memberId)
-            .in("kind", ["report", "absent"]);
-          for (const c of (commentData ?? []) as {
-            menu_id: string;
-            kind: string;
-          }[]) {
-            const d = menuIdToDate.get(c.menu_id);
-            if (!d) continue;
-            const mark = marks.get(d);
-            if (mark) mark.matStatus = c.kind === "absent" ? "absent" : "report";
-          }
-        }
-      }
-
-      if (selfDatesNeeded.length > 0) {
-        const { data: logData } = await supabase
-          .from("weight_logs")
-          .select("date")
-          .eq("author_id", memberId)
-          .in("date", selfDatesNeeded);
-        const loggedDates = new Set(
-          ((logData ?? []) as { date: string }[]).map((r) => r.date)
-        );
-        for (const d of selfDatesNeeded) {
-          const mark = marks.get(d);
-          if (mark && loggedDates.has(d)) mark.selfStatus = "done";
-        }
-      }
-
-      if (!cancelled) setWeekMarks(marks);
+      if (!cancelled) setCalendarMarks(marks);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberId, weekCursor, member]);
+  }, [memberId, calendarViewMode, calendarCursor, member]);
 
   if (loadingMember) {
     return (
@@ -659,14 +670,16 @@ function MemberDayView({
           )}
         </div>
 
-        {/* 週カレンダー（常に週表示。ここから日付を選ぶと下の詳細が切り替わる） */}
-        <MemberWeekStrip
-          weekCursor={weekCursor}
-          onWeekCursorChange={setWeekCursor}
+        {/* カレンダー（月表示/週表示を切り替え可能。ここから日付を選ぶと下の詳細が切り替わる） */}
+        <MemberCalendar
+          viewMode={calendarViewMode}
+          onViewModeChange={setCalendarViewMode}
+          cursor={calendarCursor}
+          onCursorChange={setCalendarCursor}
           selectedDate={date}
           onSelectDate={setDate}
           todayDate={todayStr}
-          marks={weekMarks}
+          marks={calendarMarks}
         />
         <p className="text-center text-sm font-semibold text-foreground">
           {formatMonthDay(date)}の記録
@@ -725,11 +738,11 @@ function MemberDayView({
         <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            マット以外のセッション(自主トレ)
+            トレーニング
           </h2>
           {detail?.selfStatus === "not_required" ? (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              この日はマット以外のセッションはありません。
+              この日はトレーニングの予定はありません。
             </p>
           ) : detail?.selfStatus === "missing" ? (
             <p className="rounded-lg bg-red-950/40 p-3 text-xs text-red-400">
