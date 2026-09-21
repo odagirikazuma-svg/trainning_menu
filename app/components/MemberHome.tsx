@@ -11,7 +11,6 @@ import {
   locationLabel,
   MAX_SAVED_TITLES,
   SessionType,
-  sessionTypeDotColor,
   sessionTypeLabel,
   TitleColor,
   TrainingType,
@@ -2541,9 +2540,6 @@ function UnifiedCalendar({
           key={slotId}
           className="flex items-center gap-0.5 max-w-full truncate"
         >
-          <span
-            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.type]}`}
-          />
           {sessionTypeLabel[s.type]} {formatSessionSlot(s, schedule)}
         </span>
       );
@@ -2559,9 +2555,6 @@ function UnifiedCalendar({
           key={slotId}
           className="flex items-center gap-0.5 max-w-full truncate"
         >
-          <span
-            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${trainingTypeDotColor[t]}`}
-          />
           {trainingTypeLabel[t]}
         </span>
       );
@@ -2687,7 +2680,7 @@ function UnifiedCalendar({
               "bg-amber-100 dark:bg-amber-950/40 font-bold text-amber-700 dark:text-amber-400";
           } else if (schedule?.isOff) {
             bgClass =
-              "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-500";
+              "bg-neutral-300 dark:bg-neutral-950 text-neutral-500 dark:text-neutral-600";
           } else if (isAway) {
             bgClass =
               "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300";
