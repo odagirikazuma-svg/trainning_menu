@@ -154,22 +154,27 @@ export default function ScheduleOverviewCalendar({
               const key = toDateKey(date);
               const day = scheduleDays.get(key);
               const isSelected = key === selectedDate;
+              const isToday = key === toDateKey(new Date());
               const weekday = date.getDay();
               return (
                 <button
                   key={i}
                   onClick={() => onSelectDate(key)}
                   className={`flex min-h-[46px] flex-col items-start gap-0.5 rounded border p-0.5 text-left ${
-                    day?.is_off
-                      ? "border-border-color bg-neutral-100 dark:bg-neutral-900"
-                      : day?.day_type === "camp"
-                        ? "border-pink-300 bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/40"
-                        : day?.day_type === "match"
-                          ? "border-red-300 bg-red-100 dark:border-red-900/60 dark:bg-red-950/40"
-                          : day?.day_type === "away"
-                            ? "border-purple-300 bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/40"
-                            : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
-                  } ${isSelected ? "ring-1 ring-red-500" : ""}`}
+                    isSelected
+                      ? "border-amber-400 bg-amber-100 ring-1 ring-amber-400 dark:bg-amber-950/40"
+                      : day?.is_off
+                        ? "border-border-color bg-neutral-100 dark:bg-neutral-900"
+                        : day?.day_type === "camp"
+                          ? "border-pink-300 bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/40"
+                          : day?.day_type === "match"
+                            ? "border-red-300 bg-red-100 dark:border-red-900/60 dark:bg-red-950/40"
+                            : day?.day_type === "away"
+                              ? "border-purple-300 bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/40"
+                              : isToday
+                                ? "border-blue-400 bg-blue-100 ring-1 ring-blue-400 dark:border-blue-600 dark:bg-blue-950/40"
+                                : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
+                  }`}
                 >
                   <span
                     className={`text-[10px] font-semibold ${

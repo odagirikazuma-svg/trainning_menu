@@ -3,14 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, DayType, dayTypeLabel, Location, locationLabel, SessionType } from "../lib/types";
+import {
+  currentGrade,
+  DayType,
+  dayTypeLabel,
+  Location,
+  locationLabel,
+  SessionType,
+  TrainingType,
+  trainingTypeLabel,
+} from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 
-const adminSubTabItems: { value: "submissions" | "injuries"; label: string }[] = [
+const adminSubTabItems: {
+  value: "submissions" | "training" | "injuries";
+  label: string;
+}[] = [
   { value: "submissions", label: "日報" },
+  { value: "training", label: "トレーニング" },
   { value: "injuries", label: "怪我" },
 ];
 
@@ -262,6 +275,7 @@ function ReportCalendar({
               if (!date) return <div key={i} />;
               const key = toDateKey(date);
               const isHighlighted = key === selectedReportDate;
+              const isToday = key === toDateKey(new Date());
               const weekday = date.getDay();
               const count = submissionCounts.get(key);
               const dayInfo = reportDayInfo.get(key);
@@ -280,14 +294,16 @@ function ReportCalendar({
                         ? "border-emerald-300 bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/60"
                         : isHighlighted
                           ? "border-amber-400 bg-amber-100 ring-1 ring-amber-400 dark:bg-amber-950/40"
-                          : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
+                          : isToday
+                            ? "border-blue-400 bg-blue-100 ring-1 ring-blue-400 dark:border-blue-600 dark:bg-blue-950/40"
+                            : "border-border-color bg-surface-2 active:bg-neutral-200 dark:active:bg-neutral-700"
                   }`}
                 >
                   <span
                     className={`text-[11px] font-semibold ${
-                      !isHighlighted && weekday === 0
+                      !isHighlighted && !isToday && weekday === 0
                         ? "border-b-2 border-red-500 text-red-500 dark:text-red-400"
-                        : !isHighlighted && weekday === 6
+                        : !isHighlighted && !isToday && weekday === 6
                           ? "border-b-2 border-blue-500 text-blue-500 dark:text-blue-400"
                           : "text-foreground"
                     }`}
@@ -872,6 +888,332 @@ export default function CoachAdminPage({
   }
 
 
+  // トレーニング（マット以外のセッション）の提出状況
+  const [trainingCalendarCursor, setTrainingCalendarCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedTrainingDate, setSelectedTrainingDate] = useState<string>(
+    () => toDateKey(new Date())
+  );
+  const [trainingCounts, setTrainingCounts] = useState<
+    Map<string, { submitted: number; total: number }>
+  >(new Map());
+  const [trainingDayInfo, setTrainingDayInfo] = useState<
+    Map<string, { isFullyOff: boolean; dayType: DayType; eventName: string | null }>
+  >(new Map());
+  const [loadingTrainingCounts, setLoadingTrainingCounts] = useState(true);
+  const [trainingDayDetail, setTrainingDayDetail] = useState<{
+    missing: {
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+    }[];
+    submitted: {
+      id: string;
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+      type: TrainingType;
+      title: string | null;
+      content: string;
+    }[];
+  }>({ missing: [], submitted: [] });
+  const [loadingTrainingDayDetail, setLoadingTrainingDayDetail] =
+    useState(false);
+  const [expandedTrainingIds, setExpandedTrainingIds] = useState<
+    Set<string>
+  >(new Set());
+
+  useEffect(() => {
+    loadTrainingMonthCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainingCalendarCursor, members]);
+
+  useEffect(() => {
+    if (selectedTrainingDate) loadTrainingDayDetail(selectedTrainingDate);
+    setExpandedTrainingIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, selectedTrainingDate]);
+
+  function handleSelectTrainingDate(dateStr: string) {
+    setSelectedTrainingDate(dateStr);
+  }
+
+  // カレンダー全体（表示中の月）の日ごとのトレーニング提出状況（◯人／◯人）を集計する
+  async function loadTrainingMonthCounts() {
+    setLoadingTrainingCounts(true);
+    const year = trainingCalendarCursor.getFullYear();
+    const month = trainingCalendarCursor.getMonth();
+    const rangeStart = toDateKey(new Date(year, month, 1));
+    const rangeEnd = toDateKey(new Date(year, month + 1, 0));
+
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const realIdsByLoc: Record<Location, string[]> = {
+      tama: requiredByLoc.tama.filter((m) => !m.isPending).map((m) => m.id),
+      otsuka: requiredByLoc.otsuka.filter((m) => !m.isPending).map((m) => m.id),
+    };
+
+    if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
+      setTrainingCounts(new Map());
+      setTrainingDayInfo(new Map());
+      setLoadingTrainingCounts(false);
+      return;
+    }
+
+    const { data: scheduleData, error: scheduleError } = await supabase
+      .from("schedule_days")
+      .select(
+        "date, location, is_off, day_type, event_name, sessions:schedule_sessions(session_type)"
+      )
+      .eq("team_id", profile.team_id)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd);
+
+    if (scheduleError) {
+      setErrorMsg(scheduleError.message);
+      setLoadingTrainingCounts(false);
+      return;
+    }
+
+    const scheduleByLocDate = new Map<
+      string,
+      { isOff: boolean; hasNonMat: boolean }
+    >();
+    const dayInfoByDate = new Map<
+      string,
+      { isFullyOff: boolean; dayType: DayType; eventName: string | null }
+    >();
+    const dayTypePriority: Record<DayType, number> = {
+      match: 3,
+      camp: 2,
+      away: 1,
+      practice: 0,
+    };
+    for (const row of (scheduleData ?? []) as unknown as {
+      date: string;
+      location: Location;
+      is_off: boolean;
+      day_type: DayType;
+      event_name: string | null;
+      sessions: { session_type: SessionType }[];
+    }[]) {
+      scheduleByLocDate.set(`${row.location}:${row.date}`, {
+        isOff: row.is_off,
+        hasNonMat: row.sessions.some((s) => s.session_type !== "mat"),
+      });
+
+      const existing = dayInfoByDate.get(row.date);
+      const isFullyOff = existing
+        ? existing.isFullyOff && row.is_off
+        : row.is_off;
+      const useThisRow =
+        !existing ||
+        dayTypePriority[row.day_type] > dayTypePriority[existing.dayType];
+      dayInfoByDate.set(row.date, {
+        isFullyOff,
+        dayType: useThisRow ? row.day_type : existing!.dayType,
+        eventName: useThisRow ? row.event_name : existing!.eventName,
+      });
+    }
+    setTrainingDayInfo(dayInfoByDate);
+
+    const allRealIds = [...realIdsByLoc.tama, ...realIdsByLoc.otsuka];
+    const selfLoggedKeys = new Set<string>();
+    if (allRealIds.length > 0) {
+      const { data: logData, error: logError } = await supabase
+        .from("weight_logs")
+        .select("author_id, date")
+        .in("author_id", allRealIds)
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd);
+      if (logError) {
+        setErrorMsg(logError.message);
+        setLoadingTrainingCounts(false);
+        return;
+      }
+      for (const row of (logData ?? []) as {
+        author_id: string;
+        date: string;
+      }[]) {
+        selfLoggedKeys.add(`${row.author_id}:${row.date}`);
+      }
+    }
+
+    const counts = new Map<string, { submitted: number; total: number }>();
+    const cursor = new Date(year, month, 1);
+    while (cursor.getMonth() === month) {
+      const dateKey = toDateKey(cursor);
+      let submitted = 0;
+      let total = 0;
+      for (const loc of ["tama", "otsuka"] as Location[]) {
+        const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
+        if (!day || day.isOff || !day.hasNonMat) continue;
+        const ids = realIdsByLoc[loc];
+        total += ids.length;
+        for (const id of ids) {
+          if (selfLoggedKeys.has(`${id}:${dateKey}`)) submitted++;
+        }
+      }
+      if (total > 0) counts.set(dateKey, { submitted, total });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    setTrainingCounts(counts);
+    setLoadingTrainingCounts(false);
+  }
+
+  // 選択した日の、トレーニング（マット以外）の提出状況の詳細を読み込む
+  async function loadTrainingDayDetail(dateStr: string) {
+    setLoadingTrainingDayDetail(true);
+
+    const { data: scheduleData } = await supabase
+      .from("schedule_days")
+      .select(
+        "location, is_off, sessions:schedule_sessions(session_type, start_time)"
+      )
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr);
+
+    const now = new Date();
+    const scheduleByLoc = new Map<
+      Location,
+      { isOff: boolean; hasNonMat: boolean; selfStarted: boolean }
+    >();
+    for (const row of (scheduleData ?? []) as unknown as {
+      location: Location;
+      is_off: boolean;
+      sessions: { session_type: SessionType; start_time: string | null }[];
+    }[]) {
+      const nonMatSessions = row.sessions.filter(
+        (s) => s.session_type !== "mat"
+      );
+      const earliestNonMat = nonMatSessions
+        .map((s) => s.start_time)
+        .filter((t): t is string => !!t)
+        .sort()[0];
+      scheduleByLoc.set(row.location, {
+        isOff: row.is_off,
+        hasNonMat: nonMatSessions.length > 0,
+        selfStarted: earliestNonMat
+          ? now >= new Date(`${dateStr}T${earliestNonMat}`)
+          : true,
+      });
+    }
+
+    const requiredByLoc: Record<Location, MemberRow[]> = {
+      tama: requiredMembersForLocation("tama"),
+      otsuka: requiredMembersForLocation("otsuka"),
+    };
+    const targetLocs = (["tama", "otsuka"] as Location[]).filter((loc) => {
+      const day = scheduleByLoc.get(loc);
+      return day && !day.isOff && day.hasNonMat;
+    });
+
+    if (targetLocs.length === 0) {
+      setTrainingDayDetail({ missing: [], submitted: [] });
+      setLoadingTrainingDayDetail(false);
+      return;
+    }
+
+    const targetMembers = targetLocs.flatMap((loc) =>
+      requiredByLoc[loc]
+        .filter((m) => !m.isPending)
+        .map((m) => ({ ...m, location: loc }))
+    );
+    const targetIds = targetMembers.map((m) => m.id);
+
+    const logByAuthor = new Map<
+      string,
+      { id: string; type: TrainingType; title: string | null; content: string }
+    >();
+    if (targetIds.length > 0) {
+      const { data: logData, error: logError } = await supabase
+        .from("weight_logs")
+        .select("id, author_id, type, title, content")
+        .eq("date", dateStr)
+        .in("author_id", targetIds);
+      if (logError) {
+        setErrorMsg(logError.message);
+        setLoadingTrainingDayDetail(false);
+        return;
+      }
+      for (const row of (logData ?? []) as {
+        id: string;
+        author_id: string;
+        type: TrainingType;
+        title: string | null;
+        content: string;
+      }[]) {
+        logByAuthor.set(row.author_id, {
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          content: row.content,
+        });
+      }
+    }
+
+    const missing: {
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+    }[] = [];
+    const submitted: {
+      id: string;
+      memberId: string;
+      displayName: string;
+      location: Location;
+      entryYear: number | null;
+      type: TrainingType;
+      title: string | null;
+      content: string;
+    }[] = [];
+
+    for (const m of targetMembers) {
+      const day = scheduleByLoc.get(m.location)!;
+      const log = logByAuthor.get(m.id);
+      if (log) {
+        submitted.push({
+          id: log.id,
+          memberId: m.id,
+          displayName: m.display_name,
+          location: m.location,
+          entryYear: m.entry_year,
+          type: log.type,
+          title: log.title,
+          content: log.content,
+        });
+      } else if (day.selfStarted) {
+        missing.push({
+          memberId: m.id,
+          displayName: m.display_name,
+          location: m.location,
+          entryYear: m.entry_year,
+        });
+      }
+    }
+
+    missing.sort(
+      (a, b) =>
+        a.location.localeCompare(b.location) ||
+        a.displayName.localeCompare(b.displayName, "ja")
+    );
+    submitted.sort(
+      (a, b) =>
+        a.location.localeCompare(b.location) ||
+        a.displayName.localeCompare(b.displayName, "ja")
+    );
+
+    setTrainingDayDetail({ missing, submitted });
+    setLoadingTrainingDayDetail(false);
+  }
+
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
   const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
@@ -879,9 +1221,9 @@ export default function CoachAdminPage({
   );
   const [showPastInjuries, setShowPastInjuries] = useState(false);
 
-  const [adminSubTab, setAdminSubTab] = useState<"submissions" | "injuries">(
-    "submissions"
-  );
+  const [adminSubTab, setAdminSubTab] = useState<
+    "submissions" | "training" | "injuries"
+  >("submissions");
 
   // フッター上のサブナビ（提出状況／怪我の報告の切り替え）を登録
   // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
@@ -1086,6 +1428,147 @@ export default function CoachAdminPage({
         </>
         )}
 
+        {adminSubTab === "training" && (
+        <>
+        {/* トレーニング（マット以外のセッション）の提出状況 */}
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+            トレーニングの提出状況
+          </h2>
+          <p className="text-[11px] text-neutral-500">
+            マット以外のセッション（ラン・ウェイトなど）がある日の、各自のトレーニング記録の提出状況です。
+          </p>
+
+          <ReportCalendar
+            cursor={trainingCalendarCursor}
+            onCursorChange={setTrainingCalendarCursor}
+            loading={loadingTrainingCounts}
+            submissionCounts={trainingCounts}
+            reportDayInfo={trainingDayInfo}
+            selectedReportDate={selectedTrainingDate}
+            onSelectDate={handleSelectTrainingDate}
+          />
+
+          <h3 className="text-xs font-semibold text-neutral-300">
+            {formatMonthDay(selectedTrainingDate)}のトレーニング
+          </h3>
+          {loadingTrainingDayDetail ? (
+            <p className="text-xs text-neutral-500">読み込み中…</p>
+          ) : trainingDayDetail.missing.length === 0 &&
+            trainingDayDetail.submitted.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+              この日はマット以外のセッションがありません。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {trainingDayDetail.missing.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold text-red-500">
+                    未提出（{trainingDayDetail.missing.length}人）
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {trainingDayDetail.missing.map((m) => (
+                      <button
+                        key={m.memberId}
+                        onClick={() =>
+                          router.push(
+                            `/team/${m.memberId}?date=${selectedTrainingDate}`
+                          )
+                        }
+                        className="rounded-full border border-red-900/60 bg-red-950/20 px-2.5 py-1 text-[11px] font-medium text-red-300 active:bg-red-950/40"
+                      >
+                        {locationLabel[m.location]}・{m.displayName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {trainingDayDetail.submitted.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-emerald-500">
+                      提出済み（{trainingDayDetail.submitted.length}人）
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedTrainingIds((prev) =>
+                          prev.size === trainingDayDetail.submitted.length
+                            ? new Set()
+                            : new Set(
+                                trainingDayDetail.submitted.map((s) => s.id)
+                              )
+                        )
+                      }
+                      className="shrink-0 text-[11px] font-medium text-neutral-400 underline"
+                    >
+                      {expandedTrainingIds.size ===
+                      trainingDayDetail.submitted.length
+                        ? "すべて閉じる"
+                        : "全員の詳細を表示"}
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {trainingDayDetail.submitted.map((s) => {
+                      const isOpen = expandedTrainingIds.has(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          className="rounded-lg border border-emerald-900/60 bg-emerald-950/10"
+                        >
+                          <button
+                            onClick={() =>
+                              setExpandedTrainingIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(s.id)) next.delete(s.id);
+                                else next.add(s.id);
+                                return next;
+                              })
+                            }
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs active:bg-black/5"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span className="font-medium text-foreground">
+                                {locationLabel[s.location]}・{s.displayName}
+                              </span>
+                              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
+                                {trainingTypeLabel[s.type]}
+                              </span>
+                              {s.title && (
+                                <span className="text-[10px] text-neutral-500">
+                                  {s.title}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-neutral-600">
+                              {isOpen ? "詳細を閉じる ︿" : "詳細を見る ﹀"}
+                            </span>
+                          </button>
+                          {isOpen && (
+                            <div className="flex flex-col gap-2 border-t border-emerald-900/60 px-3 py-2.5">
+                              <p className="whitespace-pre-wrap text-xs text-foreground">
+                                {s.content || "（内容の記載なし）"}
+                              </p>
+                              <TrainingCommentThread
+                                weightLogId={s.id}
+                                profile={profile}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+        </>
+        )}
+
         {adminSubTab === "injuries" && (
         <>
         {/* 怪我人一覧 */}
@@ -1281,6 +1764,127 @@ function InjuryListItem({
         </div>
       )}
     </li>
+  );
+}
+
+type TrainingCommentRow = {
+  id: string;
+  author_id: string;
+  text: string;
+  created_at: string;
+  author: { display_name: string } | null;
+};
+
+// トレーニング（マット以外）記録に対するコメントスレッド。
+// コーチ・本人どちらからもコメントでき、お互いのフィードバックに使える。
+function TrainingCommentThread({
+  weightLogId,
+  profile,
+}: {
+  weightLogId: string;
+  profile: Profile;
+}) {
+  const supabase = createClient();
+  const [comments, setComments] = useState<TrainingCommentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("weight_log_comments")
+      .select(
+        "id, author_id, text, created_at, author:profiles!weight_log_comments_author_id_fkey(display_name)"
+      )
+      .eq("weight_log_id", weightLogId)
+      .order("created_at", { ascending: true });
+    if (error) setErrorMsg(error.message);
+    setComments((data ?? []) as unknown as TrainingCommentRow[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weightLogId]);
+
+  async function handlePost() {
+    if (!text.trim()) return;
+    setPosting(true);
+    const { error } = await supabase.from("weight_log_comments").insert({
+      weight_log_id: weightLogId,
+      team_id: profile.team_id,
+      author_id: profile.id,
+      text: text.trim(),
+    });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setText("");
+      await load();
+    }
+    setPosting(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-emerald-900/60 pt-2">
+      <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+        コメント
+      </p>
+      {loading ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-neutral-500">まだコメントはありません。</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {comments.map((c) => {
+            const name =
+              c.author_id === profile.id
+                ? "自分"
+                : (c.author?.display_name ?? "（不明）");
+            return (
+              <div
+                key={c.id}
+                className="rounded-lg border border-border-color bg-background p-2 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{name}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    {formatMonthDay(c.created_at.slice(0, 10))}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">
+                  {c.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">
+          {errorMsg}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="コメントを入力"
+          className="flex-1 rounded-lg border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+        />
+        <button
+          onClick={handlePost}
+          disabled={posting || !text.trim()}
+          className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          送信
+        </button>
+      </div>
+    </div>
   );
 }
 

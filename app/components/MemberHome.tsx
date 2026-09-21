@@ -2015,9 +2015,15 @@ export default function MemberHome({
               )}
             </div>
             {todayLog && (
-              <p className="text-[11px] text-emerald-400">
-                保存済みです。内容を変えてから「更新する」を押すと上書きされます。
-              </p>
+              <>
+                <p className="text-[11px] text-emerald-400">
+                  保存済みです。内容を変えてから「更新する」を押すと上書きされます。
+                </p>
+                <TrainingCommentThread
+                  weightLogId={todayLog.id}
+                  profile={profile}
+                />
+              </>
             )}
             {showMemoEditor && !loadingMemo && (
               <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
@@ -2703,8 +2709,7 @@ function UnifiedCalendar({
 
           let bgClass = "bg-surface-2 text-foreground";
           if (isHighlighted) {
-            bgClass =
-              "bg-amber-100 dark:bg-amber-950/40 font-bold text-amber-700 dark:text-amber-400";
+            bgClass = "bg-amber-100 dark:bg-amber-950/40 font-bold";
           } else if (schedule?.isOff) {
             bgClass =
               "bg-neutral-300 dark:bg-neutral-950 text-neutral-500 dark:text-neutral-600";
@@ -2716,6 +2721,8 @@ function UnifiedCalendar({
               "bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300";
           } else if (titleColor) {
             bgClass = `${titleColor.fill} text-neutral-800 dark:text-neutral-200`;
+          } else if (isToday) {
+            bgClass = "bg-blue-100 dark:bg-blue-950/40";
           }
 
           return (
@@ -2726,16 +2733,16 @@ function UnifiedCalendar({
                 viewMode === "week" ? "min-h-[84px]" : "min-h-[56px]"
               } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs active:bg-neutral-200 dark:active:bg-neutral-700 ${bgClass} ${
                 isHighlighted
-                  ? "ring-2 ring-amber-400"
-                  : "border-border-color"
+                  ? "border-amber-400 ring-1 ring-amber-400"
+                  : isToday
+                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
+                    : "border-border-color"
               } ${
                 isMatchDay
                   ? "ring-2 ring-red-400"
                   : isPending
                     ? "ring-2 ring-yellow-400"
-                    : isToday
-                      ? "ring-1 ring-neutral-400"
-                      : ""
+                    : ""
               }`}
               title={title ?? undefined}
             >
@@ -2784,6 +2791,125 @@ function UnifiedCalendar({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+type TrainingCommentRow = {
+  id: string;
+  author_id: string;
+  text: string;
+  created_at: string;
+  author: { display_name: string } | null;
+};
+
+// トレーニング（マット以外）記録に対するコメントスレッド。
+// コーチ・本人どちらからもコメントでき、お互いのフィードバックに使える。
+function TrainingCommentThread({
+  weightLogId,
+  profile,
+}: {
+  weightLogId: string;
+  profile: Profile;
+}) {
+  const supabase = createClient();
+  const [comments, setComments] = useState<TrainingCommentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("weight_log_comments")
+      .select(
+        "id, author_id, text, created_at, author:profiles!weight_log_comments_author_id_fkey(display_name)"
+      )
+      .eq("weight_log_id", weightLogId)
+      .order("created_at", { ascending: true });
+    if (error) setErrorMsg(error.message);
+    setComments((data ?? []) as unknown as TrainingCommentRow[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weightLogId]);
+
+  async function handlePost() {
+    if (!text.trim()) return;
+    setPosting(true);
+    const { error } = await supabase.from("weight_log_comments").insert({
+      weight_log_id: weightLogId,
+      team_id: profile.team_id,
+      author_id: profile.id,
+      text: text.trim(),
+    });
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setText("");
+      await load();
+    }
+    setPosting(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+      <p className="text-[11px] font-semibold text-neutral-400">コメント</p>
+      {loading ? (
+        <p className="text-xs text-neutral-500">読み込み中…</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-neutral-500">まだコメントはありません。</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {comments.map((c) => {
+            const name =
+              c.author_id === profile.id
+                ? "自分"
+                : (c.author?.display_name ?? "コーチ");
+            return (
+              <div
+                key={c.id}
+                className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-neutral-100">{name}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    {c.created_at.slice(5, 10).replace("-", "/")}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-neutral-200">
+                  {c.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {errorMsg && (
+        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">
+          {errorMsg}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="コメントを入力"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-100"
+        />
+        <button
+          onClick={handlePost}
+          disabled={posting || !text.trim()}
+          className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          送信
+        </button>
       </div>
     </div>
   );

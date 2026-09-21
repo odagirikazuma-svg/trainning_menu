@@ -940,3 +940,29 @@ create policy "team_event_comments_insert_same_team" on team_event_comments
 
 create policy "team_event_comments_delete_self" on team_event_comments
   for delete using (author_id = auth.uid());
+
+-- ============================================
+-- 追加: トレーニング（マット以外のセッション）の実施報告へのコメント機能
+-- コーチ・本人どちらもコメントできる（管理ページの「トレーニング」タブ、
+-- マイページのトレーニング記録欄から利用する）。
+-- ============================================
+create table if not exists weight_log_comments (
+  id uuid primary key default gen_random_uuid(),
+  weight_log_id uuid not null references weight_logs(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+alter table weight_log_comments enable row level security;
+
+create policy "weight_log_comments_select_same_team" on weight_log_comments
+  for select using (team_id = get_my_team_id());
+
+create policy "weight_log_comments_insert_same_team" on weight_log_comments
+  for insert with check (
+    author_id = auth.uid() and team_id = get_my_team_id()
+  );
+
+create policy "weight_log_comments_delete_self" on weight_log_comments
+  for delete using (author_id = auth.uid());

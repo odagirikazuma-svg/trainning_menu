@@ -242,11 +242,12 @@ function MemberCalendar({
 
           let bgClass = "bg-surface-2 text-foreground";
           if (isSelected) {
-            bgClass =
-              "bg-amber-100 dark:bg-amber-950/40 font-bold text-amber-700 dark:text-amber-400";
+            bgClass = "bg-amber-100 dark:bg-amber-950/40 font-bold";
           } else if (mark?.isOff) {
             bgClass =
               "bg-neutral-300 dark:bg-neutral-950 text-neutral-500 dark:text-neutral-600";
+          } else if (isToday) {
+            bgClass = "bg-blue-100 dark:bg-blue-950/40";
           }
 
           return (
@@ -257,9 +258,9 @@ function MemberCalendar({
                 viewMode === "week" ? "min-h-[64px]" : "min-h-[52px]"
               } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs active:bg-neutral-200 dark:active:bg-neutral-700 ${bgClass} ${
                 isSelected
-                  ? "ring-2 ring-amber-400"
+                  ? "border-amber-400 ring-1 ring-amber-400"
                   : isToday
-                    ? "ring-1 ring-neutral-400"
+                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
                     : "border-border-color"
               }`}
             >

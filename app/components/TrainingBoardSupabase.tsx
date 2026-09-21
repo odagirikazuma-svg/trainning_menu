@@ -168,11 +168,11 @@ export default function TrainingBoardSupabase({
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showMissingPopup, setShowMissingPopup] = useState(false);
-  const [expandedReportId, setExpandedReportId] = useState<string | null>(
-    null
+  const [expandedReportIds, setExpandedReportIds] = useState<Set<string>>(
+    new Set()
   );
-  const [expandedAbsentId, setExpandedAbsentId] = useState<string | null>(
-    null
+  const [expandedAbsentIds, setExpandedAbsentIds] = useState<Set<string>>(
+    new Set()
   );
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
@@ -309,8 +309,8 @@ export default function TrainingBoardSupabase({
     setShowCommentForm(false);
     setShowReportForm(false);
     setShowMissingPopup(false);
-    setExpandedReportId(null);
-    setExpandedAbsentId(null);
+    setExpandedReportIds(new Set());
+    setExpandedAbsentIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -1202,14 +1202,36 @@ export default function TrainingBoardSupabase({
                     まだ実施報告はありません。
                   </p>
                 )}
+                {visibleReports.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedReportIds((prev) =>
+                        prev.size === visibleReports.length
+                          ? new Set()
+                          : new Set(visibleReports.map((r) => r.id))
+                      )
+                    }
+                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
+                  >
+                    {expandedReportIds.size === visibleReports.length
+                      ? "すべて閉じる"
+                      : "全員の詳細を表示"}
+                  </button>
+                )}
                 {visibleReports.map((r) => {
-                  const isOpen = expandedReportId === r.id;
+                  const isOpen = expandedReportIds.has(r.id);
                   return (
                     <div key={r.id} className="flex flex-col gap-1.5">
                       <button
                         type="button"
                         onClick={() =>
-                          setExpandedReportId(isOpen ? null : r.id)
+                          setExpandedReportIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.id)) next.delete(r.id);
+                            else next.add(r.id);
+                            return next;
+                          })
                         }
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
@@ -1279,14 +1301,36 @@ export default function TrainingBoardSupabase({
                     まだ未実施報告はありません。
                   </p>
                 )}
+                {visibleAbsentReports.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedAbsentIds((prev) =>
+                        prev.size === visibleAbsentReports.length
+                          ? new Set()
+                          : new Set(visibleAbsentReports.map((c) => c.id))
+                      )
+                    }
+                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
+                  >
+                    {expandedAbsentIds.size === visibleAbsentReports.length
+                      ? "すべて閉じる"
+                      : "全員の詳細を表示"}
+                  </button>
+                )}
                 {visibleAbsentReports.map((c) => {
-                  const isOpen = expandedAbsentId === c.id;
+                  const isOpen = expandedAbsentIds.has(c.id);
                   return (
                     <div key={c.id} className="flex flex-col gap-1.5">
                       <button
                         type="button"
                         onClick={() =>
-                          setExpandedAbsentId(isOpen ? null : c.id)
+                          setExpandedAbsentIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.id)) next.delete(c.id);
+                            else next.add(c.id);
+                            return next;
+                          })
                         }
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
@@ -2014,6 +2058,29 @@ function MenuCalendar({
           const isPast = key < todayKey;
           const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
           const weekday = date.getDay();
+          let bgClass: string;
+          if (isOff || schedule?.is_off) {
+            bgClass =
+              "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700";
+          } else if (schedule?.day_type === "camp") {
+            bgClass =
+              "bg-pink-100 font-medium text-pink-700 active:bg-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:active:bg-pink-900/40";
+          } else if (schedule?.day_type === "match") {
+            bgClass =
+              "bg-red-100 font-medium text-red-700 active:bg-red-200 dark:bg-red-950/40 dark:text-red-400 dark:active:bg-red-900/40";
+          } else if (hasMenu) {
+            bgClass =
+              "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40";
+          } else {
+            bgClass =
+              "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700";
+          }
+          if (isViewDate) {
+            bgClass =
+              "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
+          } else if (isToday) {
+            bgClass = "bg-blue-100 dark:bg-blue-950/40";
+          }
           return (
             <button
               key={i}
@@ -2024,23 +2091,17 @@ function MenuCalendar({
               }}
               className={`relative flex ${
                 viewMode === "week" ? "min-h-[88px]" : "min-h-[56px]"
-              } flex-col items-center justify-start gap-0.5 rounded-lg border border-border-color pt-1 text-xs ${
-                isViewDate && hasMenu
-                  ? "bg-blue-600 font-semibold text-white"
-                  : isOff || schedule?.is_off
-                    ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
-                    : schedule?.day_type === "camp"
-                      ? "bg-pink-100 font-medium text-pink-700 active:bg-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:active:bg-pink-900/40"
-                      : schedule?.day_type === "match"
-                        ? "bg-red-100 font-medium text-red-700 active:bg-red-200 dark:bg-red-950/40 dark:text-red-400 dark:active:bg-red-900/40"
-                        : hasMenu
-                          ? "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40"
-                          : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
-              } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
+              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs ${bgClass} ${
+                isViewDate
+                  ? "border-amber-400 ring-1 ring-amber-400"
+                  : isToday
+                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
+                    : "border-border-color"
+              }`}
             >
               <span
                 className={
-                  !isViewDate && !hasMenu && !isOff && !schedule?.is_off
+                  !isViewDate && !isToday && !hasMenu && !isOff && !schedule?.is_off
                     ? weekday === 0
                       ? "border-b-2 border-red-500 px-1 text-red-500 dark:text-red-400"
                       : weekday === 6
@@ -2051,9 +2112,6 @@ function MenuCalendar({
               >
                 {date.getDate()}
               </span>
-              {isToday && (
-                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900 dark:bg-white" />
-              )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
