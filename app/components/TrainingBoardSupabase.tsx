@@ -1449,6 +1449,16 @@ export default function TrainingBoardSupabase({
                   </button>
                 )}
               </div>
+            ) : viewDateSchedule &&
+              !viewDateSchedule.is_off &&
+              viewDateSchedule.sessions.length > 0 ? (
+              <p className="py-2 text-center text-sm text-neutral-500">
+                この日は
+                {viewDateSchedule.sessions
+                  .map((s) => sessionTypeLabel[s.session_type])
+                  .join("・")}
+                の予定です。メニュー作成はマット練習がある日のみ対応しています。
+              </p>
             ) : (
               <p className="py-2 text-center text-sm text-neutral-500">
                 まだスケジュールは作成されていません。
