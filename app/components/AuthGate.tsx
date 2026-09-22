@@ -253,11 +253,20 @@ export default function AuthGate({
     }
 
     // 事前登録があった場合は「紐付け済み」にする
+    // （ここが失敗すると、事前登録一覧に「未登録」のまま残り続け、
+    // 　提出状況などの集計にも実際の本人プロフィールと二重にカウントされてしまうため、
+    // 　エラーを握りつぶさずコンソールに残しておく）
     if (rosterMatch) {
-      await supabase
+      const { error: claimError } = await supabase
         .from("member_roster")
         .update({ claimed_by: created.id })
         .eq("id", rosterMatch.id);
+      if (claimError) {
+        console.error(
+          "member_rosterのclaimed_by更新に失敗しました（事前登録との紐付けができていません）:",
+          claimError
+        );
+      }
     }
 
     setProfile(created as Profile);

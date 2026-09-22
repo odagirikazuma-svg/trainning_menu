@@ -12,6 +12,12 @@ create table if not exists teams (
 -- role: captain / vice_captain / coach / member
 -- ============================================
 create type member_role as enum ('captain', 'vice_captain', 'coach', 'member');
+-- 以下の役職はもともと後から追加されたが、スキーマを最初から流し込む際に
+-- 途中のポリシー定義がこれらの値を参照するため、enum作成直後にまとめて追加しておく
+alter type member_role add value if not exists 'leader';
+alter type member_role add value if not exists 'vice_leader';
+alter type member_role add value if not exists 'manager';
+alter type member_role add value if not exists 'ob';
 
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -54,10 +60,53 @@ alter table profiles enable row level security;
 alter table menus enable row level security;
 alter table comments enable row level security;
 
+-- 「自分の所属チームID」を取得するヘルパー関数
+-- （以降の多くのRLSポリシーで team_id = get_my_team_id() の形で使う。
+-- 　本来はここで定義していたはずだが、schema.sqlに定義文自体が
+-- 　記載されておらず、本番Supabase側にのみ存在していたため、
+-- 　ここで改めて定義を追加した）
+--
+-- 重要: security definer を付けている。付けないと、profilesテーブル自身の
+-- RLSポリシー（例: profiles_select_same_team）の中からこの関数を呼んだ際に、
+-- 関数内部の「select ... from profiles」がまた同じRLSポリシーの評価を要求し、
+-- "infinite recursion detected in policy for relation profiles" エラーになる。
+-- security definer にすると、関数はオーナー権限（RLSをバイパスする権限）で
+-- 実行されるため、内部のprofiles参照がRLSを再評価せず再帰を起こさない。
+-- search_path も固定して、なりすまし関数によるセキュリティホールを防ぐ。
+create or replace function get_my_team_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select team_id from profiles where id = auth.uid()
+$$;
+
+-- 同様の理由で、「自分がcoachかどうか」を判定する関数もsecurity definerにする
+-- （profiles_update_coachポリシーなど、profiles自身のポリシーから使うため）
+create or replace function is_my_role_coach()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+$$;
+
+-- 自分のプロフィールは常に閲覧可能（team_idの一致判定に頼らない）
+-- 新規登録直後、自分のprofiles行をinsertしてそのままreturningで受け取る際、
+-- まだ自分の行が存在しない時点でget_my_team_id()を評価すると判定できず、
+-- 「insertした行を返そうとしたが閲覧ポリシーを満たせない」エラーになるため、
+-- id = auth.uid() という自明な条件で常に見えるようにしておく
+create policy "profiles_select_self" on profiles
+  for select using (id = auth.uid());
+
 -- 自分のプロフィールと同じチームのプロフィールは閲覧可能
 create policy "profiles_select_same_team" on profiles
   for select using (
-    team_id in (select team_id from profiles where id = auth.uid())
+    team_id = get_my_team_id()
   );
 
 -- 自分のプロフィールは自分で更新可能（roleの自己昇格は防ぎたいので、
@@ -71,7 +120,7 @@ create policy "profiles_insert_self" on profiles
 -- チームは所属メンバーのみ閲覧可能
 create policy "teams_select_member" on teams
   for select using (
-    id in (select team_id from profiles where id = auth.uid())
+    id = get_my_team_id()
   );
 
 -- メニューは同じチームのメンバーのみ閲覧可能
@@ -485,12 +534,18 @@ create policy "member_roster_delete_coach" on member_roster
 -- サインアップ時に自分のメールアドレスに一致する未紐付けの事前登録があれば、
 -- claimed_byを自分自身に更新できるようにする（プロフィール作成時に使用）
 -- ※auth.usersテーブルへの直接参照は権限エラーになるため、auth.email()を使う
+--
+-- 重要: with checkを指定していないと、Postgresの仕様でupdate後の行にも
+-- 同じusing条件（claimed_by is null）が適用されてしまい、
+-- 「claimed_byをnullから自分のIDに更新する」という本来の操作自体が
+-- 常に（エラーも出さず静かに）弾かれてしまうため、with checkを明示する。
 drop policy if exists "member_roster_update_self_claim" on member_roster;
 create policy "member_roster_update_self_claim" on member_roster
   for update using (
     claimed_by is null
     and lower(email) = lower(auth.email())
-  );
+  )
+  with check (claimed_by = auth.uid());
 
 -- 新規サインアップ時（まだ自分のprofilesが存在しない段階）でも、
 -- 自分のメールアドレスに一致する事前登録だけは検索できるようにする
@@ -521,9 +576,12 @@ drop policy if exists "member_roster_select_unclaimed" on member_roster;
 create policy "member_roster_select_unclaimed" on member_roster
   for select using (claimed_by is null);
 
+-- 同様の理由（Postgresのupdate policyはwith check省略時、更新後の行にも
+-- usingを適用してしまう）で、こちらもwith checkを明示する。
 drop policy if exists "member_roster_update_unclaimed_self" on member_roster;
 create policy "member_roster_update_unclaimed_self" on member_roster
-  for update using (claimed_by is null);
+  for update using (claimed_by is null)
+  with check (claimed_by = auth.uid());
 
 -- ============================================
 -- 追加: ウェイトのトレーニング記録にタイトルをつけられるようにする
@@ -570,21 +628,12 @@ create policy "weight_max_events_delete_coach" on weight_max_events
   );
 
 -- ============================================
--- 追加: 部員の役職に「リーダー」「副リーダー」を追加できるようにする
--- （主将・副主将に加えて、学年やグループ単位のリーダーなどを設定できるようにする）
--- ============================================
-alter type member_role add value if not exists 'leader';
-alter type member_role add value if not exists 'vice_leader';
-
--- ============================================
 -- 追加: コーチが同じチームの部員の役職を編集できるようにする
 -- ============================================
 create policy "profiles_update_coach" on profiles
   for update using (
     team_id = get_my_team_id()
-    and exists (
-      select 1 from profiles where id = auth.uid() and role = 'coach'
-    )
+    and is_my_role_coach()
   );
 
 -- ============================================
@@ -650,12 +699,6 @@ alter table injuries add column if not exists progress_updated_at timestamptz;
 -- 追加: 一度報告した怪我は削除できないようにする（編集のみ許可）
 -- ============================================
 drop policy if exists "injuries_delete_self" on injuries;
-
--- ============================================
--- 追加: 部員の役職に「マネージャー」を追加する
--- （マイページを持たず、掲示板・チームページを閲覧のみできる立場）
--- ============================================
-alter type member_role add value if not exists 'manager';
 
 -- ============================================
 -- 追加: プッシュ通知の購読情報を保存するテーブル
@@ -828,12 +871,6 @@ create policy "weight_max_event_targets_delete_coach" on weight_max_event_target
 -- 追加: 「試合の振り返り」に試合結果（優勝・準優勝・◯回戦敗退 など）の項目を追加
 -- ============================================
 alter table team_event_submissions add column if not exists match_result text;
-
--- ============================================
--- 追加: 部員の役職に「OB」を追加する
--- （引退した部員が、これまでの提出記録だけを閲覧できる立場）
--- ============================================
-alter type member_role add value if not exists 'ob';
 
 -- ============================================
 -- 追加: 事前登録（member_roster）の役職に「マネージャー」「リーダー」を追加できるようにする
