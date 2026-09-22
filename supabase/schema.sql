@@ -12,6 +12,12 @@ create table if not exists teams (
 -- role: captain / vice_captain / coach / member
 -- ============================================
 create type member_role as enum ('captain', 'vice_captain', 'coach', 'member');
+-- 以下の役職はもともと後から追加されたが、スキーマを最初から流し込む際に
+-- 途中のポリシー定義がこれらの値を参照するため、enum作成直後にまとめて追加しておく
+alter type member_role add value if not exists 'leader';
+alter type member_role add value if not exists 'vice_leader';
+alter type member_role add value if not exists 'manager';
+alter type member_role add value if not exists 'ob';
 
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -73,6 +79,19 @@ create policy "teams_select_member" on teams
   for select using (
     id in (select team_id from profiles where id = auth.uid())
   );
+
+-- 「自分の所属チームID」を取得するヘルパー関数
+-- （以降の多くのRLSポリシーで team_id = get_my_team_id() の形で使う。
+-- 　本来はここで定義していたはずだが、schema.sqlに定義文自体が
+-- 　記載されておらず、本番Supabase側にのみ存在していたため、
+-- 　ここで改めて定義を追加した）
+create or replace function get_my_team_id()
+returns uuid
+language sql
+stable
+as $$
+  select team_id from profiles where id = auth.uid()
+$$;
 
 -- メニューは同じチームのメンバーのみ閲覧可能
 create policy "menus_select_same_team" on menus
@@ -570,13 +589,6 @@ create policy "weight_max_events_delete_coach" on weight_max_events
   );
 
 -- ============================================
--- 追加: 部員の役職に「リーダー」「副リーダー」を追加できるようにする
--- （主将・副主将に加えて、学年やグループ単位のリーダーなどを設定できるようにする）
--- ============================================
-alter type member_role add value if not exists 'leader';
-alter type member_role add value if not exists 'vice_leader';
-
--- ============================================
 -- 追加: コーチが同じチームの部員の役職を編集できるようにする
 -- ============================================
 create policy "profiles_update_coach" on profiles
@@ -650,12 +662,6 @@ alter table injuries add column if not exists progress_updated_at timestamptz;
 -- 追加: 一度報告した怪我は削除できないようにする（編集のみ許可）
 -- ============================================
 drop policy if exists "injuries_delete_self" on injuries;
-
--- ============================================
--- 追加: 部員の役職に「マネージャー」を追加する
--- （マイページを持たず、掲示板・チームページを閲覧のみできる立場）
--- ============================================
-alter type member_role add value if not exists 'manager';
 
 -- ============================================
 -- 追加: プッシュ通知の購読情報を保存するテーブル
@@ -828,12 +834,6 @@ create policy "weight_max_event_targets_delete_coach" on weight_max_event_target
 -- 追加: 「試合の振り返り」に試合結果（優勝・準優勝・◯回戦敗退 など）の項目を追加
 -- ============================================
 alter table team_event_submissions add column if not exists match_result text;
-
--- ============================================
--- 追加: 部員の役職に「OB」を追加する
--- （引退した部員が、これまでの提出記録だけを閲覧できる立場）
--- ============================================
-alter type member_role add value if not exists 'ob';
 
 -- ============================================
 -- 追加: 事前登録（member_roster）の役職に「マネージャー」「リーダー」を追加できるようにする
