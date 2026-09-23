@@ -216,12 +216,13 @@ export default function TrainingBoardSupabase({
   const [viewDate, setViewDate] = useState<string>(() => toDateKey(new Date()));
 
   useEffect(() => {
-    // 練習に参加しうる部員を、管理者を除いて拠点ごとに集計する
+    // 練習に参加しうる部員を、コーチ・マネージャー・OBを除いて拠点ごとに集計する
+    // （マネージャーは実施報告の提出義務がないため、分母から除外する）
     supabase
       .from("profiles")
       .select("home_location")
       .eq("team_id", profile.team_id)
-      .neq("role", "coach")
+      .not("role", "in", "(coach,manager,ob)")
       .then(({ data }) => {
         const rows = (data ?? []) as { home_location: Location | null }[];
         const tama = rows.filter((r) => r.home_location === "tama").length;
