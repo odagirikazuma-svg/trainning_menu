@@ -289,7 +289,7 @@ function ReportCalendar({
                     viewMode === "week" ? "min-h-[88px]" : "min-h-[52px]"
                   } flex-col items-start gap-0.5 rounded-lg border p-1 text-left ${
                     dayInfo?.isFullyOff
-                      ? "border-border-color bg-neutral-100 dark:bg-neutral-900"
+                      ? "border-neutral-400 bg-neutral-300 dark:border-neutral-600 dark:bg-neutral-800"
                       : isFullySubmitted
                         ? "border-emerald-300 bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/60"
                         : isHighlighted
@@ -311,7 +311,7 @@ function ReportCalendar({
                     {date.getDate()}
                   </span>
                   {dayInfo?.isFullyOff ? (
-                    <span className="text-[9px] text-neutral-500 dark:text-neutral-500">
+                    <span className="text-[9px] font-semibold text-neutral-700 dark:text-neutral-300">
                       全体オフ
                     </span>
                   ) : (
@@ -354,7 +354,7 @@ function ReportCalendar({
               試合
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />
+              <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-300 dark:bg-neutral-800" />
               オフ
             </span>
           </p>
