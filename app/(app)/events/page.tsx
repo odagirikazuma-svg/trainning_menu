@@ -1093,6 +1093,16 @@ function TeamEventTab({
                     {submitted.challenges && (
                       <p className="whitespace-pre-wrap">課題：{submitted.challenges}</p>
                     )}
+                    {submitted.improvement_plan && (
+                      <p className="whitespace-pre-wrap">
+                        今後の改善策：{submitted.improvement_plan}
+                      </p>
+                    )}
+                    {submitted.team_challenges && (
+                      <p className="whitespace-pre-wrap">
+                        チームとしての課題：{submitted.team_challenges}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
