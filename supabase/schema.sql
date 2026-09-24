@@ -123,6 +123,19 @@ create policy "teams_select_member" on teams
     id = get_my_team_id()
   );
 
+-- 「自分の所属チームID」を取得するヘルパー関数
+-- （以降の多くのRLSポリシーで team_id = get_my_team_id() の形で使う。
+-- 　本来はここで定義していたはずだが、schema.sqlに定義文自体が
+-- 　記載されておらず、本番Supabase側にのみ存在していたため、
+-- 　ここで改めて定義を追加した）
+create or replace function get_my_team_id()
+returns uuid
+language sql
+stable
+as $$
+  select team_id from profiles where id = auth.uid()
+$$;
+
 -- メニューは同じチームのメンバーのみ閲覧可能
 create policy "menus_select_same_team" on menus
   for select using (

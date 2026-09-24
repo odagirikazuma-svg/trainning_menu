@@ -407,12 +407,12 @@ export default function MemberHome({
 
   async function loadTodo() {
     setLoadingTodo(true);
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
     const joinedDate = toDateKey(new Date(profile.created_at));
     const rangeStart =
-      toDateKey(twoWeeksAgo) > joinedDate
-        ? toDateKey(twoWeeksAgo)
+      toDateKey(oneMonthAgo) > joinedDate
+        ? toDateKey(oneMonthAgo)
         : joinedDate;
 
     const { data: ownMenuData, error: ownMenuError } = await supabase
@@ -493,12 +493,12 @@ export default function MemberHome({
       setSelfTrainingPending([]);
       return;
     }
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
     const joinedDate = toDateKey(new Date(profile.created_at));
     const rangeStart =
-      toDateKey(twoWeeksAgo) > joinedDate
-        ? toDateKey(twoWeeksAgo)
+      toDateKey(oneMonthAgo) > joinedDate
+        ? toDateKey(oneMonthAgo)
         : joinedDate;
 
     const { data: scheduleData, error: scheduleError } = await supabase
@@ -1773,6 +1773,7 @@ export default function MemberHome({
             urgent: isOverdue,
             content: (
               <MatReportInlineForm
+                key={`mat-${m.id}`}
                 menu={m}
                 onSubmitted={async () => {
                   await loadTodo();
@@ -1791,10 +1792,11 @@ export default function MemberHome({
           queueTasks.push({
             key: `self-${date}`,
             badgeLabel: `練習タスク：トレ報 未提出${isOverdue ? "（期限切れ）" : ""}`,
-            title: `${formatMonthDay(date)}の自主トレを記録する`,
+            title: `${formatMonthDay(date)}のトレーニングを提出する`,
             urgent: isOverdue,
             content: (
               <SelfTrainingInlineForm
+                key={`self-${date}`}
                 date={date}
                 profile={profile}
                 supabase={supabase}
@@ -1813,7 +1815,7 @@ export default function MemberHome({
           });
         }
 
-        return <TaskQueuePopup tasks={queueTasks} />;
+        return <TaskQueuePopup tasks={queueTasks} startWithList />;
       })()}
         </>
       )}
@@ -1996,7 +1998,7 @@ export default function MemberHome({
                 disabled={savingLog || !todayLogType}
                 className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
               >
-                {todayLog ? "更新する" : "保存する"}
+                {savingLog ? "提出中…" : todayLog ? "再提出する" : "提出する"}
               </button>
               {!loadingMemo && (
                 <button
@@ -2017,7 +2019,7 @@ export default function MemberHome({
             {todayLog && (
               <>
                 <p className="text-[11px] text-emerald-400">
-                  保存済みです。内容を変えてから「更新する」を押すと上書きされます。
+                  提出済みです。内容を変えてから「再提出する」を押すと上書きされます。
                 </p>
                 <TrainingCommentThread
                   weightLogId={todayLog.id}
