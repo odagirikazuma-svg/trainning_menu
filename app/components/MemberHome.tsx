@@ -1636,7 +1636,7 @@ export default function MemberHome({
           <button
             onClick={handleToggleTaskListPref}
             disabled={savingTaskListPref}
-            className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[length:calc(11px*var(--fs))] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+            className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
           >
             {showTaskListPref
               ? "タスクのポップアップを非表示にする"
@@ -1696,7 +1696,7 @@ export default function MemberHome({
                     </div>
                     {!progressIsRecovered && (
                       <>
-                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                           新しい完治見込み日
                           <input
                             type="date"
@@ -1707,7 +1707,7 @@ export default function MemberHome({
                             className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                           マット参加の可否
                           <select
                             value={progressMatParticipation}
@@ -1724,7 +1724,7 @@ export default function MemberHome({
                           </select>
                         </label>
                         {progressMatParticipation === "conditional" && (
-                          <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                          <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                             条件の詳細
                             <textarea
                               value={progressMatDetail}
@@ -1738,7 +1738,7 @@ export default function MemberHome({
                         )}
                       </>
                     )}
-                    <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                    <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                       理由・経過（自由記述）
                       <textarea
                         value={progressNote}
@@ -1882,7 +1882,7 @@ export default function MemberHome({
                 loadLogForDate(todayStr);
                 loadMemoForDate(todayStr);
               }}
-              className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-300 active:bg-neutral-800"
+              className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
             >
               今日に戻る
             </button>
@@ -1900,7 +1900,7 @@ export default function MemberHome({
                 className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
               />
               {trainingTypeLabel[r.type]}
-              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-medium text-neutral-300">
+              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-300">
                 未実施報告の代替メニュー
               </span>
             </div>
@@ -1935,7 +1935,7 @@ export default function MemberHome({
               ))}
             </div>
             {todayLogType && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                 開始時間
                 <input
                   type="time"
@@ -1948,7 +1948,7 @@ export default function MemberHome({
               </label>
             )}
             {todayLogType && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                 タイトル
                 <input
                   type="text"
@@ -1973,7 +1973,7 @@ export default function MemberHome({
                           key={t}
                           type="button"
                           onClick={() => setTodayLogTitle(t)}
-                          className={`rounded-full border px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium ${
+                          className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
                             selected
                               ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
                               : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
@@ -2033,7 +2033,7 @@ export default function MemberHome({
             </div>
             {todayLog && (
               <>
-                <p className="text-[length:calc(11px*var(--fs))] text-emerald-400">
+                <p className="text-[length:calc(11px+var(--fs-add))] text-emerald-400">
                   提出済みです。内容を変えてから「再提出する」を押すと上書きされます。
                 </p>
                 <TrainingCommentThread
@@ -2048,7 +2048,7 @@ export default function MemberHome({
                   <label className="text-xs font-semibold text-neutral-400">
                     一言メモ（自分だけが見られます・20文字まで）
                   </label>
-                  <span className="shrink-0 text-[length:calc(10px*var(--fs))] text-neutral-500">
+                  <span className="shrink-0 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                     {todayMemoText.length}/20
                   </span>
                 </div>
@@ -2115,7 +2115,7 @@ export default function MemberHome({
             onSubmit={handleSubmitInjury}
             className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
           >
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               怪我の症状名
               <input
                 type="text"
@@ -2126,7 +2126,7 @@ export default function MemberHome({
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               部位
               <input
                 type="text"
@@ -2137,7 +2137,7 @@ export default function MemberHome({
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               詳細（任意）
               <textarea
                 value={injuryDetail}
@@ -2147,7 +2147,7 @@ export default function MemberHome({
                 className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 disabled:opacity-60"
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               完治見込み日（任意）
               <input
                 type="date"
@@ -2156,7 +2156,7 @@ export default function MemberHome({
                 className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               手術の可能性
               <select
                 value={injurySurgery}
@@ -2170,7 +2170,7 @@ export default function MemberHome({
                 <option value="yes">あり</option>
               </select>
             </label>
-            <label className="flex items-center gap-2 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               <input
                 type="checkbox"
                 checked={injuryNextHospitalUndetermined}
@@ -2182,7 +2182,7 @@ export default function MemberHome({
               次回通院日は未定
             </label>
             {!injuryNextHospitalUndetermined && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                 次回通院日
                 <input
                   type="date"
@@ -2192,7 +2192,7 @@ export default function MemberHome({
                 />
               </label>
             )}
-            <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               マット参加の可否
               <select
                 value={injuryMatParticipation}
@@ -2209,7 +2209,7 @@ export default function MemberHome({
               </select>
             </label>
             {injuryMatParticipation === "conditional" && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                 条件の詳細
                 <textarea
                   value={injuryMatDetail}
@@ -2262,24 +2262,24 @@ export default function MemberHome({
                     </span>
                     <button
                       onClick={() => handleStartEditInjury(inj)}
-                      className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-300 active:bg-neutral-800"
+                      className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
                     >
                       編集
                     </button>
                   </div>
-                  <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                  <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                     マット参加：{matParticipationLabel[inj.mat_participation]}
                     {inj.mat_participation === "conditional" &&
                       inj.mat_participation_detail &&
                       `（${inj.mat_participation_detail}）`}
                   </p>
                   {inj.expected_recovery_date && (
-                    <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                    <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                       完治見込み：{formatMonthDay(inj.expected_recovery_date)}
                     </p>
                   )}
                   {inj.next_hospital_date && (
-                    <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                    <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                       次回通院：{formatMonthDay(inj.next_hospital_date)}
                     </p>
                   )}
@@ -2290,7 +2290,7 @@ export default function MemberHome({
                   )}
                   <button
                     onClick={() => handleMarkRecovered(inj.id)}
-                    className="self-start rounded border border-emerald-800 px-2 py-1 text-[length:calc(11px*var(--fs))] text-emerald-400 active:bg-emerald-900/40"
+                    className="self-start rounded border border-emerald-800 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-emerald-400 active:bg-emerald-900/40"
                   >
                     完治として報告する
                   </button>
@@ -2382,7 +2382,7 @@ function RecentTypeLogs({
             key={r.id}
             className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
           >
-            <p className="mb-1 text-[length:calc(11px*var(--fs))] font-semibold text-neutral-500">
+            <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-500">
               {formatMonthDay(r.date)}
             </p>
             <p className="whitespace-pre-wrap text-sm text-neutral-100">
@@ -2655,7 +2655,7 @@ function UnifiedCalendar({
         </button>
       </div>
       <div className="mb-2 flex justify-center">
-        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px*var(--fs))]">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px+var(--fs-add))]">
           {(
             [
               { v: "month", label: "月表示" },
@@ -2677,7 +2677,7 @@ function UnifiedCalendar({
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px*var(--fs))]">
+      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px+var(--fs-add))]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
           <div
             key={w}
@@ -2779,12 +2779,12 @@ function UnifiedCalendar({
               {schedule &&
                 !schedule.isOff &&
                 (schedule.dayType === "camp" || schedule.dayType === "away") && (
-                  <span className="max-w-full truncate rounded px-1 text-[length:calc(7px*var(--fs))] font-semibold text-neutral-600 dark:text-neutral-300">
+                  <span className="max-w-full truncate rounded text-[length:calc(7px+var(--fs-add-mini))] font-semibold text-neutral-600 dark:text-neutral-300">
                     {schedule.eventName || dayTypeLabel[schedule.dayType]}
                   </span>
                 )}
               {schedule?.isOff && (
-                <span className="max-w-full truncate rounded px-1 text-[length:calc(7px*var(--fs))] font-semibold text-neutral-500 dark:text-neutral-400">
+                <span className="max-w-full truncate rounded text-[length:calc(7px+var(--fs-add-mini))] font-semibold text-neutral-500 dark:text-neutral-400">
                   {otherLocationOffDates.has(key)
                     ? "全体オフ"
                     : `${locationLabel[homeLocation]}のみオフ`}
@@ -2792,13 +2792,13 @@ function UnifiedCalendar({
               )}
               {(renderSlot(pref.slot1, "slot1", key, schedule, title) ||
                 renderSlot(pref.slot2, "slot2", key, schedule, title)) && (
-                <span className="flex flex-col items-center gap-0.5 text-[length:calc(8px*var(--fs))] leading-none text-neutral-500 dark:text-neutral-400">
+                <span className="flex flex-col items-center gap-0.5 text-[length:calc(8px+var(--fs-add-mini))] leading-none text-neutral-500 dark:text-neutral-400">
                   {renderSlot(pref.slot1, "slot1", key, schedule, title)}
                   {renderSlot(pref.slot2, "slot2", key, schedule, title)}
                 </span>
               )}
               {isMatchDay && (
-                <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1 text-[length:calc(8px*var(--fs))] font-bold text-white">
+                <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1 text-[length:calc(8px+var(--fs-add-mini))] font-bold text-white">
                   試合
                 </span>
               )}
@@ -2876,7 +2876,7 @@ function TrainingCommentThread({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <p className="text-[length:calc(11px*var(--fs))] font-semibold text-neutral-400">コメント</p>
+      <p className="text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-400">コメント</p>
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : comments.length === 0 ? (
@@ -2895,7 +2895,7 @@ function TrainingCommentThread({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-neutral-100">{name}</span>
-                  <span className="text-[length:calc(10px*var(--fs))] text-neutral-500">
+                  <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                     {c.created_at.slice(5, 10).replace("-", "/")}
                   </span>
                 </div>
@@ -2908,7 +2908,7 @@ function TrainingCommentThread({
         </div>
       )}
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px*var(--fs))] text-red-400">
+        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">
           {errorMsg}
         </p>
       )}

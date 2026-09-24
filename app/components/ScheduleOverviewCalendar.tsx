@@ -132,7 +132,7 @@ export default function ScheduleOverviewCalendar({
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-0.5 text-center text-[length:calc(9px*var(--fs))]">
+          <div className="grid grid-cols-7 gap-0.5 text-center text-[length:calc(9px+var(--fs-add-mini))]">
             {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
               <div
                 key={w}
@@ -177,7 +177,7 @@ export default function ScheduleOverviewCalendar({
                   }`}
                 >
                   <span
-                    className={`text-[length:calc(10px*var(--fs))] font-semibold ${
+                    className={`text-[length:calc(10px+var(--fs-add))] font-semibold ${
                       day?.is_off
                         ? "text-neutral-400 dark:text-neutral-600"
                         : weekday === 0
@@ -190,7 +190,7 @@ export default function ScheduleOverviewCalendar({
                     {date.getDate()}
                   </span>
                   {day?.is_off && (
-                    <span className="text-[length:calc(8px*var(--fs))] text-neutral-500 dark:text-neutral-500">
+                    <span className="text-[length:calc(8px+var(--fs-add-mini))] text-neutral-500 dark:text-neutral-500">
                       オフ
                     </span>
                   )}
@@ -200,7 +200,7 @@ export default function ScheduleOverviewCalendar({
                       day.day_type === "match" ||
                       day.day_type === "away") && (
                       <span
-                        className={`max-w-full truncate rounded px-0.5 text-[length:calc(8px*var(--fs))] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
+                        className={`max-w-full truncate rounded px-0.5 text-[length:calc(8px+var(--fs-add-mini))] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
                       >
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
@@ -215,7 +215,7 @@ export default function ScheduleOverviewCalendar({
                         <span
                           className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                         />
-                        <span className="truncate text-[length:calc(8px*var(--fs))] text-neutral-600 dark:text-neutral-300">
+                        <span className="truncate text-[length:calc(8px+var(--fs-add-mini))] text-neutral-600 dark:text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time ? s.start_time.slice(0, 5) : "各自"}
                         </span>

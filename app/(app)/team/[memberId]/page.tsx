@@ -198,7 +198,7 @@ function MemberCalendar({
         </button>
       </div>
       <div className="mb-2 flex justify-center">
-        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px*var(--fs))]">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px+var(--fs-add))]">
           {(
             [
               { v: "month", label: "月表示" },
@@ -220,7 +220,7 @@ function MemberCalendar({
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px*var(--fs))]">
+      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px+var(--fs-add))]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
           <div
             key={w}
@@ -270,11 +270,11 @@ function MemberCalendar({
             >
               <span>{d.getDate()}</span>
               {mark?.isOff ? (
-                <span className="text-[length:calc(8px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+                <span className="text-[length:calc(8px+var(--fs-add-mini))] text-neutral-500 dark:text-neutral-400">
                   オフ
                 </span>
               ) : mark?.type ? (
-                <span className="max-w-full truncate px-0.5 text-[length:calc(8px*var(--fs))] leading-none text-neutral-500 dark:text-neutral-400">
+                <span className="max-w-full truncate px-0.5 text-[length:calc(8px+var(--fs-add-mini))] leading-none text-neutral-500 dark:text-neutral-400">
                   {trainingTypeLabel[mark.type]}
                   {mark.title ? `・${mark.title}` : ""}
                 </span>
@@ -656,7 +656,7 @@ function MemberDayView({
         </h1>
         <button
           onClick={() => router.push("/team")}
-          className="rounded border border-border-color px-2.5 py-1.5 text-[length:calc(11px*var(--fs))] text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
+          className="rounded border border-border-color px-2.5 py-1.5 text-[length:calc(11px+var(--fs-add))] text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-800"
         >
           チームページに戻る
         </button>
@@ -683,7 +683,7 @@ function MemberDayView({
             </span>
           )}
           {nextMatch && (
-            <span className="rounded bg-amber-100 px-2.5 py-1 text-[length:calc(13px*var(--fs))] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <span className="rounded bg-amber-100 px-2.5 py-1 text-[length:calc(13px+var(--fs-add))] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
               次の試合まであと{matchDays}日
               <span className="ml-1 font-normal text-amber-700/80 dark:text-amber-400/80">
                 （{nextMatch.name}）
@@ -733,7 +733,7 @@ function MemberDayView({
               {detail?.menu && (
                 <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
                   {detail.menu.start_time && (
-                    <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                    <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                       {detail.menu.start_time.slice(0, 5)}〜
                     </p>
                   )}
@@ -755,7 +755,7 @@ function MemberDayView({
                 </p>
               ) : (
                 <div className="flex flex-col gap-1 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3">
-                  <span className="self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-semibold text-emerald-400">
+                  <span className="self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-emerald-400">
                     {detail?.matStatus === "absent" ? "未実施報告" : "実施報告"}
                   </span>
                   <p className="whitespace-pre-wrap text-sm text-neutral-100">
@@ -783,7 +783,7 @@ function MemberDayView({
             </p>
           ) : (
             <div className="flex flex-col gap-1 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-3">
-              <span className="flex items-center gap-1.5 self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-semibold text-emerald-400">
+              <span className="flex items-center gap-1.5 self-start rounded bg-emerald-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-emerald-400">
                 {detail?.selfType && (
                   <span
                     className={`inline-block h-1.5 w-1.5 rounded-full ${trainingTypeDotColor[detail.selfType]}`}
@@ -827,7 +827,7 @@ function MemberDayView({
                       <span className="font-medium text-neutral-100">
                         {r.eventTitle}の振り返り
                       </span>
-                      <span className="shrink-0 text-[length:calc(11px*var(--fs))] text-neutral-500">
+                      <span className="shrink-0 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                         提出日{formatMonthDay(r.submittedAt.slice(0, 10))}
                       </span>
                     </button>
@@ -860,7 +860,7 @@ function MemberDayView({
                         )}
                         {r.reflection && (
                           <div>
-                            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                               試合の反省
                             </p>
                             <p className="whitespace-pre-wrap text-neutral-100">
@@ -870,7 +870,7 @@ function MemberDayView({
                         )}
                         {r.goodPoints && (
                           <div>
-                            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                               良かった点
                             </p>
                             <p className="whitespace-pre-wrap text-neutral-100">
@@ -880,7 +880,7 @@ function MemberDayView({
                         )}
                         {r.challenges && (
                           <div>
-                            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                               課題に感じた点
                             </p>
                             <p className="whitespace-pre-wrap text-neutral-100">
@@ -890,7 +890,7 @@ function MemberDayView({
                         )}
                         {r.improvementPlan && (
                           <div>
-                            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                               改善方法と必要だと考えるトレーニング
                             </p>
                             <p className="whitespace-pre-wrap text-neutral-100">
@@ -900,7 +900,7 @@ function MemberDayView({
                         )}
                         {r.teamChallenges && (
                           <div>
-                            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                               当部の課題
                             </p>
                             <p className="whitespace-pre-wrap text-neutral-100">
@@ -937,14 +937,14 @@ function MemberDayView({
                   <p className="font-medium text-neutral-100">
                     {inj.symptom_name}（{inj.body_part}）
                   </p>
-                  <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                  <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                     マット参加：{matParticipationLabel[inj.mat_participation]}
                     {inj.mat_participation === "conditional" &&
                       inj.mat_participation_detail &&
                       `（${inj.mat_participation_detail}）`}
                   </p>
                   {inj.expected_recovery_date && (
-                    <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+                    <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                       完治見込み：{formatMonthDay(inj.expected_recovery_date)}
                     </p>
                   )}
@@ -954,7 +954,7 @@ function MemberDayView({
           )}
         </section>
 
-        <p className="border-t border-neutral-800 pt-3 text-[length:calc(11px*var(--fs))] text-neutral-600 dark:text-neutral-500">
+        <p className="border-t border-neutral-800 pt-3 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-500">
           このページは閲覧専用です。編集はご本人のマイページから行われます。
         </p>
       </div>

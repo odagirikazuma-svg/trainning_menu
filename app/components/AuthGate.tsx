@@ -449,7 +449,7 @@ export default function AuthGate({
                 />
 
                 <div className="flex flex-col gap-1">
-                  <span className="text-[length:calc(11px*var(--fs))] text-neutral-400">区分</span>
+                  <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">区分</span>
                   <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                     {(
                       [
@@ -477,7 +477,7 @@ export default function AuthGate({
                 {signupCategory === "member" && (
                   <>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[length:calc(11px*var(--fs))] text-neutral-400">
+                      <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                         所属拠点
                       </span>
                       <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
@@ -499,7 +499,7 @@ export default function AuthGate({
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[length:calc(11px*var(--fs))] text-neutral-400">
+                      <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                         入学年（学年は自動計算されます）
                       </span>
                       <select
@@ -517,7 +517,7 @@ export default function AuthGate({
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[length:calc(11px*var(--fs))] text-neutral-400">
+                      <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                         役職
                       </span>
                       <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-800 p-1 text-xs">

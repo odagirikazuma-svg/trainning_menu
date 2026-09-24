@@ -1,5 +1,5 @@
 // 文字サイズ設定（3段階）。端末ごとにlocalStorageへ保存し、<html data-font-size="..."> に反映する。
-// 実際の拡大率は globals.css の --fs（標準1 / 大きめ1.15 / 特大1.3）で決まる。
+// 実際の大きさは globals.css の --fs-add（標準0 / 大きめ+1px / 特大+2px）で決まる。
 
 export type FontSizePref = "normal" | "large" | "xlarge";
 
@@ -7,8 +7,8 @@ export const FONT_SIZE_STORAGE_KEY = "font-size-pref";
 
 export const fontSizeOptions: { value: FontSizePref; label: string }[] = [
   { value: "normal", label: "標準" },
-  { value: "large", label: "大きめ" },
-  { value: "xlarge", label: "特大" },
+  { value: "large", label: "大きめ（+1px）" },
+  { value: "xlarge", label: "特大（+2px）" },
 ];
 
 export function readFontSizePref(): FontSizePref {

@@ -877,7 +877,7 @@ export default function TrainingBoardSupabase({
                   setShowBulkScheduleForm(false);
                   setEditingViewDateSchedule((v) => !v);
                 }}
-                className="shrink-0 text-[length:calc(11px*var(--fs))] font-medium text-neutral-300 underline"
+                className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-300 underline"
               >
                 {editingViewDateSchedule
                   ? "閉じる"
@@ -909,7 +909,7 @@ export default function TrainingBoardSupabase({
                 setEditingViewDateSchedule(false);
                 setShowBulkScheduleForm((v) => !v);
               }}
-              className="self-start text-[length:calc(11px*var(--fs))] font-medium text-neutral-400 underline"
+              className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 underline"
             >
               {showBulkScheduleForm
                 ? "期間まとめて設定を閉じる"
@@ -1029,7 +1029,7 @@ export default function TrainingBoardSupabase({
                     </label>
                   ) : (
                     <>
-                      <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+                      <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                         開始時刻
                         <TimeSelect
                           value={newStartTime}
@@ -1037,7 +1037,7 @@ export default function TrainingBoardSupabase({
                         />
                       </label>
                       {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                           開催拠点
                           <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                             {locations.map((loc) => (
@@ -1066,7 +1066,7 @@ export default function TrainingBoardSupabase({
                         required
                       />
                       {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <p className="text-[length:calc(11px*var(--fs))] text-neutral-400">
+                        <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                           {newJointLocation === activeLocation
                             ? "もう一方の拠点はこの練習に合流します"
                             : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
@@ -1179,7 +1179,7 @@ export default function TrainingBoardSupabase({
                     className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
                     required
                   />
-                  <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+                  <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                     開始時刻
                     <TimeSelect
                       value={editStartTime}
@@ -1233,7 +1233,7 @@ export default function TrainingBoardSupabase({
                       <div className="mt-2 flex justify-end">
                         <button
                           onClick={() => startEditingMenu(selected)}
-                          className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-300 active:bg-neutral-800"
+                          className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
                         >
                           編集する
                         </button>
@@ -1261,7 +1261,7 @@ export default function TrainingBoardSupabase({
               {!showCommentForm ? (
                 <button
                   onClick={() => setShowCommentForm(true)}
-                  className="self-start text-[length:calc(11px*var(--fs))] font-medium text-red-400 underline"
+                  className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-400 underline"
                 >
                   意見・コメントする
                 </button>
@@ -1296,7 +1296,7 @@ export default function TrainingBoardSupabase({
                 <button
                   type="button"
                   onClick={() => setShowMissingPopup(true)}
-                  className="text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted"
+                  className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
                 >
                   {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
                 </button>
@@ -1317,7 +1317,7 @@ export default function TrainingBoardSupabase({
                           : new Set(visibleReports.map((r) => r.id))
                       )
                     }
-                    className="self-end text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted"
+                    className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
                   >
                     {expandedReportIds.size === visibleReports.length
                       ? "すべて閉じる"
@@ -1428,7 +1428,7 @@ export default function TrainingBoardSupabase({
                           : new Set(visibleAbsentReports.map((c) => c.id))
                       )
                     }
-                    className="self-end text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted"
+                    className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
                   >
                     {expandedAbsentIds.size === visibleAbsentReports.length
                       ? "すべて閉じる"
@@ -1499,7 +1499,7 @@ export default function TrainingBoardSupabase({
                 </button>
               ) : (
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
-                <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                   未実施の理由
                   <input
                     type="text"
@@ -1509,7 +1509,7 @@ export default function TrainingBoardSupabase({
                     className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
                   />
                 </label>
-                <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                   代替メニュー
                   <select
                     value={absentAltType}
@@ -1525,7 +1525,7 @@ export default function TrainingBoardSupabase({
                     <option value="other">その他</option>
                   </select>
                 </label>
-                <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                   詳細
                   <textarea
                     value={absentAlternative}
@@ -1571,7 +1571,7 @@ export default function TrainingBoardSupabase({
                         >
                           <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
                             {log.display_name}
-                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-medium text-neutral-400">
+                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-400">
                               {trainingTypeLabel[log.type]}
                               {log.title && `・${log.title}`}
                             </span>
@@ -1767,7 +1767,7 @@ function CommentItem({ c }: { c: CommentRow }) {
 
 function CommentMeta({ c }: { c: CommentRow }) {
   return (
-    <div className="mb-1 flex flex-wrap items-center gap-2 text-[length:calc(11px*var(--fs))] text-neutral-500">
+    <div className="mb-1 flex flex-wrap items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
       <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-medium text-neutral-300">
         {c.author ? roleLabel[c.author.role] : "?"}
       </span>
@@ -1849,7 +1849,7 @@ function ReportThread({
   return (
     <li className={`rounded-lg border ${colors.border} ${colors.bg} p-3`}>
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-[length:calc(11px*var(--fs))] text-neutral-500">
+        <div className="flex flex-wrap items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
           <span className={`rounded px-1.5 py-0.5 font-medium ${colors.tag}`}>
             {commentKindLabel[report.kind]}
           </span>
@@ -1860,7 +1860,7 @@ function ReportThread({
           <span>{formatDateTime(report.created_at)}</span>
         </div>
         {isOwn && !isEditing && (
-          <div className="flex items-center gap-2 text-[length:calc(11px*var(--fs))]">
+          <div className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))]">
             <button
               onClick={() => {
                 setEditText(report.text);
@@ -1884,7 +1884,7 @@ function ReportThread({
       {isEditing ? (
         <div className="flex flex-col gap-2">
           {editableAltType && (
-            <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
+            <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
               代替メニュー
               <select
                 value={editAltType}
@@ -2204,7 +2204,7 @@ function MenuCalendar({
         </button>
       </div>
       <div className="mb-2 flex justify-center">
-        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px*var(--fs))]">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px+var(--fs-add))]">
           {(
             [
               { v: "month", label: "月表示" },
@@ -2226,7 +2226,7 @@ function MenuCalendar({
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px*var(--fs))]">
+      <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px+var(--fs-add))]">
         {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
           <div
             key={w}
@@ -2309,7 +2309,7 @@ function MenuCalendar({
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
               {schedule && schedule.is_off && (
-                <span className="text-[length:calc(8px*var(--fs))] font-medium text-neutral-500 dark:text-neutral-500">
+                <span className="text-[length:calc(8px+var(--fs-add-mini))] font-medium text-neutral-500 dark:text-neutral-500">
                   オフ
                 </span>
               )}
@@ -2319,7 +2319,7 @@ function MenuCalendar({
                   schedule.day_type === "match" ||
                   schedule.day_type === "away") && (
                   <span
-                    className={`max-w-full truncate rounded px-1 text-[length:calc(8px*var(--fs))] font-semibold ${dayTypeFillColorDark[schedule.day_type]}`}
+                    className={`max-w-full truncate rounded px-1 text-[length:calc(8px+var(--fs-add-mini))] font-semibold ${dayTypeFillColorDark[schedule.day_type]}`}
                   >
                     {schedule.event_name || dayTypeLabel[schedule.day_type]}
                   </span>
@@ -2337,7 +2337,7 @@ function MenuCalendar({
                       .map((s, idx) => (
                         <span
                           key={idx}
-                          className="flex items-center gap-0.5 text-[length:calc(8px*var(--fs))] leading-none text-neutral-500 dark:text-neutral-400"
+                          className="flex items-center gap-0.5 text-[length:calc(8px+var(--fs-add-mini))] leading-none text-neutral-500 dark:text-neutral-400"
                         >
                           <span
                             className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
@@ -2364,7 +2364,7 @@ function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px*var(--fs))] text-neutral-500 dark:text-neutral-500">
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px+var(--fs-add))] text-neutral-500 dark:text-neutral-500">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded border border-blue-400 bg-blue-100 dark:bg-blue-950/40" />
           今日

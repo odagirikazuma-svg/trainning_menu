@@ -48,7 +48,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {isNonProduction && (
-          <div className="sticky top-0 z-50 bg-amber-500 px-2 py-1 text-center text-[length:calc(11px*var(--fs))] font-bold text-black">
+          <div className="sticky top-0 z-50 bg-amber-500 px-2 py-1 text-center text-[length:calc(11px+var(--fs-add))] font-bold text-black">
             ここはテスト環境です（本番データではありません）
           </div>
         )}

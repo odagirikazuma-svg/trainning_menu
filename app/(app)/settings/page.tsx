@@ -72,7 +72,7 @@ function CalendarViewSection() {
           </button>
         ))}
       </div>
-      <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
         マイページ・チームページ・練習予定表のカレンダーを開いたときに、月表示と週表示のどちらを最初に表示するか選べます。
       </p>
     </>
@@ -89,7 +89,7 @@ function CalendarSlotSelect({
   onChange: (v: CalendarSlotOption) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+    <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
       {label}
       <select
         value={value}
@@ -135,7 +135,7 @@ function MyPageCalendarDisplaySection() {
           className="h-5 w-5 accent-red-600"
         />
       </label>
-      <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
         マイページのカレンダーのマス目は小さいため、直接表示できる項目は最大2つ（スロット1・スロット2）です。行った種目の内容や一言メモの全文など、詳しい情報は日付をタップした下の欄でいつでも確認できます。一言メモは自分だけが閲覧・編集できます（20文字まで）。
       </p>
     </div>
@@ -181,7 +181,7 @@ function EventResultsSection() {
           />
         </label>
       )}
-      <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
         ウェイトMAX・体組成のイベントを開いた時に、自分の数値だけを見るか、チーム全員の数値を見られるようにするかを選べます。「全員の数値」を選ぶと、一番上に自分、その下は学年が上の人から（同学年内は多摩→大塚の順）で並びます。「学年ごとに折りたたんで表示する」をオンにすると、学年をタップするまで詳細が隠れます。
       </p>
     </div>
@@ -374,7 +374,7 @@ function NextMatchSection() {
         <div className="relative rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-center">
           <p className="text-xs text-red-400">次の試合【{nextMatch.name}】まで</p>
           <p className="text-3xl font-bold text-red-500">あと{matchDays}日</p>
-          <p className="text-[length:calc(11px*var(--fs))] text-red-500">{formatMonthDay(nextMatch.date)}</p>
+          <p className="text-[length:calc(11px+var(--fs-add))] text-red-500">{formatMonthDay(nextMatch.date)}</p>
 
           {editing ? (
             <form
@@ -414,7 +414,7 @@ function NextMatchSection() {
           ) : (
             <button
               onClick={startEditing}
-              className="absolute bottom-2 right-2 rounded border border-red-900/60 bg-neutral-900 px-2 py-1 text-[length:calc(10px*var(--fs))] text-red-500 active:bg-red-900/40"
+              className="absolute bottom-2 right-2 rounded border border-red-900/60 bg-neutral-900 px-2 py-1 text-[length:calc(10px+var(--fs-add))] text-red-500 active:bg-red-900/40"
             >
               編集
             </button>
@@ -428,7 +428,7 @@ function NextMatchSection() {
 
       <button
         onClick={() => setShowForm((v) => !v)}
-        className="self-start text-[length:calc(11px*var(--fs))] font-medium text-red-400 active:text-red-900"
+        className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-400 active:text-red-900"
       >
         {showForm ? "キャンセル" : "＋ 試合を登録する"}
       </button>
@@ -662,7 +662,7 @@ function IconSection() {
           className="h-16 w-16 shrink-0 rounded-full border border-border-color object-cover"
         />
         <div className="flex flex-col gap-1">
-          <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+          <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
             {profile.display_name}
           </p>
           <button
@@ -756,7 +756,7 @@ function SectionRegistrationSection({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
         カレンダーの日付をタップすると、その日を単日で編集できます。日付を選ばず「期間でまとめて設定」から、オフ・合宿・試合・出稽古をまとめて登録することもできます。
       </p>
 
@@ -793,7 +793,7 @@ function SectionRegistrationSection({
           </p>
           <button
             onClick={() => setSelectedDate(null)}
-            className="shrink-0 text-[length:calc(11px*var(--fs))] font-medium text-neutral-400 underline"
+            className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 underline"
           >
             日付選択を解除
           </button>
@@ -856,7 +856,7 @@ function SettingsGroup({
       {children ? (
         <div className="flex flex-col gap-2">{children}</div>
       ) : (
-        <p className="rounded-lg border border-dashed border-neutral-400 px-3 py-3 text-center text-[length:calc(11px*var(--fs))] text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+        <p className="rounded-lg border border-dashed border-neutral-400 px-3 py-3 text-center text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
           {placeholder ?? "設定できる項目は準備中です。"}
         </p>
       )}

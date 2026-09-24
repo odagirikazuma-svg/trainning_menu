@@ -47,7 +47,7 @@ function TaskLabel({ task }: { task: QueueTask }) {
   if (!task.kind) {
     return (
       <span
-        className={`text-[length:calc(11px*var(--fs))] font-medium ${
+        className={`text-[length:calc(11px+var(--fs-add))] font-medium ${
           task.urgent ? "text-red-400" : "text-amber-400"
         }`}
       >
@@ -59,12 +59,12 @@ function TaskLabel({ task }: { task: QueueTask }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       <span
-        className={`rounded px-1.5 py-0.5 text-[length:calc(11px*var(--fs))] font-bold ${k.chip}`}
+        className={`rounded px-1.5 py-0.5 text-[length:calc(11px+var(--fs-add))] font-bold ${k.chip}`}
       >
         {k.label}
       </span>
       {task.overdue && (
-        <span className="rounded border border-red-500/70 px-1.5 py-px text-[length:calc(10px*var(--fs))] font-semibold text-red-400">
+        <span className="rounded border border-red-500/70 px-1.5 py-px text-[length:calc(10px+var(--fs-add))] font-semibold text-red-400">
           期限切れ
         </span>
       )}
@@ -128,10 +128,10 @@ export default function TaskQueuePopup({
     !open && tasks.length > 0 ? (
       <button
         onClick={handleOpenList}
-        className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-bold text-white shadow active:bg-red-700"
+        className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-bold text-white shadow active:bg-red-700"
       >
         未提出
-        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[length:calc(10px*var(--fs))] font-bold text-red-600">
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[length:calc(10px+var(--fs-add))] font-bold text-red-600">
           {tasks.length > 9 ? "9+" : tasks.length}
         </span>
       </button>
@@ -190,11 +190,11 @@ export default function TaskQueuePopup({
               <span className="text-sm font-semibold text-white">
                 未提出のタスク
               </span>
-              <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+              <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                 {tasks.length}件
               </span>
             </div>
-            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
               提出したいタスクを選んでください。
             </p>
             <ul className="flex flex-col gap-2">
@@ -220,7 +220,7 @@ export default function TaskQueuePopup({
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <TaskLabel task={t} />
-                      <span className="truncate text-sm font-semibold text-white">
+                      <span className="break-words text-sm font-semibold text-white">
                         {t.title}
                       </span>
                     </span>
@@ -256,7 +256,7 @@ export default function TaskQueuePopup({
                   </span>
                 </div>
                 {effectiveView === "queue" && pending.length > 1 && (
-                  <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
+                  <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                     残り{pending.length}件
                   </span>
                 )}

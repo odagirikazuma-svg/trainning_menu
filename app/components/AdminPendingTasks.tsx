@@ -293,7 +293,7 @@ export default function AdminPendingTasks({
         </p>
       ) : (
         <>
-          <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
+          <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
             直近1か月分。日付を押すと、その日の記録を下に表示します。
           </p>
           <ul className="flex flex-col gap-1">
@@ -306,7 +306,7 @@ export default function AdminPendingTasks({
                   className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs active:bg-neutral-200 disabled:active:bg-transparent dark:active:bg-neutral-800"
                 >
                   <span
-                    className={`shrink-0 rounded px-1.5 py-px text-[length:calc(10px*var(--fs))] font-medium ${kindColor[i.kind]}`}
+                    className={`shrink-0 rounded px-1.5 py-px text-[length:calc(10px+var(--fs-add))] font-medium ${kindColor[i.kind]}`}
                   >
                     {kindLabel[i.kind]}
                   </span>
@@ -320,7 +320,7 @@ export default function AdminPendingTasks({
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="self-start text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted"
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
             >
               {showAll ? "閉じる" : `すべて表示（残り${count - COLLAPSED_COUNT}件）`}
             </button>

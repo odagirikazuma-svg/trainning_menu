@@ -363,7 +363,7 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
         </p>
       )}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+        <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
           {s.showRoleLocationEdit
             ? "役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。"
             : "部員の役職・所属拠点を確認・編集できます。"}
@@ -373,7 +373,7 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
             s.setShowRoleLocationEdit((v) => !v);
             s.setDraftEdits({});
           }}
-          className="shrink-0 rounded border border-neutral-400 px-2.5 py-1 text-[length:calc(11px*var(--fs))] text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
+          className="shrink-0 rounded border border-neutral-400 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
         >
           {s.showRoleLocationEdit ? "閉じる" : "編集する"}
         </button>
@@ -475,14 +475,14 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                     <button
                       onClick={() => s.handleSaveMemberEdit(m.id)}
                       disabled={!isDirty || s.savingRoleId === m.id}
-                      className="rounded bg-red-600 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium text-white active:bg-red-700 disabled:opacity-40"
+                      className="rounded bg-red-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-white active:bg-red-700 disabled:opacity-40"
                     >
                       保存する
                     </button>
                     <button
                       onClick={() => s.handleDeleteMember(m.id, m.display_name)}
                       disabled={s.savingRoleId === m.id}
-                      className="rounded border border-red-700 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
+                      className="rounded border border-red-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
                     >
                       削除
                     </button>
@@ -508,7 +508,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
           {s.errorMsg}
         </p>
       )}
-      <p className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
         部員だけでなく、管理者・マネージャーもここから事前登録できます。氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
       </p>
 
@@ -549,7 +549,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                     ))}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-medium text-neutral-600 dark:text-neutral-400">
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400">
                     未登録
                   </span>
                   <button
@@ -574,13 +574,13 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                   <button
                     onClick={() => s.handleSaveEmail(r.id)}
                     disabled={s.savingEmail}
-                    className="rounded bg-red-600 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium text-white disabled:opacity-50"
+                    className="rounded bg-red-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-white disabled:opacity-50"
                   >
                     保存
                   </button>
                   <button
                     onClick={() => s.setEditingEmailId(null)}
-                    className="rounded border border-border-color px-2.5 py-1 text-[length:calc(11px*var(--fs))] text-neutral-600 dark:text-neutral-300"
+                    className="rounded border border-border-color px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-300"
                   >
                     キャンセル
                   </button>
@@ -589,14 +589,14 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => s.handleStartEditEmail(r)}
-                    className="text-[length:calc(11px*var(--fs))] font-medium text-neutral-600 underline dark:text-neutral-400"
+                    className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 underline dark:text-neutral-400"
                   >
                     {r.email ? "メールを編集" : "メールを追加"}
                   </button>
                   {!r.claimed_by && (
                     <button
                       onClick={() => s.handleCopyInviteLink(r)}
-                      className="text-[length:calc(11px*var(--fs))] font-medium text-blue-600 underline dark:text-blue-400"
+                      className="text-[length:calc(11px+var(--fs-add))] font-medium text-blue-600 underline dark:text-blue-400"
                     >
                       {s.copiedTokenId === r.id
                         ? "コピーしました！"
