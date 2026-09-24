@@ -337,7 +337,7 @@ export function SelfTrainingInlineForm({
         disabled={saving || !type}
         className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
       >
-        保存する
+        {saving ? "提出中…" : "提出する"}
       </button>
     </div>
   );

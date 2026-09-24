@@ -68,11 +68,11 @@ export function useMyTaskCount(profile: Profile | null): number {
       let matPendingCount = 0;
       let selfPendingCount = 0;
 
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
       const joinedDate = toDateKey(new Date(profile!.created_at));
       const rangeStart =
-        toDateKey(twoWeeksAgo) > joinedDate ? toDateKey(twoWeeksAgo) : joinedDate;
+        toDateKey(oneMonthAgo) > joinedDate ? toDateKey(oneMonthAgo) : joinedDate;
 
       if (effectiveHomeLocation) {
         const { data: ownMenuData } = await supabase

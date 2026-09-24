@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const todayStr = toDateKey(new Date());
   const rangeStartDate = new Date();
-  rangeStartDate.setDate(rangeStartDate.getDate() - 14);
+  rangeStartDate.setMonth(rangeStartDate.getMonth() - 1); // 直近1か月分のタスクを対象にする
   const rangeStart = toDateKey(rangeStartDate);
 
   // 対象になりうる部員（コーチ・マネージャーは対象外）
