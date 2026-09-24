@@ -267,7 +267,7 @@ export function SelfTrainingInlineForm({
       </div>
       {type && (
         <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-          開始時間（任意。その日の6時以降）
+          開始時間
           <input
             type="time"
             min="06:00"
@@ -280,7 +280,7 @@ export function SelfTrainingInlineForm({
       )}
       {type && (
         <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-          タイトル（メニュー名など。任意。カレンダーにも表示できます）
+          タイトル
           <input
             type="text"
             list={`popup-${type}-title-options`}

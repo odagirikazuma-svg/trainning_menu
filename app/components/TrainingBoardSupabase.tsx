@@ -1367,7 +1367,7 @@ export default function TrainingBoardSupabase({
 
               {isViewOnly ? null : myReport ? (
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
-                  実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
+                  実施報告は提出済みです。
                 </p>
               ) : myAbsent ? (
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
@@ -1480,7 +1480,7 @@ export default function TrainingBoardSupabase({
               </div>
               {isViewOnly ? null : myAbsent ? (
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
-                  未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
+                  未実施報告は提出済みです。
                 </p>
               ) : myReport ? (
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">

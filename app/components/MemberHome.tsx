@@ -1648,6 +1648,8 @@ export default function MemberHome({
       {(() => {
         if (isOb && !showTaskListPref) return null;
         const queueTasks: QueueTask[] = [];
+        // 並び順用のキー（古い日付が上。怪我の経過報告は日付がないので一番上）
+        const sortKeyOf = new Map<string, string>();
 
         for (const inj of injuries.filter(injuryNeedsProgressUpdate)) {
           const isOpen = progressInjuryId === inj.id;
@@ -1766,6 +1768,7 @@ export default function MemberHome({
 
         for (const m of todoMenus) {
           const isOverdue = m.date < todayStr;
+          sortKeyOf.set(`mat-${m.id}`, `${m.date} ${m.start_time ?? "00:00"} 0`);
           queueTasks.push({
             key: `mat-${m.id}`,
             badgeLabel: `練習タスク：実施報告 未提出${isOverdue ? "（期限切れ）" : ""}`,
@@ -1789,6 +1792,7 @@ export default function MemberHome({
 
         for (const date of selfTrainingPending) {
           const isOverdue = date < todayStr;
+          sortKeyOf.set(`self-${date}`, `${date} 99:99 1`);
           queueTasks.push({
             key: `self-${date}`,
             badgeLabel: `練習タスク：トレ報 未提出${isOverdue ? "（期限切れ）" : ""}`,
@@ -1814,6 +1818,11 @@ export default function MemberHome({
             ),
           });
         }
+
+        // 日付の時系列順（古い日のタスクが上）。同じ日はマット→トレ報の順
+        queueTasks.sort((a, b) =>
+          (sortKeyOf.get(a.key) ?? "").localeCompare(sortKeyOf.get(b.key) ?? "")
+        );
 
         return <TaskQueuePopup tasks={queueTasks} startWithList />;
       })()}
@@ -1921,7 +1930,7 @@ export default function MemberHome({
             </div>
             {todayLogType && (
               <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                開始時間（任意。その日の6時以降）
+                開始時間
                 <input
                   type="time"
                   min="06:00"
@@ -1934,7 +1943,7 @@ export default function MemberHome({
             )}
             {todayLogType && (
               <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
-                タイトル（メニュー名など。任意。カレンダーにも表示できます）
+                タイトル
                 <input
                   type="text"
                   list={`${todayLogType}-title-options`}
