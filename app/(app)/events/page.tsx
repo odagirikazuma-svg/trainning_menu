@@ -175,7 +175,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
         {label} {value ?? "―"}kg
         {diff && (
           <span
-            className={`ml-1 text-[11px] ${
+            className={`ml-1 text-[length:calc(11px*var(--fs))] ${
               diff.zero
                 ? "text-neutral-500"
                 : diff.positive
@@ -224,12 +224,12 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
                 測定会（〜{formatMonthDay(ev.deadline)}）
               </span>
               {submitted ? (
-                <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px*var(--fs))] font-medium text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
                 <span
-                  className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                  className={`rounded px-2 py-0.5 text-[length:calc(11px*var(--fs))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
                       : "bg-amber-800/60 text-amber-300"
@@ -238,7 +238,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
                   未提出
                 </span>
               ) : (
-                <span className="rounded bg-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300">
+                <span className="rounded bg-neutral-700 px-2 py-0.5 text-[length:calc(11px*var(--fs))] text-neutral-300">
                   締切済み
                 </span>
               )}
@@ -259,7 +259,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
               openEventId === ev.id ? (
                 <div className="flex flex-col gap-2">
                   <div className="grid grid-cols-3 gap-2">
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                       ベンチプレス(kg)
                       <input
                         type="number"
@@ -269,7 +269,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
                         className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                       />
                     </label>
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                       スクワット(kg)
                       <input
                         type="number"
@@ -279,7 +279,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
                         className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                       />
                     </label>
-                    <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                       デッドリフト(kg)
                       <input
                         type="number"
@@ -327,7 +327,7 @@ function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfile>["pro
                       <span className="font-medium text-foreground">
                         {r.display_name}
                         {r.id === profile.id && (
-                          <span className="ml-1 text-[10px] text-red-400">
+                          <span className="ml-1 text-[length:calc(10px*var(--fs))] text-red-400">
                             (自分)
                           </span>
                         )}
@@ -459,7 +459,7 @@ function CommentThread({
 
   return (
     <div className="flex flex-col gap-2 border-t border-border-color pt-2">
-      <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px*var(--fs))] font-semibold text-neutral-500 dark:text-neutral-400">
         コメント
       </p>
       {loading ? (
@@ -481,7 +481,7 @@ function CommentThread({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-foreground">{name}</span>
-                  <span className="text-[10px] text-neutral-500">
+                  <span className="text-[length:calc(10px*var(--fs))] text-neutral-500">
                     {formatMonthDay(c.created_at.slice(0, 10))}
                   </span>
                 </div>
@@ -494,7 +494,7 @@ function CommentThread({
         </div>
       )}
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">
+        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px*var(--fs))] text-red-400">
           {errorMsg}
         </p>
       )}
@@ -692,12 +692,12 @@ function BodyCompositionTab({
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
               {openEvent.title || "体組成測定"}
-              <span className="ml-2 text-[11px] font-normal text-neutral-500">
+              <span className="ml-2 text-[length:calc(11px*var(--fs))] font-normal text-neutral-500">
                 〜{formatMonthDay(openEvent.deadline)}
               </span>
             </span>
             <span
-              className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${
+              className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px*var(--fs))] font-medium ${
                 new Date().toISOString().slice(0, 10) > openEvent.deadline
                   ? "bg-red-600 text-white"
                   : "bg-amber-800/60 text-amber-300"
@@ -708,7 +708,7 @@ function BodyCompositionTab({
           </div>
           {openForm ? (
             <div className="flex flex-col gap-2">
-              <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                 測定日
                 <input
                   type="date"
@@ -718,7 +718,7 @@ function BodyCompositionTab({
                 />
               </label>
               <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                   体重(kg)
                   <input
                     type="number"
@@ -728,7 +728,7 @@ function BodyCompositionTab({
                     className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                   体脂肪率(%)
                   <input
                     type="number"
@@ -738,7 +738,7 @@ function BodyCompositionTab({
                     className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                   骨格筋量(kg)
                   <input
                     type="number"
@@ -748,7 +748,7 @@ function BodyCompositionTab({
                     className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                   除脂肪体重(kg)
                   <input
                     type="number"
@@ -807,7 +807,7 @@ function BodyCompositionTab({
                   <span className="font-medium text-foreground">
                     計測日：{g.label}
                   </span>
-                  <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  <span className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                     提出済み：{g.submittedCount}人/{g.totalCount}人
                     {isExpanded ? " ▲" : " ▼"}
                   </span>
@@ -834,7 +834,7 @@ function BodyCompositionTab({
                             <span className="font-medium text-foreground">
                               {r.display_name}
                               {r.id === profile.id && (
-                                <span className="ml-1 text-[10px] text-red-400">
+                                <span className="ml-1 text-[length:calc(10px*var(--fs))] text-red-400">
                                   (自分)
                                 </span>
                               )}
@@ -1049,17 +1049,17 @@ function TeamEventTab({
             >
               <span className="font-medium">
                 {ev.title}
-                <span className="ml-2 text-[11px] font-normal text-neutral-500">
+                <span className="ml-2 text-[length:calc(11px*var(--fs))] font-normal text-neutral-500">
                   〜{formatMonthDay(ev.deadline)}
                 </span>
               </span>
               {submitted ? (
-                <span className="shrink-0 rounded bg-emerald-800/60 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                <span className="shrink-0 rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px*var(--fs))] font-medium text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
                 <span
-                  className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${
+                  className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px*var(--fs))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
                       : "bg-amber-800/60 text-amber-300"
@@ -1068,7 +1068,7 @@ function TeamEventTab({
                   未提出
                 </span>
               ) : (
-                <span className="shrink-0 rounded bg-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300">
+                <span className="shrink-0 rounded bg-neutral-700 px-2 py-0.5 text-[length:calc(11px*var(--fs))] text-neutral-300">
                   締切済み
                 </span>
               )}
@@ -1146,7 +1146,7 @@ function TeamEventTab({
               return (
                 <div className="flex flex-col gap-1.5 border-t border-border-color pt-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                    <h4 className="text-[length:calc(11px*var(--fs))] font-semibold text-neutral-500 dark:text-neutral-400">
                       他の部員の振り返り
                     </h4>
                     <button
@@ -1159,7 +1159,7 @@ function TeamEventTab({
                           return next;
                         })
                       }
-                      className="text-[11px] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
+                      className="text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
                     >
                       {allOpen ? "すべて閉じる" : "全員の詳細を表示"}
                     </button>
@@ -1186,7 +1186,7 @@ function TeamEventTab({
                           <span className="font-medium text-foreground">
                             {s.name}
                           </span>
-                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                          <span className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                             {s.match_result ?? ""}
                             {isOpen ? " ▲" : " ▼"}
                           </span>
@@ -1245,7 +1245,7 @@ function TeamEventTab({
                 <div className="flex flex-col gap-2 border-t border-border-color pt-2">
                   {type === "match_reflection" ? (
                     <>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         出場した試合名
                         <input
                           type="text"
@@ -1254,7 +1254,7 @@ function TeamEventTab({
                           className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         試合結果
                         <select
                           value={matchResult}
@@ -1270,7 +1270,7 @@ function TeamEventTab({
                         </select>
                       </label>
                       <div className="grid grid-cols-3 gap-2">
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           試合数
                           <input
                             type="number"
@@ -1279,7 +1279,7 @@ function TeamEventTab({
                             className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           勝ち数
                           <input
                             type="number"
@@ -1288,7 +1288,7 @@ function TeamEventTab({
                             className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           負け数
                           <input
                             type="number"
@@ -1298,7 +1298,7 @@ function TeamEventTab({
                           />
                         </label>
                       </div>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         試合の反省
                         <textarea
                           value={matchReflection}
@@ -1307,7 +1307,7 @@ function TeamEventTab({
                           className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         良かった点
                         <textarea
                           value={matchGoodPoints}
@@ -1316,7 +1316,7 @@ function TeamEventTab({
                           className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         課題に感じた点
                         <textarea
                           value={matchChallenges}
@@ -1325,7 +1325,7 @@ function TeamEventTab({
                           className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         今後の改善策
                         <textarea
                           value={matchImprovementPlan}
@@ -1336,7 +1336,7 @@ function TeamEventTab({
                           className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         チームとしての課題
                         <textarea
                           value={matchTeamChallenges}
@@ -1348,7 +1348,7 @@ function TeamEventTab({
                     </>
                   ) : (
                     <>
-                      <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                         測定日
                         <input
                           type="date"
@@ -1358,7 +1358,7 @@ function TeamEventTab({
                         />
                       </label>
                       <div className="grid grid-cols-2 gap-2">
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           体重(kg)
                           <input
                             type="number"
@@ -1368,7 +1368,7 @@ function TeamEventTab({
                             className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           体脂肪率(%)
                           <input
                             type="number"
@@ -1378,7 +1378,7 @@ function TeamEventTab({
                             className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           骨格筋量(kg)
                           <input
                             type="number"
@@ -1388,7 +1388,7 @@ function TeamEventTab({
                             className="rounded border border-border-color bg-background px-2 py-1.5 text-sm"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           除脂肪体重(kg)
                           <input
                             type="number"
@@ -1595,14 +1595,14 @@ function EventTargetPicker({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        <span className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
           対象者(選ばなければ全員が対象になります)
         </span>
         {selectedIds.size > 0 && (
           <button
             type="button"
             onClick={() => onChange(new Set())}
-            className="text-[11px] text-neutral-500 underline dark:text-neutral-400"
+            className="text-[length:calc(11px*var(--fs))] text-neutral-500 underline dark:text-neutral-400"
           >
             選択をクリア
           </button>
@@ -1854,7 +1854,7 @@ function WeightMaxCoachManagement({
                 if (!diff) return null;
                 return (
                   <span
-                    className={`ml-1 text-[10px] ${
+                    className={`ml-1 text-[length:calc(10px*var(--fs))] ${
                       diff.zero
                         ? "text-neutral-500"
                         : diff.positive
@@ -1868,7 +1868,7 @@ function WeightMaxCoachManagement({
               };
               return (
                 <div className="max-w-md overflow-x-auto rounded-lg border border-border-color">
-                  <table className="w-full table-fixed text-[11px]">
+                  <table className="w-full table-fixed text-[length:calc(11px*var(--fs))]">
                     <colgroup>
                       <col className="w-[34%]" />
                       <col className="w-[22%]" />
@@ -1953,7 +1953,7 @@ function WeightMaxCoachManagement({
             onChange={setSelectedTargetIds}
           />
           <div className="flex items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+            <label className="flex flex-1 flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
               締切日
               <input
                 type="date"
@@ -2239,7 +2239,7 @@ function TeamEventCoachManagement({
                       : new Set(matchSubmissions.map((s) => s.author_id))
                   )
                 }
-                className="self-end text-[11px] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
+                className="self-end text-[length:calc(11px*var(--fs))] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
               >
                 {expandedMatchAuthorIds.size === matchSubmissions.length
                   ? "すべて閉じる"
@@ -2275,7 +2275,7 @@ function TeamEventCoachManagement({
                         <span className="font-medium text-foreground">
                           {s.name}
                         </span>
-                        <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <span className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                           {s.match_result ?? ""}
                           {isExpanded ? " ▲" : " ▼"}
                         </span>
@@ -2343,7 +2343,7 @@ function TeamEventCoachManagement({
         </p>
       ) : (
         <form onSubmit={handleCreate} className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+          <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
             {type === "match_reflection"
               ? "タイトル(例：全日本学生選手権、東日本学生リーグ戦)"
               : "タイトル(任意)"}
@@ -2363,7 +2363,7 @@ function TeamEventCoachManagement({
             />
           )}
           <div className="flex items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+            <label className="flex flex-1 flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
               締切日
               <input
                 type="date"
@@ -2411,14 +2411,14 @@ function TeamEventCoachManagement({
                   <span className="font-medium text-foreground">
                     計測日：{g.label}
                   </span>
-                  <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  <span className="text-[length:calc(11px*var(--fs))] text-neutral-500 dark:text-neutral-400">
                     提出済み：{g.submittedCount}人/{eligibleMembers.length}人
                     {isExpanded ? " ▲" : " ▼"}
                   </span>
                 </button>
                 {isExpanded && (
                   <div className="overflow-x-auto border-t border-border-color">
-                    <table className="w-full table-fixed text-[11px]">
+                    <table className="w-full table-fixed text-[length:calc(11px*var(--fs))]">
                       <colgroup>
                         <col className="w-[34%]" />
                         <col className="w-[22%]" />
@@ -2499,6 +2499,8 @@ function buildEventQueueTask(
 ): QueueTask {
   return {
     key: `event-${type}-${task.id}`,
+    kind: "event",
+    overdue: task.overdue,
     badgeLabel: `イベント：${tabLabel[type]} 未提出${
       task.overdue ? "（期限切れ）" : ""
     }`,

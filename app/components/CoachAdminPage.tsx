@@ -228,7 +228,7 @@ function ReportCalendar({
         </button>
       </div>
       <div className="mb-2 flex justify-center">
-        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px*var(--fs))]">
           {(
             [
               { v: "month", label: "月表示" },
@@ -254,7 +254,7 @@ function ReportCalendar({
         <p className="text-xs text-neutral-500 dark:text-neutral-500">読み込み中…</p>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+          <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px*var(--fs))]">
             {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
               <div
                 key={w}
@@ -300,7 +300,7 @@ function ReportCalendar({
                   }`}
                 >
                   <span
-                    className={`text-[11px] font-semibold ${
+                    className={`text-[length:calc(11px*var(--fs))] font-semibold ${
                       !isHighlighted && !isToday && weekday === 0
                         ? "border-b-2 border-red-500 text-red-500 dark:text-red-400"
                         : !isHighlighted && !isToday && weekday === 6
@@ -311,21 +311,21 @@ function ReportCalendar({
                     {date.getDate()}
                   </span>
                   {dayInfo?.isFullyOff ? (
-                    <span className="text-[9px] font-semibold text-neutral-700 dark:text-neutral-300">
+                    <span className="text-[length:calc(9px*var(--fs))] font-semibold text-neutral-700 dark:text-neutral-300">
                       全体オフ
                     </span>
                   ) : (
                     <>
                       {dayInfo && dayInfo.dayType !== "practice" && (
                         <span
-                          className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[dayInfo.dayType]}`}
+                          className={`max-w-full truncate rounded px-1 text-[length:calc(9px*var(--fs))] font-semibold ${dayTypeFillColorDark[dayInfo.dayType]}`}
                         >
                           {dayInfo.eventName || dayTypeLabel[dayInfo.dayType]}
                         </span>
                       )}
                       {count && (
                         <span
-                          className={`text-[9px] font-semibold ${
+                          className={`text-[length:calc(9px*var(--fs))] font-semibold ${
                             isFullySubmitted
                               ? "text-emerald-600 dark:text-emerald-300"
                               : "text-neutral-600 dark:text-neutral-300"
@@ -340,7 +340,7 @@ function ReportCalendar({
               );
             })}
           </div>
-          <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
+          <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px*var(--fs))] text-neutral-500 dark:text-neutral-500">
             <span className="flex items-center gap-1">
               <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-400 dark:bg-emerald-900/60 dark:ring-emerald-700" />
               全員提出済み
@@ -1339,7 +1339,7 @@ export default function CoachAdminPage({
                       );
                       return (
                       <div key={group.label} className="flex flex-col gap-1">
-                        <p className="text-[10px] text-neutral-500">
+                        <p className="text-[length:calc(10px*var(--fs))] text-neutral-500">
                           {group.label}
                         </p>
                         {rowsForLoc.map((d) => {
@@ -1384,16 +1384,16 @@ export default function CoachAdminPage({
                                 {d.displayName}
                               </span>
                               {d.isPending ? (
-                                <span className="shrink-0 text-[10px] text-neutral-600">
+                                <span className="shrink-0 text-[length:calc(10px*var(--fs))] text-neutral-600">
                                   未登録
                                 </span>
                               ) : notStarted ? (
-                                <span className="shrink-0 text-[10px] text-neutral-500">
+                                <span className="shrink-0 text-[length:calc(10px*var(--fs))] text-neutral-500">
                                   未開始
                                 </span>
                               ) : (
                                 <span
-                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-semibold ${
                                     allDone
                                       ? "bg-emerald-950/40 text-emerald-400"
                                       : "bg-red-950/40 text-red-400"
@@ -1436,7 +1436,7 @@ export default function CoachAdminPage({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             トレーニングの提出状況
           </h2>
-          <p className="text-[11px] text-neutral-500">
+          <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
             マット以外のセッション（ラン・ウェイトなど）がある日の、各自のトレーニング記録の提出状況です。
           </p>
 
@@ -1476,7 +1476,7 @@ export default function CoachAdminPage({
                             `/team/${m.memberId}?date=${selectedTrainingDate}`
                           )
                         }
-                        className="rounded-full border border-red-900/60 bg-red-950/20 px-2.5 py-1 text-[11px] font-medium text-red-300 active:bg-red-950/40"
+                        className="rounded-full border border-red-900/60 bg-red-950/20 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium text-red-300 active:bg-red-950/40"
                       >
                         {locationLabel[m.location]}・{m.displayName}
                       </button>
@@ -1502,7 +1502,7 @@ export default function CoachAdminPage({
                               )
                         )
                       }
-                      className="shrink-0 text-[11px] font-medium text-neutral-400 underline"
+                      className="shrink-0 text-[length:calc(11px*var(--fs))] font-medium text-neutral-400 underline"
                     >
                       {expandedTrainingIds.size ===
                       trainingDayDetail.submitted.length
@@ -1533,11 +1533,11 @@ export default function CoachAdminPage({
                               <span className="font-medium text-foreground">
                                 {locationLabel[s.location]}・{s.displayName}
                               </span>
-                              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
+                              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] text-neutral-300">
                                 {trainingTypeLabel[s.type]}
                               </span>
                               {s.title && (
-                                <span className="text-[10px] text-neutral-500">
+                                <span className="text-[length:calc(10px*var(--fs))] text-neutral-500">
                                   {s.title}
                                 </span>
                               )}
@@ -1577,7 +1577,7 @@ export default function CoachAdminPage({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             怪我人一覧
           </h2>
-          <p className="text-[11px] text-neutral-500">
+          <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
             部員がマイページから報告した怪我の一覧です。タップすると詳細が開きます。完治してから1週間が経過した怪我は、下の「過去の怪我情報を見る」から確認できます。
           </p>
           {loadingInjuries ? (
@@ -1709,7 +1709,7 @@ function InjuryListItem({
           <span className="text-neutral-400">
             {inj.symptom_name}（{inj.body_part}）
             {inj.is_recovered && (
-              <span className="ml-1.5 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              <span className="ml-1.5 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-medium text-emerald-400">
                 完治
               </span>
             )}
@@ -1753,12 +1753,12 @@ function InjuryListItem({
             </p>
           )}
           {inj.progress_updated_at && (
-            <p className="text-[10px] text-neutral-500">
+            <p className="text-[length:calc(10px*var(--fs))] text-neutral-500">
               経過報告日:{" "}
               {formatMonthDay(toDateKey(new Date(inj.progress_updated_at)))}
             </p>
           )}
-          <p className="text-[10px] text-neutral-500">
+          <p className="text-[length:calc(10px*var(--fs))] text-neutral-500">
             報告日: {formatMonthDay(toDateKey(new Date(inj.created_at)))}
           </p>
         </div>
@@ -1830,7 +1830,7 @@ function TrainingCommentThread({
 
   return (
     <div className="flex flex-col gap-2 border-t border-emerald-900/60 pt-2">
-      <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+      <p className="text-[length:calc(11px*var(--fs))] font-semibold text-neutral-500 dark:text-neutral-400">
         コメント
       </p>
       {loading ? (
@@ -1851,7 +1851,7 @@ function TrainingCommentThread({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-foreground">{name}</span>
-                  <span className="text-[10px] text-neutral-500">
+                  <span className="text-[length:calc(10px*var(--fs))] text-neutral-500">
                     {formatMonthDay(c.created_at.slice(0, 10))}
                   </span>
                 </div>
@@ -1864,7 +1864,7 @@ function TrainingCommentThread({
         </div>
       )}
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">
+        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px*var(--fs))] text-red-400">
           {errorMsg}
         </p>
       )}

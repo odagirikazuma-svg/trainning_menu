@@ -29,7 +29,7 @@ export default function SubTabBar<T extends string>({
             key={item.value}
             type="button"
             onClick={() => onChange(item.value)}
-            className={`relative flex-1 rounded-lg py-2.5 text-[13px] font-semibold transition-colors ${
+            className={`relative flex-1 rounded-lg py-2.5 text-[length:calc(13px*var(--fs))] font-semibold transition-colors ${
               isActive
                 ? "bg-red-600 text-white shadow"
                 : "bg-surface text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-700"
@@ -38,7 +38,7 @@ export default function SubTabBar<T extends string>({
             {item.label}
             {!!item.badge && item.badge > 0 && (
               <span
-                className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold ${
+                className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[length:calc(9px*var(--fs))] font-bold ${
                   isActive
                     ? "bg-white text-red-600"
                     : "bg-red-600 text-white"

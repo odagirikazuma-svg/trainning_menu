@@ -138,7 +138,7 @@ export function MatReportInlineForm({
 
       {mode === "absent" && (
         <form onSubmit={submitAbsent} className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+          <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
             理由
             <input
               type="text"
@@ -147,7 +147,7 @@ export function MatReportInlineForm({
               className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
             />
           </label>
-          <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+          <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
             代替メニューの種類
             <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
               {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
@@ -166,7 +166,7 @@ export function MatReportInlineForm({
               ))}
             </div>
           </label>
-          <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+          <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
             代替メニューの詳細
             <textarea
               value={absentAlternative}
@@ -266,7 +266,7 @@ export function SelfTrainingInlineForm({
         ))}
       </div>
       {type && (
-        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
           開始時間
           <input
             type="time"
@@ -279,7 +279,7 @@ export function SelfTrainingInlineForm({
         </label>
       )}
       {type && (
-        <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+        <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
           タイトル
           <input
             type="text"
@@ -304,7 +304,7 @@ export function SelfTrainingInlineForm({
                     key={t}
                     type="button"
                     onClick={() => setTitle(t)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                    className={`rounded-full border px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-medium ${
                       selected
                         ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
                         : "border-neutral-700 text-neutral-400 active:bg-neutral-800"

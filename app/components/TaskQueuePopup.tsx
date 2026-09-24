@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 import { useHeaderExtra } from "./shell/AppShell";
 
+export type TaskKind = "mat" | "self" | "injury" | "event";
+
 export type QueueTask = {
   key: string;
+  // タスクの種類。一覧で色分けとラベル表示に使う（未指定なら badgeLabel をそのまま表示）
+  kind?: TaskKind;
+  // 期限切れかどうか（一覧に「期限切れ」の赤いラベルを出す）
+  overdue?: boolean;
   badgeLabel: string;
   title: string;
   urgent: boolean;
@@ -12,6 +18,59 @@ export type QueueTask = {
   // ボタン等に組み込みたい場合は関数形式で渡す（例：イベントページの「入力へ進む」）。
   content: React.ReactNode | ((close: () => void) => React.ReactNode);
 };
+
+// 種類ごとの見た目（左の色帯・ラベルの色）。ひと目でマット日報かトレ報か分かるようにする
+const kindStyle: Record<TaskKind, { label: string; bar: string; chip: string }> = {
+  mat: {
+    label: "マット日報",
+    bar: "bg-violet-500",
+    chip: "bg-violet-600 text-white",
+  },
+  self: {
+    label: "トレ報",
+    bar: "bg-sky-500",
+    chip: "bg-sky-600 text-white",
+  },
+  injury: {
+    label: "怪我の経過",
+    bar: "bg-amber-500",
+    chip: "bg-amber-500 text-black",
+  },
+  event: {
+    label: "イベント",
+    bar: "bg-emerald-500",
+    chip: "bg-emerald-600 text-white",
+  },
+};
+
+function TaskLabel({ task }: { task: QueueTask }) {
+  if (!task.kind) {
+    return (
+      <span
+        className={`text-[length:calc(11px*var(--fs))] font-medium ${
+          task.urgent ? "text-red-400" : "text-amber-400"
+        }`}
+      >
+        {task.badgeLabel}
+      </span>
+    );
+  }
+  const k = kindStyle[task.kind];
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span
+        className={`rounded px-1.5 py-0.5 text-[length:calc(11px*var(--fs))] font-bold ${k.chip}`}
+      >
+        {k.label}
+      </span>
+      {task.overdue && (
+        <span className="rounded border border-red-500/70 px-1.5 py-px text-[length:calc(10px*var(--fs))] font-semibold text-red-400">
+          期限切れ
+        </span>
+      )}
+    </span>
+  );
+}
 
 /**
  * マイページ・イベントページの「未提出タスク」をポップアップで提出させる仕組み。
@@ -69,10 +128,10 @@ export default function TaskQueuePopup({
     !open && tasks.length > 0 ? (
       <button
         onClick={handleOpenList}
-        className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow active:bg-red-700"
+        className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[length:calc(11px*var(--fs))] font-bold text-white shadow active:bg-red-700"
       >
         未提出
-        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-red-600">
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[length:calc(10px*var(--fs))] font-bold text-red-600">
           {tasks.length > 9 ? "9+" : tasks.length}
         </span>
       </button>
@@ -131,11 +190,11 @@ export default function TaskQueuePopup({
               <span className="text-sm font-semibold text-white">
                 未提出のタスク
               </span>
-              <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
+              <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
                 {tasks.length}件
               </span>
             </div>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
               提出したいタスクを選んでください。
             </p>
             <ul className="flex flex-col gap-2">
@@ -144,23 +203,23 @@ export default function TaskQueuePopup({
                   <button
                     type="button"
                     onClick={() => handleSelect(t.key)}
-                    className={`flex w-full items-center gap-3 rounded-lg border bg-neutral-800 px-3 py-2.5 text-left active:bg-neutral-700 ${
-                      t.urgent ? "border-red-900" : "border-neutral-700"
-                    }`}
+                    className={`relative flex w-full items-center gap-3 overflow-hidden rounded-lg border bg-neutral-800 py-2.5 pr-3 text-left active:bg-neutral-700 ${
+                      t.kind ? "pl-4" : "pl-3"
+                    } ${t.urgent ? "border-red-900" : "border-neutral-700"}`}
                   >
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${
-                        t.urgent ? "bg-red-500" : "bg-amber-400"
-                      }`}
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col">
+                    {t.kind ? (
                       <span
-                        className={`text-[11px] font-medium ${
-                          t.urgent ? "text-red-400" : "text-amber-400"
+                        className={`absolute inset-y-0 left-0 w-1.5 ${kindStyle[t.kind].bar}`}
+                      />
+                    ) : (
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          t.urgent ? "bg-red-500" : "bg-amber-400"
                         }`}
-                      >
-                        {t.badgeLabel}
-                      </span>
+                      />
+                    )}
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <TaskLabel task={t} />
                       <span className="truncate text-sm font-semibold text-white">
                         {t.title}
                       </span>
@@ -190,20 +249,14 @@ export default function TaskQueuePopup({
                 </button>
               )}
               <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-col">
-                  <span
-                    className={`text-[11px] font-medium ${
-                      current.urgent ? "text-red-400" : "text-amber-400"
-                    }`}
-                  >
-                    {current.badgeLabel}
-                  </span>
+                <div className="flex flex-col gap-1">
+                  <TaskLabel task={current} />
                   <span className="text-sm font-semibold text-white">
                     {current.title}
                   </span>
                 </div>
                 {effectiveView === "queue" && pending.length > 1 && (
-                  <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
+                  <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
                     残り{pending.length}件
                   </span>
                 )}

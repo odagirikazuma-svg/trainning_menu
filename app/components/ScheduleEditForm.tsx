@@ -633,7 +633,7 @@ export default function ScheduleEditForm({
 
       {mode === "range" && (
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col text-[11px] text-neutral-400">
+          <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
             開始日
             <input
               type="date"
@@ -642,7 +642,7 @@ export default function ScheduleEditForm({
               className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
             />
           </label>
-          <label className="flex flex-col text-[11px] text-neutral-400">
+          <label className="flex flex-col text-[length:calc(11px*var(--fs))] text-neutral-400">
             終了日
             <input
               type="date"
@@ -655,9 +655,9 @@ export default function ScheduleEditForm({
       )}
 
       <div className="flex flex-col gap-1">
-        <span className="text-[11px] text-neutral-400">区分</span>
+        <span className="text-[length:calc(11px*var(--fs))] text-neutral-400">区分</span>
         <div
-          className={`grid gap-1 rounded-lg bg-neutral-800 p-1 text-[11px] ${
+          className={`grid gap-1 rounded-lg bg-neutral-800 p-1 text-[length:calc(11px*var(--fs))] ${
             mode === "single" ? "grid-cols-3" : "grid-cols-4"
           }`}
         >
@@ -752,13 +752,13 @@ export default function ScheduleEditForm({
               className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-neutral-400">
+                <span className="text-[length:calc(11px*var(--fs))] font-semibold text-neutral-400">
                   第{idx + 1}セッション
                 </span>
                 {(mode === "range" ? sessions.length > 1 : true) && (
                   <button
                     onClick={() => removeSession(idx)}
-                    className="text-[11px] text-red-500"
+                    className="text-[length:calc(11px*var(--fs))] text-red-500"
                   >
                     削除
                   </button>
@@ -796,7 +796,7 @@ export default function ScheduleEditForm({
                 )}
               </div>
               {mode === "single" && s.type !== "mat" && (
-                <label className="flex items-center gap-2 text-[11px] text-neutral-400">
+                <label className="flex items-center gap-2 text-[length:calc(11px*var(--fs))] text-neutral-400">
                   <input
                     type="checkbox"
                     checked={s.isFlexibleTime}
@@ -808,7 +808,7 @@ export default function ScheduleEditForm({
                 </label>
               )}
               {category === "camp" || category === "away" ? (
-                <label className="flex flex-col gap-1 text-[11px] text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px*var(--fs))] text-neutral-400">
                   練習場所（任意）
                   <input
                     type="text"
@@ -822,7 +822,7 @@ export default function ScheduleEditForm({
                 </label>
               ) : mode === "single" ? (
                 <>
-                  <label className="flex items-center gap-2 text-[11px] text-neutral-400">
+                  <label className="flex items-center gap-2 text-[length:calc(11px*var(--fs))] text-neutral-400">
                     <input
                       type="checkbox"
                       checked={s.isJoint}
@@ -874,7 +874,7 @@ export default function ScheduleEditForm({
           </button>
           {showCopyToDates && (
             <div className="flex flex-col gap-2">
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
                 下でコピー先の日付を1つずつ追加し、今設定している内容(区分・セッション)をまとめてコピーします。保存する前に、まずこちらを実行してください。
               </p>
               {copyTargetDates.length > 0 && (
@@ -920,10 +920,10 @@ export default function ScheduleEditForm({
       )}
 
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[11px] text-red-400">{errorMsg}</p>
+        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px*var(--fs))] text-red-400">{errorMsg}</p>
       )}
       {rangeResult && (
-        <p className="rounded bg-emerald-950/40 p-2 text-[11px] text-emerald-400">
+        <p className="rounded bg-emerald-950/40 p-2 text-[length:calc(11px*var(--fs))] text-emerald-400">
           {rangeResult}
         </p>
       )}

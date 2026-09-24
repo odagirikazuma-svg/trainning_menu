@@ -19,7 +19,7 @@ function TabLink({ item, active }: { item: TabItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[10px] transition-colors ${
+      className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[length:calc(10px*var(--fs))] transition-colors ${
         active
           ? "font-semibold text-red-600 dark:text-red-400"
           : "font-medium text-neutral-500 dark:text-neutral-400"
@@ -42,7 +42,7 @@ function TabLink({ item, active }: { item: TabItem; active: boolean }) {
           } ${active ? "opacity-100" : "opacity-60"}`}
         />
         {!!item.badge && item.badge > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[length:calc(9px*var(--fs))] font-bold text-white">
             {item.badge > 99 ? "99+" : item.badge}
           </span>
         )}

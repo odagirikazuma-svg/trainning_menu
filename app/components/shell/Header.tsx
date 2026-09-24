@@ -143,7 +143,7 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
       </span>
       {nextMatch ? (
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="shrink-0 text-[10px] font-semibold leading-none text-white/70">
+          <span className="shrink-0 text-[length:calc(10px*var(--fs))] font-semibold leading-none text-white/70">
             次の試合まで
           </span>
           <span className="shrink-0 text-2xl font-extrabold leading-none text-white">
@@ -154,7 +154,7 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
           </span>
         </div>
       ) : (
-        <span className="text-[11px] text-white/70">
+        <span className="text-[length:calc(11px*var(--fs))] text-white/70">
           次の試合の予定はまだありません
         </span>
       )}
@@ -262,7 +262,7 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
       <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
-      <span className="text-[10px] leading-tight text-white/80">
+      <span className="text-[length:calc(10px*var(--fs))] leading-tight text-white/80">
         {line("昨日の提出状況", yesterdayStr, stats)}
         {line("今日の提出状況", todayStr, stats)}
       </span>

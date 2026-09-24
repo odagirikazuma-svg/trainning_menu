@@ -28,6 +28,10 @@ const themeInitScript = `
       (pref !== "light" &&
         window.matchMedia("(prefers-color-scheme: dark)").matches);
     if (isDark) document.documentElement.classList.add("dark");
+    // 文字サイズ設定（標準以外のときだけ属性を付ける）
+    var fs = window.localStorage.getItem("font-size-pref");
+    if (fs === "large" || fs === "xlarge")
+      document.documentElement.setAttribute("data-font-size", fs);
   } catch (e) {}
 })();
 `;
@@ -44,7 +48,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {isNonProduction && (
-          <div className="sticky top-0 z-50 bg-amber-500 px-2 py-1 text-center text-[11px] font-bold text-black">
+          <div className="sticky top-0 z-50 bg-amber-500 px-2 py-1 text-center text-[length:calc(11px*var(--fs))] font-bold text-black">
             ここはテスト環境です（本番データではありません）
           </div>
         )}

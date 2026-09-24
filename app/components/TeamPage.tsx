@@ -997,7 +997,7 @@ export default function TeamPage({
                             dayDetail.day_type === "away") && (
                             <button
                               onClick={handleDeleteAwayLikeSchedule}
-                              className="rounded px-2 py-1 text-[11px] font-medium text-red-400 underline"
+                              className="rounded px-2 py-1 text-[length:calc(11px*var(--fs))] font-medium text-red-400 underline"
                             >
                               この予定を削除する
                             </button>
@@ -1033,12 +1033,12 @@ export default function TeamPage({
                               : "各自"}
                           </div>
                           {s.location_note ? (
-                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                            <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[length:calc(11px*var(--fs))] text-purple-400">
                               練習場所：{s.location_note}
                             </p>
                           ) : (
                             s.is_joint && (
-                              <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[11px] text-purple-400">
+                              <p className="mb-2 rounded bg-purple-950/40 px-2 py-1 text-[length:calc(11px*var(--fs))] text-purple-400">
                                 全体練習（
                                 {locationLabel[s.joint_location ?? scheduleLocation]}
                                 で実施）
@@ -1149,7 +1149,7 @@ export default function TeamPage({
               ? `${formatMonthDay(selectedScheduleDate)}の提出状況`
               : "部員一覧"}
           </h2>
-          <p className="text-[11px] text-neutral-500">
+          <p className="text-[length:calc(11px*var(--fs))] text-neutral-500">
             上のカレンダーで日付をタップすると、その日に必要な報告（マットの実施報告・未実施報告、マット以外のセッションの自主トレ記録）を、部員ごとに確認できます。
           </p>
           {loadingMembers || loadingDaySubmissionDetail ? (
@@ -1191,7 +1191,7 @@ export default function TeamPage({
                       );
                       return (
                       <div key={group.label} className="flex flex-col gap-1">
-                        <p className="text-[10px] text-neutral-500">
+                        <p className="text-[length:calc(10px*var(--fs))] text-neutral-500">
                           {group.label}
                         </p>
                         {rowsForLoc.map((d) => {
@@ -1234,16 +1234,16 @@ export default function TeamPage({
                             >
                               <span className="truncate">{d.displayName}</span>
                               {d.isPending ? (
-                                <span className="shrink-0 text-[10px] text-neutral-600">
+                                <span className="shrink-0 text-[length:calc(10px*var(--fs))] text-neutral-600">
                                   未登録
                                 </span>
                               ) : notStarted ? (
-                                <span className="shrink-0 text-[10px] text-neutral-500">
+                                <span className="shrink-0 text-[length:calc(10px*var(--fs))] text-neutral-500">
                                   未開始
                                 </span>
                               ) : (
                                 <span
-                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[length:calc(10px*var(--fs))] font-semibold ${
                                     allDone
                                       ? "bg-emerald-950/40 text-emerald-400"
                                       : "bg-red-950/40 text-red-400"
@@ -1395,7 +1395,7 @@ function MonthlyCalendar({
         </button>
       </div>
       <div className="mb-2 flex justify-center">
-        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[11px]">
+        <div className="flex gap-1 rounded-lg bg-surface-2 p-1 text-[length:calc(11px*var(--fs))]">
           {(
             [
               { v: "month", label: "月表示" },
@@ -1421,7 +1421,7 @@ function MonthlyCalendar({
         <p className="text-xs text-neutral-500 dark:text-neutral-500">読み込み中…</p>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+          <div className="grid grid-cols-7 gap-1 text-center text-[length:calc(10px*var(--fs))]">
             {["日", "月", "火", "水", "木", "金", "土"].map((w, idx) => (
               <div
                 key={w}
@@ -1468,7 +1468,7 @@ function MonthlyCalendar({
                   } ${isHighlighted && !day?.is_off ? "ring-1 ring-amber-400" : ""}`}
                 >
                   <span
-                    className={`text-[11px] font-semibold ${
+                    className={`text-[length:calc(11px*var(--fs))] font-semibold ${
                       day?.is_off
                         ? "text-neutral-400 dark:text-neutral-600"
                         : !isHighlighted && weekday === 0
@@ -1481,7 +1481,7 @@ function MonthlyCalendar({
                     {date.getDate()}
                   </span>
                   {day?.is_off && (
-                    <span className="text-[9px] text-neutral-500 dark:text-neutral-500">
+                    <span className="text-[length:calc(9px*var(--fs))] text-neutral-500 dark:text-neutral-500">
                       全体オフ
                     </span>
                   )}
@@ -1491,7 +1491,7 @@ function MonthlyCalendar({
                       day.day_type === "match" ||
                       day.day_type === "away") && (
                       <span
-                        className={`max-w-full truncate rounded px-1 text-[9px] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
+                        className={`max-w-full truncate rounded px-1 text-[length:calc(9px*var(--fs))] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
                       >
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
@@ -1507,7 +1507,7 @@ function MonthlyCalendar({
                         <span
                           className={`mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                         />
-                        <span className="break-words text-[9px] text-neutral-600 dark:text-neutral-300">
+                        <span className="break-words text-[length:calc(9px*var(--fs))] text-neutral-600 dark:text-neutral-300">
                           {sessionTypeLabel[s.session_type]}
                           {s.start_time ? `${s.start_time.slice(0, 5)}〜` : "各自"}
                           {s.location_note
@@ -1523,7 +1523,7 @@ function MonthlyCalendar({
                   ) : (
                     day && !day.is_off && count && (
                       <span
-                        className={`text-[10px] font-semibold ${
+                        className={`text-[length:calc(10px*var(--fs))] font-semibold ${
                           isFullySubmitted
                             ? "text-emerald-600 dark:text-emerald-300"
                             : "text-neutral-600 dark:text-neutral-300"
@@ -1538,7 +1538,7 @@ function MonthlyCalendar({
             })}
           </div>
           {isCoach ? (
-            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px*var(--fs))] text-neutral-500 dark:text-neutral-500">
               {(Object.keys(sessionTypeLabel) as SessionType[]).map((t) => (
                 <span key={t} className="flex items-center gap-1">
                   <span
@@ -1561,7 +1561,7 @@ function MonthlyCalendar({
               </span>
             </p>
           ) : (
-            <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
+            <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px*var(--fs))] text-neutral-500 dark:text-neutral-500">
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-400 dark:bg-emerald-900/60 dark:ring-emerald-700" />
                 全員提出済み
