@@ -848,9 +848,7 @@ export default function SettingsPage() {
             <CollapsibleSection title="カレンダー表示設定">
               <CalendarViewSection />
             </CollapsibleSection>
-            <CollapsibleSection title="プロフィールアイコンの設定">
-              <IconSection />
-            </CollapsibleSection>
+            {/* 管理者・マネージャーはプロフィールアイコンを使わないため、アイコン設定は出さない */}
           </SettingsGroup>
 
           {canEdit && (

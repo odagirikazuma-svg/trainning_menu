@@ -175,6 +175,15 @@ export default function TrainingBoardSupabase({
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showAbsentForm, setShowAbsentForm] = useState(false);
+  // 「◯人/◯人 提出済み」を押すと出る未提出者ポップアップ
+  const [showMissingPopup, setShowMissingPopup] = useState(false);
+  // 実施報告・未実施報告は名前だけ並べ、押した人の詳細だけ開く
+  const [expandedReportIds, setExpandedReportIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [expandedAbsentIds, setExpandedAbsentIds] = useState<Set<string>>(
+    new Set()
+  );
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAltType, setAbsentAltType] = useState<
@@ -239,7 +248,7 @@ export default function TrainingBoardSupabase({
   }, []);
 
   useEffect(() => {
-    if (!isCoachView) return;
+    // 未提出者ポップアップ用に、拠点の部員一覧は全員分読み込む
     (async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -362,6 +371,9 @@ export default function TrainingBoardSupabase({
     setAbsentReason("");
     setAbsentAltType("running");
     setAbsentAlternative("");
+    setShowMissingPopup(false);
+    setExpandedReportIds(new Set());
+    setExpandedAbsentIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -796,16 +808,8 @@ export default function TrainingBoardSupabase({
   const absentReports = comments.filter(
     (c) => c.kind === "absent" && !c.parent_id
   );
-  // コーチ・マネージャー以外（マイページに統合された部員view）には、
-  // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
-  const isMemberView =
-    !isCoachView && profile.role !== "manager" && profile.role !== "ob";
-  const visibleReports = isMemberView
-    ? reports.filter((r) => r.author_id === profile.id)
-    : reports;
-  const visibleAbsentReports = isMemberView
-    ? absentReports.filter((c) => c.author_id === profile.id)
-    : absentReports;
+  const visibleReports = reports;
+  const visibleAbsentReports = absentReports;
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
@@ -1289,50 +1293,79 @@ export default function TrainingBoardSupabase({
                 <h3 className="text-xs font-semibold text-neutral-400">
                   実施報告
                 </h3>
-                <span className="text-[11px] text-neutral-500">
+                <button
+                  type="button"
+                  onClick={() => setShowMissingPopup(true)}
+                  className="text-[11px] text-neutral-500 underline decoration-dotted"
+                >
                   {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
-                </span>
+                </button>
               </div>
-              <ul className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 {visibleReports.length === 0 && (
-                  <li className="text-xs text-neutral-500">
+                  <p className="text-xs text-neutral-500">
                     まだ実施報告はありません。
-                  </li>
-                )}
-                {visibleReports.map((r) => (
-                  <ReportThread
-                    key={r.id}
-                    report={r}
-                    replies={repliesOf(r.id)}
-                    onReply={(text) => submitComment("opinion", text, r.id)}
-                    currentUserId={profile.id}
-                    onUpdate={(text) => handleUpdateComment(r.id, text)}
-                    onDelete={() => handleDeleteComment(r.id)}
-                  />
-                ))}
-              </ul>
-
-              {isViewOnly ? (
-                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
-                  <p className="mb-1.5 font-semibold text-neutral-400">
-                    実施報告を提出したメンバー
                   </p>
-                  {reports.length === 0 ? (
-                    <p className="text-neutral-500">まだいません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {reports.map((r) => (
-                        <span
-                          key={r.id}
-                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
-                        >
+                )}
+                {visibleReports.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedReportIds((prev) =>
+                        prev.size === visibleReports.length
+                          ? new Set()
+                          : new Set(visibleReports.map((r) => r.id))
+                      )
+                    }
+                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
+                  >
+                    {expandedReportIds.size === visibleReports.length
+                      ? "すべて閉じる"
+                      : "全員の詳細を表示"}
+                  </button>
+                )}
+                {visibleReports.map((r) => {
+                  const isOpen = expandedReportIds.has(r.id);
+                  return (
+                    <div key={r.id} className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedReportIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.id)) next.delete(r.id);
+                            else next.add(r.id);
+                            return next;
+                          })
+                        }
+                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
+                      >
+                        <span className="font-medium text-neutral-100">
                           {r.author?.display_name ?? "不明"}
                         </span>
-                      ))}
+                        <span className="text-neutral-500">
+                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <ReportThread
+                          report={r}
+                          replies={repliesOf(r.id)}
+                          onReply={(text) =>
+                            submitComment("opinion", text, r.id)
+                          }
+                          currentUserId={profile.id}
+                          onUpdate={(text) => handleUpdateComment(r.id, text)}
+                          onDelete={() => handleDeleteComment(r.id)}
+                        />
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : myReport ? (
+                  );
+                })}
+              </div>
+
+
+              {isViewOnly ? null : myReport ? (
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
                   実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1379,49 +1412,73 @@ export default function TrainingBoardSupabase({
               <h3 className="text-xs font-semibold text-neutral-400">
                 未実施報告（授業・通院などで参加できなかった場合）
               </h3>
-              <ul className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {visibleAbsentReports.length === 0 && (
-                  <li className="text-xs text-neutral-500">
+                  <p className="text-xs text-neutral-500">
                     まだ未実施報告はありません。
-                  </li>
-                )}
-                {visibleAbsentReports.map((c) => (
-                  <ReportThread
-                    key={c.id}
-                    report={c}
-                    replies={repliesOf(c.id)}
-                    onReply={(text) => submitComment("opinion", text, c.id)}
-                    tone="neutral"
-                    currentUserId={profile.id}
-                    editableAltType
-                    onUpdate={(text, altType) =>
-                      handleUpdateComment(c.id, text, altType ?? null)
-                    }
-                    onDelete={() => handleDeleteComment(c.id)}
-                  />
-                ))}
-              </ul>
-              {isViewOnly ? (
-                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
-                  <p className="mb-1.5 font-semibold text-neutral-400">
-                    未実施報告を提出したメンバー
                   </p>
-                  {absentReports.length === 0 ? (
-                    <p className="text-neutral-500">まだいません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {absentReports.map((c) => (
-                        <span
-                          key={c.id}
-                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
-                        >
+                )}
+                {visibleAbsentReports.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedAbsentIds((prev) =>
+                        prev.size === visibleAbsentReports.length
+                          ? new Set()
+                          : new Set(visibleAbsentReports.map((c) => c.id))
+                      )
+                    }
+                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
+                  >
+                    {expandedAbsentIds.size === visibleAbsentReports.length
+                      ? "すべて閉じる"
+                      : "全員の詳細を表示"}
+                  </button>
+                )}
+                {visibleAbsentReports.map((c) => {
+                  const isOpen = expandedAbsentIds.has(c.id);
+                  return (
+                    <div key={c.id} className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedAbsentIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.id)) next.delete(c.id);
+                            else next.add(c.id);
+                            return next;
+                          })
+                        }
+                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
+                      >
+                        <span className="font-medium text-neutral-100">
                           {c.author?.display_name ?? "不明"}
                         </span>
-                      ))}
+                        <span className="text-neutral-500">
+                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <ReportThread
+                          report={c}
+                          replies={repliesOf(c.id)}
+                          onReply={(text) =>
+                            submitComment("opinion", text, c.id)
+                          }
+                          tone="neutral"
+                          currentUserId={profile.id}
+                          editableAltType
+                          onUpdate={(text, altType) =>
+                            handleUpdateComment(c.id, text, altType ?? null)
+                          }
+                          onDelete={() => handleDeleteComment(c.id)}
+                        />
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : myAbsent ? (
+                  );
+                })}
+              </div>
+              {isViewOnly ? null : myAbsent ? (
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1489,39 +1546,6 @@ export default function TrainingBoardSupabase({
               </form>
               )}
             </section>
-
-            {isCoachView && (
-              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-                <h3 className="text-xs font-semibold text-neutral-400">
-                  未提出者（{locationLabel[activeLocation]}）
-                </h3>
-                {(() => {
-                  const reportedIds = new Set(reports.map((r) => r.author_id));
-                  const absentIds = new Set(
-                    absentReports.map((c) => c.author_id)
-                  );
-                  const missing = locationRoster.filter(
-                    (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
-                  );
-                  return missing.length === 0 ? (
-                    <p className="text-xs text-neutral-500">
-                      全員提出済みです。
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {missing.map((m) => (
-                        <span
-                          key={m.id}
-                          className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                        >
-                          {m.display_name}
-                        </span>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </section>
-            )}
 
             {isCoachView &&
               matSessionForViewDate &&
@@ -1681,6 +1705,53 @@ export default function TrainingBoardSupabase({
 
         {practiceSection}
       </div>
+
+      {showMissingPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setShowMissingPopup(false)}
+        >
+          <div
+            className="relative flex w-full max-w-sm flex-col gap-2 rounded-lg border border-border-color bg-surface p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                未提出者（{locationLabel[activeLocation]}）
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowMissingPopup(false)}
+                aria-label="閉じる"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 active:bg-neutral-800/50"
+              >
+                ✕
+              </button>
+            </div>
+            {(() => {
+              const reportedIds = new Set(reports.map((r) => r.author_id));
+              const absentIds = new Set(absentReports.map((c) => c.author_id));
+              const missing = locationRoster.filter(
+                (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
+              );
+              return missing.length === 0 ? (
+                <p className="text-xs text-neutral-500">全員提出済みです。</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {missing.map((m) => (
+                    <span
+                      key={m.id}
+                      className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                    >
+                      {m.display_name}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2195,9 +2266,17 @@ function MenuCalendar({
               }}
               className={`relative flex ${
                 viewMode === "week" ? "min-h-[88px]" : "min-h-[56px]"
-              } flex-col items-center justify-start gap-0.5 rounded-lg border border-border-color pt-1 text-xs ${
-                isViewDate && hasMenu
-                  ? "bg-blue-600 font-semibold text-white"
+              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs ${
+                // 今日・表示中の日の見せ方は他のカレンダーと共通：
+                // 表示中の日＝黄色（アンバー）の枠と背景、今日＝青の枠（背景色が他に無ければ青の背景）
+                isViewDate
+                  ? "border-amber-400 bg-amber-100 font-semibold ring-1 ring-amber-400 dark:bg-amber-950/40"
+                  : isToday
+                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
+                    : "border-border-color"
+              } ${
+                isViewDate
+                  ? ""
                   : isOff || schedule?.is_off
                     ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
                     : schedule?.day_type === "camp"
@@ -2208,8 +2287,10 @@ function MenuCalendar({
                           ? "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40"
                           : jointInfo
                             ? "bg-purple-100 font-medium text-purple-700 active:bg-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:active:bg-purple-900/40"
-                            : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
-              } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
+                            : isToday
+                              ? "bg-blue-100 text-neutral-700 dark:bg-blue-950/40 dark:text-neutral-300"
+                              : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
+              }`}
             >
               <span
                 className={
@@ -2224,9 +2305,6 @@ function MenuCalendar({
               >
                 {date.getDate()}
               </span>
-              {isToday && (
-                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900 dark:bg-white" />
-              )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
@@ -2288,11 +2366,11 @@ function MenuCalendar({
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900 dark:bg-white" />
+          <span className="inline-block h-2 w-2 rounded border border-blue-400 bg-blue-100 dark:bg-blue-950/40" />
           今日
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded ring-2 ring-blue-500" />
+          <span className="inline-block h-2 w-2 rounded border border-amber-400 bg-amber-100 dark:bg-amber-950/40" />
           表示中の日
         </span>
         <span className="flex items-center gap-1">
