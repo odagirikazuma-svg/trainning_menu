@@ -2195,9 +2195,17 @@ function MenuCalendar({
               }}
               className={`relative flex ${
                 viewMode === "week" ? "min-h-[88px]" : "min-h-[56px]"
-              } flex-col items-center justify-start gap-0.5 rounded-lg border border-border-color pt-1 text-xs ${
-                isViewDate && hasMenu
-                  ? "bg-blue-600 font-semibold text-white"
+              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs ${
+                // 今日・表示中の日の見せ方は他のカレンダーと共通：
+                // 表示中の日＝黄色（アンバー）の枠と背景、今日＝青の枠（背景色が他に無ければ青の背景）
+                isViewDate
+                  ? "border-amber-400 bg-amber-100 font-semibold ring-1 ring-amber-400 dark:bg-amber-950/40"
+                  : isToday
+                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
+                    : "border-border-color"
+              } ${
+                isViewDate
+                  ? ""
                   : isOff || schedule?.is_off
                     ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
                     : schedule?.day_type === "camp"
@@ -2208,8 +2216,10 @@ function MenuCalendar({
                           ? "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40"
                           : jointInfo
                             ? "bg-purple-100 font-medium text-purple-700 active:bg-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:active:bg-purple-900/40"
-                            : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
-              } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
+                            : isToday
+                              ? "bg-blue-100 text-neutral-700 dark:bg-blue-950/40 dark:text-neutral-300"
+                              : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
+              }`}
             >
               <span
                 className={
@@ -2224,9 +2234,6 @@ function MenuCalendar({
               >
                 {date.getDate()}
               </span>
-              {isToday && (
-                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900 dark:bg-white" />
-              )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
@@ -2288,11 +2295,11 @@ function MenuCalendar({
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900 dark:bg-white" />
+          <span className="inline-block h-2 w-2 rounded border border-blue-400 bg-blue-100 dark:bg-blue-950/40" />
           今日
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded ring-2 ring-blue-500" />
+          <span className="inline-block h-2 w-2 rounded border border-amber-400 bg-amber-100 dark:bg-amber-950/40" />
           表示中の日
         </span>
         <span className="flex items-center gap-1">
