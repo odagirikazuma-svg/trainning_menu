@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "../AuthGate";
+import { isStaffRole } from "../../lib/types";
 import { useMyTaskCount } from "./useMyTaskCount";
 import { useMyEventTaskCount } from "./useMyEventTaskCount";
 
@@ -55,9 +56,10 @@ export default function Footer({ profile }: { profile: Profile }) {
   const pathname = usePathname();
   const taskCount = useMyTaskCount(profile);
   const eventTaskCount = useMyEventTaskCount(profile);
-  const isCoach = profile.role === "coach";
+  // 管理者・マネージャーは管理者用のタブ構成（マネージャーは閲覧のみ）
+  const isStaff = isStaffRole(profile.role);
 
-  const items: TabItem[] = isCoach
+  const items: TabItem[] = isStaff
     ? [
         { href: "/admin", label: "管理ページ", icon: "/icons/nav-admin.png" },
         { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png" },

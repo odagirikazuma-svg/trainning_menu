@@ -14,6 +14,8 @@ import {
 import { createClient } from "../../lib/supabase/client";
 import {
   currentGrade,
+  isAdminEditor,
+  isStaffRole,
   Location,
   locationLabel,
   teamEventTypeLabel,
@@ -1658,8 +1660,11 @@ function useEventMembers(teamId: string) {
 
 function WeightMaxCoachManagement({
   profile,
+  readOnly = false,
 }: {
   profile: ReturnType<typeof useProfile>["profile"];
+  // マネージャー用：結果の閲覧のみ（集計の開始・終了はできない）
+  readOnly?: boolean;
 }) {
   const supabase = createClient();
   const members = useEventMembers(profile.team_id);
@@ -1927,13 +1932,19 @@ function WeightMaxCoachManagement({
                 </div>
               );
             })()}
+          {!readOnly && (
           <button
             onClick={handleEnd}
             className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
           >
             この集計を終了する
           </button>
+          )}
         </div>
+      ) : readOnly ? (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          現在開催中の集計はありません。（集計の開始は管理者が行います）
+        </p>
       ) : (
         <form onSubmit={handleCreate} className="flex flex-col gap-2">
           <EventTargetPicker
@@ -1969,9 +1980,12 @@ function WeightMaxCoachManagement({
 function TeamEventCoachManagement({
   type,
   profile,
+  readOnly = false,
 }: {
   type: "match_reflection" | "body_composition";
   profile: ReturnType<typeof useProfile>["profile"];
+  // マネージャー用：提出内容の閲覧のみ（イベントの作成・終了はできない）
+  readOnly?: boolean;
 }) {
   const supabase = createClient();
   const members = useEventMembers(profile.team_id);
@@ -2314,13 +2328,19 @@ function TeamEventCoachManagement({
             </div>
           )}
 
+          {!readOnly && (
           <button
             onClick={handleEnd}
             className="self-start rounded-lg border border-neutral-400 px-3 py-1.5 text-xs text-neutral-600 active:bg-neutral-200 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-800"
           >
             このイベントを終了する
           </button>
+          )}
         </div>
+      ) : readOnly ? (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          現在開催中のイベントはありません。（イベントの作成は管理者が行います）
+        </p>
       ) : (
         <form onSubmit={handleCreate} className="flex flex-col gap-2">
           <label className="flex flex-col gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
@@ -2506,7 +2526,9 @@ function buildEventQueueTask(
 export default function EventsPage() {
   const { profile } = useProfile();
   const [tab, setTab] = useState<EventTab>("weight_max");
-  const isCoach = profile.role === "coach";
+  // 管理者・マネージャーは管理者用の画面（提出タスクなし）。イベントの作成・終了は管理者のみ
+  const isCoach = isStaffRole(profile.role);
+  const canEdit = isAdminEditor(profile.role);
   const pendingTasks = useMyEventPendingTasks(isCoach ? null : profile);
 
   const pendingByTab: Record<EventTab, EventPendingTask | null> = {
@@ -2550,24 +2572,32 @@ export default function EventsPage() {
       {isCoach && (
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          イベントを作成する
+          {canEdit ? "イベントを作成する" : "イベント"}
         </h2>
       )}
       {tab === "weight_max" &&
         (isCoach ? (
-          <WeightMaxCoachManagement profile={profile} />
+          <WeightMaxCoachManagement profile={profile} readOnly={!canEdit} />
         ) : (
           <WeightMaxTab profile={profile} />
         ))}
       {tab === "body_composition" &&
         (isCoach ? (
-          <TeamEventCoachManagement type="body_composition" profile={profile} />
+          <TeamEventCoachManagement
+            type="body_composition"
+            profile={profile}
+            readOnly={!canEdit}
+          />
         ) : (
           <BodyCompositionTab profile={profile} />
         ))}
       {tab === "match_reflection" &&
         (isCoach ? (
-          <TeamEventCoachManagement type="match_reflection" profile={profile} />
+          <TeamEventCoachManagement
+            type="match_reflection"
+            profile={profile}
+            readOnly={!canEdit}
+          />
         ) : (
           <TeamEventTab type="match_reflection" profile={profile} />
         ))}

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
+  isAdminEditor,
+  isStaffRole,
   CommentKind,
   commentKindLabel,
   DayType,
@@ -130,7 +132,10 @@ export default function TrainingBoardSupabase({
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
   const practiceSectionRef = useRef<HTMLDivElement>(null);
-  const isCoachView = profile.role === "coach";
+  // 管理者・マネージャーは管理者用の表示（時間割・未提出者・トレ報の一覧など）。
+  // 時間割（セクション）の登録・編集ができるのは管理者だけ。
+  const isCoachView = isStaffRole(profile.role);
+  const canEditSchedule = isAdminEditor(profile.role);
   // 部員（コーチ以外）が閲覧できる拠点。マネージャーは多摩所属として扱う。
   const memberHomeLocation: Location =
     profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
@@ -795,7 +800,6 @@ export default function TrainingBoardSupabase({
   // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
   const isMemberView =
     !isCoachView && profile.role !== "manager" && profile.role !== "ob";
-  const isManager = profile.role === "manager";
   const visibleReports = isMemberView
     ? reports.filter((r) => r.author_id === profile.id)
     : reports;
@@ -862,6 +866,7 @@ export default function TrainingBoardSupabase({
                   </span>
                 )}
               </p>
+              {canEditSchedule && (
               <button
                 type="button"
                 onClick={() => {
@@ -876,8 +881,9 @@ export default function TrainingBoardSupabase({
                     ? "編集する"
                     : "時間割を設定する"}
               </button>
+              )}
             </div>
-            {editingViewDateSchedule && (
+            {canEditSchedule && editingViewDateSchedule && (
               <ScheduleEditForm
                 teamId={profile.team_id}
                 authorId={profile.id}
@@ -892,6 +898,7 @@ export default function TrainingBoardSupabase({
                 }}
               />
             )}
+            {canEditSchedule && (
             <button
               type="button"
               onClick={() => {
@@ -904,7 +911,8 @@ export default function TrainingBoardSupabase({
                 ? "期間まとめて設定を閉じる"
                 : "期間でまとめて設定する（オフ・合宿・試合・出稽古）"}
             </button>
-            {showBulkScheduleForm && (
+            )}
+            {canEditSchedule && showBulkScheduleForm && (
               <ScheduleEditForm
                 teamId={profile.team_id}
                 authorId={profile.id}
@@ -1272,7 +1280,8 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
-            {!isManager && (
+            {/* 実施報告・未実施報告（管理者・マネージャーは閲覧のみ＝isViewOnly） */}
+            {(
               <>
             {/* 実施報告 */}
             <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">

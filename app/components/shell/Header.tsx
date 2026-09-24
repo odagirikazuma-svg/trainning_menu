@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
-import { Location, locationLabel, locations } from "../../lib/types";
+import { isStaffRole, Location, locationLabel, locations } from "../../lib/types";
 import type { Profile } from "../AuthGate";
 
 function toDateKey(d: Date) {
@@ -303,7 +303,7 @@ export default function Header({
       style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
       <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-white/50" />
-      {profile.role === "coach" ? (
+      {isStaffRole(profile.role) ? (
         <CoachHeaderInfo profile={profile} />
       ) : (
         <MemberHeaderInfo profile={profile} />

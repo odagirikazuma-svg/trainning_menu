@@ -9,6 +9,7 @@ import {
   currentGrade,
   Location,
   locationLabel,
+  isStaffRole,
   Role,
   roleLabel,
   trainingTypeDotColor,
@@ -295,9 +296,9 @@ function MemberDayView({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  // 閲覧している人（管理者のときだけ、この部員の未提出タスクを表示する）
+  // 閲覧している人（管理者・マネージャーのときだけ、この部員の未提出タスクを表示する）
   const { profile: viewer } = useProfile();
-  const isAdminViewer = viewer.role === "coach";
+  const isAdminViewer = isStaffRole(viewer.role);
   const recordHeadingRef = useRef<HTMLParagraphElement>(null);
   const [date, setDate] = useState(initialDate);
   const [calendarViewMode, setCalendarViewMode] = useState<"month" | "week">(
