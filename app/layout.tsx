@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+// 本番以外（テスト環境のプレビューデプロイなど）かどうか。
+// Vercelが自動で設定するVERCEL_ENVを使う（ローカル開発時はundefinedなのでこちらもテスト扱い）
+const isNonProduction = process.env.VERCEL_ENV !== "production";
+
 export const metadata: Metadata = {
-  title: "練習ノート",
+  title: isNonProduction ? "【テスト】練習ノート" : "練習ノート",
   description: "レスリング部 練習メニュー掲示板",
 };
 
@@ -39,6 +43,11 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        {isNonProduction && (
+          <div className="sticky top-0 z-50 bg-amber-500 px-2 py-1 text-center text-[11px] font-bold text-black">
+            ここはテスト環境です（本番データではありません）
+          </div>
+        )}
         {children}
       </body>
     </html>

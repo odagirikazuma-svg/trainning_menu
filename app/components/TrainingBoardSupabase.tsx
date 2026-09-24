@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
+  isAdminEditor,
+  isStaffRole,
   CommentKind,
   commentKindLabel,
   DayType,
@@ -15,6 +17,8 @@ import {
   SessionType,
   sessionTypeDotColor,
   sessionTypeLabel,
+  TrainingType,
+  trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { useSubNav } from "./shell/AppShell";
@@ -106,11 +110,8 @@ export default function TrainingBoardSupabase({
     initialDate: string | null;
     initialStartTime: string | null;
   }>(() => {
-    // 自分の所属拠点（未設定・マネージャーは多摩扱い）を最初に表示する
-    const ownLocation: Location =
-      profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
     if (typeof window === "undefined") {
-      return { initialLocation: ownLocation, initialDate: null, initialStartTime: null };
+      return { initialLocation: "tama", initialDate: null, initialStartTime: null };
     }
     try {
       const raw = sessionStorage.getItem("jumpTo");
@@ -126,12 +127,15 @@ export default function TrainingBoardSupabase({
     } catch {
       // 無視して通常起動にフォールバック
     }
-    return { initialLocation: ownLocation, initialDate: null, initialStartTime: null };
+    return { initialLocation: "tama", initialDate: null, initialStartTime: null };
   });
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
   const practiceSectionRef = useRef<HTMLDivElement>(null);
-  const isCoachView = profile.role === "coach";
+  // 管理者・マネージャーは管理者用の表示（時間割・未提出者・トレ報の一覧など）。
+  // 時間割（セクション）の登録・編集ができるのは管理者だけ。
+  const isCoachView = isStaffRole(profile.role);
+  const canEditSchedule = isAdminEditor(profile.role);
   // 部員（コーチ以外）が閲覧できる拠点。マネージャーは多摩所属として扱う。
   const memberHomeLocation: Location =
     profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
@@ -144,6 +148,7 @@ export default function TrainingBoardSupabase({
     null
   );
   const [comments, setComments] = useState<CommentRow[]>([]);
+  const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
     day_type: DayType;
@@ -158,6 +163,7 @@ export default function TrainingBoardSupabase({
   } | null>(null);
   // コーチがマット掲示板から直接、時間割（練習セクション）を編集できるようにする
   const [editingViewDateSchedule, setEditingViewDateSchedule] = useState(false);
+  const [showBulkScheduleForm, setShowBulkScheduleForm] = useState(false);
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [confirmingNew, setConfirmingNew] = useState(false);
@@ -165,21 +171,15 @@ export default function TrainingBoardSupabase({
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showAbsentForm, setShowAbsentForm] = useState(false);
-  const [showMissingPopup, setShowMissingPopup] = useState(false);
-  const [expandedReportIds, setExpandedReportIds] = useState<Set<string>>(
-    new Set()
-  );
-  const [expandedAbsentIds, setExpandedAbsentIds] = useState<Set<string>>(
-    new Set()
-  );
   const [reportText, setReportText] = useState("");
   const [absentReason, setAbsentReason] = useState("");
   const [absentAltType, setAbsentAltType] = useState<
-    "running" | "weight" | "other" | ""
-  >("");
+    "running" | "weight" | "other"
+  >("running");
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
@@ -201,6 +201,16 @@ export default function TrainingBoardSupabase({
   const [locationRoster, setLocationRoster] = useState<
     { id: string; display_name: string }[]
   >([]);
+  const [dayWeightLogs, setDayWeightLogs] = useState<
+    {
+      author_id: string;
+      display_name: string;
+      content: string;
+      type: TrainingType;
+      title: string | null;
+    }[]
+  >([]);
+  const [loadingDayWeightLogs, setLoadingDayWeightLogs] = useState(false);
   const [submissionMap, setSubmissionMap] = useState<
     Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
   >({});
@@ -245,6 +255,42 @@ export default function TrainingBoardSupabase({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCoachView, activeLocation]);
+
+  useEffect(() => {
+    if (!isCoachView) return;
+    (async () => {
+      setLoadingDayWeightLogs(true);
+      const { data, error } = await supabase
+        .from("weight_logs")
+        .select(
+          "author_id, content, type, title, author:profiles!weight_logs_author_id_fkey(display_name, home_location)"
+        )
+        .eq("team_id", profile.team_id)
+        .eq("date", viewDate);
+      if (!error) {
+        const rows = (data ?? []) as unknown as {
+          author_id: string;
+          content: string;
+          type: TrainingType;
+          title: string | null;
+          author: { display_name: string; home_location: Location | null } | null;
+        }[];
+        setDayWeightLogs(
+          rows
+            .filter((r) => r.author?.home_location === activeLocation)
+            .map((r) => ({
+              author_id: r.author_id,
+              display_name: r.author?.display_name ?? "不明",
+              content: r.content,
+              type: r.type,
+              title: r.title,
+            }))
+        );
+      }
+      setLoadingDayWeightLogs(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCoachView, activeLocation, viewDate]);
 
   useEffect(() => {
     setJointNoticeDate(null);
@@ -314,11 +360,8 @@ export default function TrainingBoardSupabase({
     // 別のメニューに切り替えたら、書きかけの報告内容は必ずリセットする
     setReportText("");
     setAbsentReason("");
-    setAbsentAltType("");
+    setAbsentAltType("running");
     setAbsentAlternative("");
-    setShowMissingPopup(false);
-    setExpandedReportIds(new Set());
-    setExpandedAbsentIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -340,6 +383,7 @@ export default function TrainingBoardSupabase({
   useEffect(() => {
     loadViewDateSchedule();
     setEditingViewDateSchedule(false);
+    setShowBulkScheduleForm(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewDate, activeLocation]);
 
@@ -438,6 +482,7 @@ export default function TrainingBoardSupabase({
   }
 
   async function loadMenus(): Promise<MenuRow[]> {
+    setLoadingMenus(true);
     const { data, error } = await supabase
       .from("menus")
       .select(
@@ -454,6 +499,7 @@ export default function TrainingBoardSupabase({
       setMenus(rows);
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
+    setLoadingMenus(false);
     return rows;
   }
 
@@ -676,6 +722,7 @@ export default function TrainingBoardSupabase({
     await loadComments(selectedId);
     if (kind === "report" || kind === "absent") {
       await loadSubmissionSummary(menus.map((m) => m.id));
+      setTaskRefreshSignal((n) => n + 1);
     }
   }
 
@@ -707,6 +754,7 @@ export default function TrainingBoardSupabase({
     }
     if (selectedId) await loadComments(selectedId);
     await loadSubmissionSummary(menus.map((m) => m.id));
+    setTaskRefreshSignal((n) => n + 1);
   }
 
   async function handleAddComment(e: React.FormEvent) {
@@ -723,12 +771,7 @@ export default function TrainingBoardSupabase({
 
   async function handleAddAbsent(e: React.FormEvent) {
     e.preventDefault();
-    if (
-      !absentReason.trim() ||
-      !absentAlternative.trim() ||
-      !absentAltType
-    )
-      return;
+    if (!absentReason.trim() || !absentAlternative.trim()) return;
     const altTypeLabel =
       absentAltType === "running"
         ? "ランニング"
@@ -738,7 +781,7 @@ export default function TrainingBoardSupabase({
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
     await submitComment("absent", combined, null, absentAltType);
     setAbsentReason("");
-    setAbsentAltType("");
+    setAbsentAltType("running");
     setAbsentAlternative("");
   }
 
@@ -753,14 +796,22 @@ export default function TrainingBoardSupabase({
   const absentReports = comments.filter(
     (c) => c.kind === "absent" && !c.parent_id
   );
-  const isManager = profile.role === "manager";
-  const visibleReports = reports;
-  const visibleAbsentReports = absentReports;
+  // コーチ・マネージャー以外（マイページに統合された部員view）には、
+  // 他の部員の実施報告・未実施報告の中身は見せず、自分の分だけ表示する
+  const isMemberView =
+    !isCoachView && profile.role !== "manager" && profile.role !== "ob";
+  const visibleReports = isMemberView
+    ? reports.filter((r) => r.author_id === profile.id)
+    : reports;
+  const visibleAbsentReports = isMemberView
+    ? absentReports.filter((c) => c.author_id === profile.id)
+    : absentReports;
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
+  const isViewOnly = profile.role === "coach" || profile.role === "manager";
   const reportOpen = selected ? isReportOpen(selected) : false;
   const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
   const reportSubmittedCount = selectedSubmission
@@ -795,6 +846,87 @@ export default function TrainingBoardSupabase({
 
   const practiceSection = (
     <div ref={practiceSectionRef}>
+        {isCoachView && (
+          <section className="mb-3 flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-neutral-400">
+                {locationLabel[activeLocation]}・{formatMonthDay(viewDate)}の時間割
+                {viewDateSchedule && !viewDateSchedule.is_off && (
+                  <span className="ml-1 font-normal text-neutral-500">
+                    （{dayTypeLabel[viewDateSchedule.day_type]}
+                    {viewDateSchedule.event_name
+                      ? `：${viewDateSchedule.event_name}`
+                      : ""}
+                    ）
+                  </span>
+                )}
+                {viewDateSchedule?.is_off && (
+                  <span className="ml-1 font-normal text-neutral-500">
+                    （オフ）
+                  </span>
+                )}
+              </p>
+              {canEditSchedule && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkScheduleForm(false);
+                  setEditingViewDateSchedule((v) => !v);
+                }}
+                className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
+              >
+                {editingViewDateSchedule
+                  ? "閉じる"
+                  : viewDateSchedule
+                    ? "編集する"
+                    : "時間割を設定する"}
+              </button>
+              )}
+            </div>
+            {canEditSchedule && editingViewDateSchedule && (
+              <ScheduleEditForm
+                teamId={profile.team_id}
+                authorId={profile.id}
+                location={activeLocation}
+                mode="single"
+                date={viewDate}
+                existingDay={viewDateSchedule as ScheduleDayPrefill | null}
+                onCancel={() => setEditingViewDateSchedule(false)}
+                onSaved={async () => {
+                  setEditingViewDateSchedule(false);
+                  await loadViewDateSchedule();
+                }}
+              />
+            )}
+            {canEditSchedule && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingViewDateSchedule(false);
+                setShowBulkScheduleForm((v) => !v);
+              }}
+              className="self-start text-[11px] font-medium text-neutral-400 underline"
+            >
+              {showBulkScheduleForm
+                ? "期間まとめて設定を閉じる"
+                : "期間でまとめて設定する（オフ・合宿・試合・出稽古）"}
+            </button>
+            )}
+            {canEditSchedule && showBulkScheduleForm && (
+              <ScheduleEditForm
+                teamId={profile.team_id}
+                authorId={profile.id}
+                location={activeLocation}
+                mode="range"
+                date={viewDate}
+                onCancel={() => setShowBulkScheduleForm(false)}
+                onSaved={async () => {
+                  await loadViewDateSchedule();
+                }}
+              />
+            )}
+          </section>
+        )}
         {/* メニュー一覧（横スクロール、スマホ向け） */}
         <div className="flex flex-col gap-2">
           {showNewForm && canCreateMenu(profile.role) && (
@@ -986,49 +1118,9 @@ export default function TrainingBoardSupabase({
         </div>
 
       {isCoachView && (
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold text-neutral-400">
-            {formatMonthDay(viewDate)}の練習メニュー
-            {viewDateSchedule && !viewDateSchedule.is_off && (
-              <span className="ml-1 font-normal text-neutral-500">
-                （{dayTypeLabel[viewDateSchedule.day_type]}
-                {viewDateSchedule.event_name
-                  ? `：${viewDateSchedule.event_name}`
-                  : ""}
-                ）
-              </span>
-            )}
-            {viewDateSchedule?.is_off && (
-              <span className="ml-1 font-normal text-neutral-500">（オフ）</span>
-            )}
-          </h3>
-          <button
-            type="button"
-            onClick={() => setEditingViewDateSchedule((v) => !v)}
-            className="shrink-0 text-[11px] font-medium text-neutral-300 underline"
-          >
-            {editingViewDateSchedule
-              ? "閉じる"
-              : viewDateSchedule
-                ? "時間割を編集する"
-                : "時間割を設定する"}
-          </button>
-        </div>
-      )}
-      {isCoachView && editingViewDateSchedule && (
-        <ScheduleEditForm
-          teamId={profile.team_id}
-          authorId={profile.id}
-          location={activeLocation}
-          mode="single"
-          date={viewDate}
-          existingDay={viewDateSchedule as ScheduleDayPrefill | null}
-          onCancel={() => setEditingViewDateSchedule(false)}
-          onSaved={async () => {
-            setEditingViewDateSchedule(false);
-            await loadViewDateSchedule();
-          }}
-        />
+        <h3 className="text-xs font-semibold text-neutral-400">
+          {formatMonthDay(viewDate)}の練習メニュー
+        </h3>
       )}
       {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
@@ -1188,7 +1280,8 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
-            {!isManager && (
+            {/* 実施報告・未実施報告（管理者・マネージャーは閲覧のみ＝isViewOnly） */}
+            {(
               <>
             {/* 実施報告 */}
             <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
@@ -1196,78 +1289,50 @@ export default function TrainingBoardSupabase({
                 <h3 className="text-xs font-semibold text-neutral-400">
                   実施報告
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowMissingPopup(true)}
-                  className="text-[11px] text-neutral-500 underline decoration-dotted"
-                >
+                <span className="text-[11px] text-neutral-500">
                   {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
-                </button>
+                </span>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <ul className="flex flex-col gap-3">
                 {visibleReports.length === 0 && (
-                  <p className="text-xs text-neutral-500">
+                  <li className="text-xs text-neutral-500">
                     まだ実施報告はありません。
+                  </li>
+                )}
+                {visibleReports.map((r) => (
+                  <ReportThread
+                    key={r.id}
+                    report={r}
+                    replies={repliesOf(r.id)}
+                    onReply={(text) => submitComment("opinion", text, r.id)}
+                    currentUserId={profile.id}
+                    onUpdate={(text) => handleUpdateComment(r.id, text)}
+                    onDelete={() => handleDeleteComment(r.id)}
+                  />
+                ))}
+              </ul>
+
+              {isViewOnly ? (
+                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
+                  <p className="mb-1.5 font-semibold text-neutral-400">
+                    実施報告を提出したメンバー
                   </p>
-                )}
-                {visibleReports.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedReportIds((prev) =>
-                        prev.size === visibleReports.length
-                          ? new Set()
-                          : new Set(visibleReports.map((r) => r.id))
-                      )
-                    }
-                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
-                  >
-                    {expandedReportIds.size === visibleReports.length
-                      ? "すべて閉じる"
-                      : "全員の詳細を表示"}
-                  </button>
-                )}
-                {visibleReports.map((r) => {
-                  const isOpen = expandedReportIds.has(r.id);
-                  return (
-                    <div key={r.id} className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedReportIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(r.id)) next.delete(r.id);
-                            else next.add(r.id);
-                            return next;
-                          })
-                        }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
-                      >
-                        <span className="font-medium text-neutral-100">
+                  {reports.length === 0 ? (
+                    <p className="text-neutral-500">まだいません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {reports.map((r) => (
+                        <span
+                          key={r.id}
+                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
+                        >
                           {r.author?.display_name ?? "不明"}
                         </span>
-                        <span className="text-neutral-500">
-                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
-                        </span>
-                      </button>
-                      {isOpen && (
-                        <ReportThread
-                          report={r}
-                          replies={repliesOf(r.id)}
-                          onReply={(text) =>
-                            submitComment("opinion", text, r.id)
-                          }
-                          currentUserId={profile.id}
-                          onUpdate={(text) => handleUpdateComment(r.id, text)}
-                          onDelete={() => handleDeleteComment(r.id)}
-                        />
-                      )}
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-
-              {myReport ? (
+                  )}
+                </div>
+              ) : myReport ? (
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
                   実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1314,73 +1379,49 @@ export default function TrainingBoardSupabase({
               <h3 className="text-xs font-semibold text-neutral-400">
                 未実施報告（授業・通院などで参加できなかった場合）
               </h3>
-              <div className="flex flex-col gap-1.5">
+              <ul className="flex flex-col gap-2">
                 {visibleAbsentReports.length === 0 && (
-                  <p className="text-xs text-neutral-500">
+                  <li className="text-xs text-neutral-500">
                     まだ未実施報告はありません。
-                  </p>
+                  </li>
                 )}
-                {visibleAbsentReports.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedAbsentIds((prev) =>
-                        prev.size === visibleAbsentReports.length
-                          ? new Set()
-                          : new Set(visibleAbsentReports.map((c) => c.id))
-                      )
+                {visibleAbsentReports.map((c) => (
+                  <ReportThread
+                    key={c.id}
+                    report={c}
+                    replies={repliesOf(c.id)}
+                    onReply={(text) => submitComment("opinion", text, c.id)}
+                    tone="neutral"
+                    currentUserId={profile.id}
+                    editableAltType
+                    onUpdate={(text, altType) =>
+                      handleUpdateComment(c.id, text, altType ?? null)
                     }
-                    className="self-end text-[11px] text-neutral-500 underline decoration-dotted"
-                  >
-                    {expandedAbsentIds.size === visibleAbsentReports.length
-                      ? "すべて閉じる"
-                      : "全員の詳細を表示"}
-                  </button>
-                )}
-                {visibleAbsentReports.map((c) => {
-                  const isOpen = expandedAbsentIds.has(c.id);
-                  return (
-                    <div key={c.id} className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedAbsentIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(c.id)) next.delete(c.id);
-                            else next.add(c.id);
-                            return next;
-                          })
-                        }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
-                      >
-                        <span className="font-medium text-neutral-100">
+                    onDelete={() => handleDeleteComment(c.id)}
+                  />
+                ))}
+              </ul>
+              {isViewOnly ? (
+                <div className="rounded-lg bg-neutral-900 p-3 text-xs text-neutral-300">
+                  <p className="mb-1.5 font-semibold text-neutral-400">
+                    未実施報告を提出したメンバー
+                  </p>
+                  {absentReports.length === 0 ? (
+                    <p className="text-neutral-500">まだいません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {absentReports.map((c) => (
+                        <span
+                          key={c.id}
+                          className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1"
+                        >
                           {c.author?.display_name ?? "不明"}
                         </span>
-                        <span className="text-neutral-500">
-                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
-                        </span>
-                      </button>
-                      {isOpen && (
-                        <ReportThread
-                          report={c}
-                          replies={repliesOf(c.id)}
-                          onReply={(text) =>
-                            submitComment("opinion", text, c.id)
-                          }
-                          tone="neutral"
-                          currentUserId={profile.id}
-                          editableAltType
-                          onUpdate={(text, altType) =>
-                            handleUpdateComment(c.id, text, altType ?? null)
-                          }
-                          onDelete={() => handleDeleteComment(c.id)}
-                        />
-                      )}
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-              {myAbsent ? (
+                  )}
+                </div>
+              ) : myAbsent ? (
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告は提出済みです。内容の修正・削除は上の報告欄から行えます。
                 </p>
@@ -1417,12 +1458,11 @@ export default function TrainingBoardSupabase({
                     value={absentAltType}
                     onChange={(e) =>
                       setAbsentAltType(
-                        e.target.value as "running" | "weight" | "other" | ""
+                        e.target.value as "running" | "weight" | "other"
                       )
                     }
                     className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
                   >
-                    <option value="">選択してください</option>
                     <option value="running">ランニング</option>
                     <option value="weight">ウェイト</option>
                     <option value="other">その他</option>
@@ -1442,12 +1482,7 @@ export default function TrainingBoardSupabase({
                 </label>
                 <button
                   type="submit"
-                  disabled={
-                    !absentReason.trim() ||
-                    !absentAlternative.trim() ||
-                    !absentAltType
-                  }
-                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 active:bg-neutral-700"
+                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700"
                 >
                   未実施報告を提出する
                 </button>
@@ -1455,6 +1490,106 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
+            {isCoachView && (
+              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+                <h3 className="text-xs font-semibold text-neutral-400">
+                  未提出者（{locationLabel[activeLocation]}）
+                </h3>
+                {(() => {
+                  const reportedIds = new Set(reports.map((r) => r.author_id));
+                  const absentIds = new Set(
+                    absentReports.map((c) => c.author_id)
+                  );
+                  const missing = locationRoster.filter(
+                    (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
+                  );
+                  return missing.length === 0 ? (
+                    <p className="text-xs text-neutral-500">
+                      全員提出済みです。
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {missing.map((m) => (
+                        <span
+                          key={m.id}
+                          className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                        >
+                          {m.display_name}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </section>
+            )}
+
+            {isCoachView &&
+              matSessionForViewDate &&
+              viewDateSchedule?.sessions.some(
+                (s) => s.session_type !== "mat"
+              ) && (
+                <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+                  <h3 className="text-xs font-semibold text-neutral-400">
+                    トレ報（{locationLabel[activeLocation]}）
+                  </h3>
+                  {loadingDayWeightLogs ? (
+                    <p className="text-xs text-neutral-500">読み込み中…</p>
+                  ) : dayWeightLogs.length === 0 ? (
+                    <p className="text-xs text-neutral-500">
+                      まだトレ報の提出はありません。
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {dayWeightLogs.map((log) => (
+                        <div
+                          key={log.author_id}
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm"
+                        >
+                          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
+                            {log.display_name}
+                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                              {trainingTypeLabel[log.type]}
+                              {log.title && `・${log.title}`}
+                            </span>
+                          </p>
+                          <p className="whitespace-pre-wrap text-neutral-100">
+                            {log.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-neutral-400">
+                      未提出者
+                    </p>
+                    {(() => {
+                      const loggedIds = new Set(
+                        dayWeightLogs.map((l) => l.author_id)
+                      );
+                      const missing = locationRoster.filter(
+                        (m) => !loggedIds.has(m.id)
+                      );
+                      return missing.length === 0 ? (
+                        <p className="text-xs text-neutral-500">
+                          全員提出済みです。
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {missing.map((m) => (
+                            <span
+                              key={m.id}
+                              className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                            >
+                              {m.display_name}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </section>
+              )}
               </>
             )}
           </>
@@ -1523,8 +1658,7 @@ export default function TrainingBoardSupabase({
 
         {/* 練習スケジュール */}
         <section className="flex flex-col gap-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
+          <h3 className="text-xs font-semibold text-neutral-400">
             練習スケジュール
           </h3>
           <MenuCalendar
@@ -1547,53 +1681,6 @@ export default function TrainingBoardSupabase({
 
         {practiceSection}
       </div>
-
-      {showMissingPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => setShowMissingPopup(false)}
-        >
-          <div
-            className="relative flex w-full max-w-sm flex-col gap-2 rounded-lg border border-border-color bg-surface p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-foreground">
-                未提出者（{locationLabel[activeLocation]}）
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowMissingPopup(false)}
-                aria-label="閉じる"
-                className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 active:bg-neutral-800/50"
-              >
-                ✕
-              </button>
-            </div>
-            {(() => {
-              const reportedIds = new Set(reports.map((r) => r.author_id));
-              const absentIds = new Set(absentReports.map((c) => c.author_id));
-              const missing = locationRoster.filter(
-                (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
-              );
-              return missing.length === 0 ? (
-                <p className="text-xs text-neutral-500">全員提出済みです。</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {missing.map((m) => (
-                    <span
-                      key={m.id}
-                      className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                    >
-                      {m.display_name}
-                    </span>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2098,29 +2185,6 @@ function MenuCalendar({
           const isPast = key < todayKey;
           const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
           const weekday = date.getDay();
-          let bgClass: string;
-          if (isOff || schedule?.is_off) {
-            bgClass =
-              "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700";
-          } else if (schedule?.day_type === "camp") {
-            bgClass =
-              "bg-pink-100 font-medium text-pink-700 active:bg-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:active:bg-pink-900/40";
-          } else if (schedule?.day_type === "match") {
-            bgClass =
-              "bg-red-100 font-medium text-red-700 active:bg-red-200 dark:bg-red-950/40 dark:text-red-400 dark:active:bg-red-900/40";
-          } else if (hasMenu) {
-            bgClass =
-              "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40";
-          } else {
-            bgClass =
-              "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700";
-          }
-          if (isViewDate) {
-            bgClass =
-              "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
-          } else if (isToday) {
-            bgClass = "bg-blue-100 dark:bg-blue-950/40";
-          }
           return (
             <button
               key={i}
@@ -2131,17 +2195,25 @@ function MenuCalendar({
               }}
               className={`relative flex ${
                 viewMode === "week" ? "min-h-[88px]" : "min-h-[56px]"
-              } flex-col items-center justify-start gap-0.5 rounded-lg border pt-1 text-xs ${bgClass} ${
-                isViewDate
-                  ? "border-amber-400 ring-1 ring-amber-400"
-                  : isToday
-                    ? "border-blue-400 ring-1 ring-blue-400 dark:border-blue-600"
-                    : "border-border-color"
-              }`}
+              } flex-col items-center justify-start gap-0.5 rounded-lg border border-border-color pt-1 text-xs ${
+                isViewDate && hasMenu
+                  ? "bg-blue-600 font-semibold text-white"
+                  : isOff || schedule?.is_off
+                    ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
+                    : schedule?.day_type === "camp"
+                      ? "bg-pink-100 font-medium text-pink-700 active:bg-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:active:bg-pink-900/40"
+                      : schedule?.day_type === "match"
+                        ? "bg-red-100 font-medium text-red-700 active:bg-red-200 dark:bg-red-950/40 dark:text-red-400 dark:active:bg-red-900/40"
+                        : hasMenu
+                          ? "bg-blue-100 font-medium text-blue-700 active:bg-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:active:bg-blue-900/40"
+                          : jointInfo
+                            ? "bg-purple-100 font-medium text-purple-700 active:bg-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:active:bg-purple-900/40"
+                            : "bg-surface-2 text-neutral-700 active:bg-neutral-200 dark:text-neutral-300 dark:active:bg-neutral-700"
+              } ${isViewDate ? "ring-2 ring-blue-500" : ""}`}
             >
               <span
                 className={
-                  !isViewDate && !isToday && !hasMenu && !isOff && !schedule?.is_off
+                  !isViewDate && !hasMenu && !isOff && !schedule?.is_off
                     ? weekday === 0
                       ? "border-b-2 border-red-500 px-1 text-red-500 dark:text-red-400"
                       : weekday === 6
@@ -2152,6 +2224,9 @@ function MenuCalendar({
               >
                 {date.getDate()}
               </span>
+              {isToday && (
+                <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-neutral-900 dark:bg-white" />
+              )}
               {incomplete && (
                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
               )}
@@ -2211,6 +2286,28 @@ function MenuCalendar({
           );
         })}
       </div>
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-500">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900 dark:bg-white" />
+          今日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded ring-2 ring-blue-500" />
+          表示中の日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+          未提出の部員がいる日
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded bg-purple-100 dark:bg-purple-950/40" />
+          全体練習（別拠点）
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded bg-neutral-200 dark:bg-neutral-800" />
+          オフ
+        </span>
+      </p>
     </div>
   );
 }

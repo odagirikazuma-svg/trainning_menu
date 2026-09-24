@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "../components/shell/AppShell";
+import { isStaffRole } from "../lib/types";
 
 export default function RootRedirect() {
   const { profile } = useProfile();
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(profile.role === "coach" ? "/admin" : "/mypage");
+    router.replace(isStaffRole(profile.role) ? "/admin" : "/mypage");
   }, [profile.role, router]);
 
   return (

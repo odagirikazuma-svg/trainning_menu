@@ -94,6 +94,12 @@ export const roleLabel: Record<Role, string> = {
   ob: "OB",
 };
 
+// 管理者と同じ画面レイアウト（管理ページ・練習予定表・イベント・設定）を使うロール。
+// マネージャーは管理者と同じ画面を見られるが、セクション登録・イベント作成などの編集はできない
+// （編集できるのは管理者＝coach のみ。isAdminEditor で判定する）。
+export const isStaffRole = (role: Role) => role === "coach" || role === "manager";
+export const isAdminEditor = (role: Role) => role === "coach";
+
 // メニューを作成できる権限を持つロール
 // キャプテンはリーダーと同じ権限に加え、将来的に追加の権限を持つ想定
 export const canCreateMenu = (role: Role) =>

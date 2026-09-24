@@ -28,7 +28,13 @@ import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
 import ScheduleOverviewCalendar from "../../components/ScheduleOverviewCalendar";
-import { Location, locationLabel, locations } from "../../lib/types";
+import {
+  isAdminEditor,
+  isStaffRole,
+  Location,
+  locationLabel,
+  locations,
+} from "../../lib/types";
 
 const themeOptions: { value: ThemePref; label: string }[] = [
   { value: "system", label: "端末設定に合わせる" },
@@ -820,13 +826,15 @@ function SettingsGroup({
 
 export default function SettingsPage() {
   const { profile, signOut } = useProfile();
-  const isCoach = profile.role === "coach";
+  // 管理者・マネージャーは管理者用の設定画面。ただし「管理設定」「セクション登録」は管理者のみ
+  const isStaff = isStaffRole(profile.role);
+  const canEdit = isAdminEditor(profile.role);
   const pushSupported = isPushSupported();
   const myPageIcon = profile.icon_url || "/icons/nav-default-avatar.png";
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4 sm:p-5">
-      {isCoach ? (
+      {isStaff ? (
         <>
           <SettingsGroup icon="/icons/nav-settings.png" iconAlt="通常" title="通常">
             {pushSupported && (
@@ -840,11 +848,11 @@ export default function SettingsPage() {
             <CollapsibleSection title="カレンダー表示設定">
               <CalendarViewSection />
             </CollapsibleSection>
-            <CollapsibleSection title="プロフィールアイコンの設定">
-              <IconSection />
-            </CollapsibleSection>
+            {/* 管理者・マネージャーはプロフィールアイコンを使わないため、アイコン設定は出さない */}
           </SettingsGroup>
 
+          {canEdit && (
+          <>
           <SettingsGroup icon="/icons/nav-admin.png" iconAlt="管理設定" title="管理設定">
             <CollapsibleSection title="メンバー情報の編集">
               <MemberRoleEditSection profile={profile} />
@@ -859,6 +867,8 @@ export default function SettingsPage() {
               <SectionRegistrationSection profile={profile} />
             </CollapsibleSection>
           </SettingsGroup>
+          </>
+          )}
 
           <SettingsGroup
             icon="/icons/nav-events.png"
