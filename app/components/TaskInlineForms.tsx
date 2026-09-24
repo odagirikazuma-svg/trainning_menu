@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { TitleColor, TrainingType, trainingTypeLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
@@ -41,48 +41,60 @@ export function MatReportInlineForm({
   );
   const [absentAlternative, setAbsentAlternative] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // ボタンの連打などで同じ報告が何件も送られないようにするためのロック
+  const lock = useRef(false);
+
+  // 実施報告・未実施報告を1件だけ送る（すでにあれば送らない）
+  async function insertOnce(row: {
+    kind: "report" | "absent";
+    text: string;
+    alt_type: TrainingType | null;
+  }) {
+    if (lock.current) return;
+    lock.current = true;
+    setSubmitting(true);
+    try {
+      const { data: existing } = await supabase
+        .from("comments")
+        .select("id")
+        .eq("menu_id", menu.id)
+        .eq("author_id", profileId)
+        .in("kind", ["report", "absent"])
+        .is("parent_id", null)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        const { error } = await supabase.from("comments").insert({
+          menu_id: menu.id,
+          author_id: profileId,
+          parent_id: null,
+          ...row,
+        });
+        // 23505 = すでに同じ報告がある（重複防止に引っかかった）ので成功扱い
+        if (error && error.code !== "23505") {
+          onError(error.message);
+          return;
+        }
+      }
+      await onSubmitted();
+    } finally {
+      lock.current = false;
+      setSubmitting(false);
+    }
+  }
 
   async function submitReport(e: React.FormEvent) {
     e.preventDefault();
     if (!reportText.trim()) return;
-    setSubmitting(true);
-    const { error } = await supabase.from("comments").insert({
-      menu_id: menu.id,
-      author_id: profileId,
-      kind: "report",
-      parent_id: null,
-      text: reportText.trim(),
-      alt_type: null,
-    });
-    setSubmitting(false);
-    if (error) {
-      onError(error.message);
-      return;
-    }
-    await onSubmitted();
+    await insertOnce({ kind: "report", text: reportText.trim(), alt_type: null });
   }
 
   async function submitAbsent(e: React.FormEvent) {
     e.preventDefault();
     if (!absentReason.trim() || !absentAlternative.trim() || !absentAltType)
       return;
-    setSubmitting(true);
     const altTypeLabel = trainingTypeLabel[absentAltType];
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
-    const { error } = await supabase.from("comments").insert({
-      menu_id: menu.id,
-      author_id: profileId,
-      kind: "absent",
-      parent_id: null,
-      text: combined,
-      alt_type: absentAltType,
-    });
-    setSubmitting(false);
-    if (error) {
-      onError(error.message);
-      return;
-    }
-    await onSubmitted();
+    await insertOnce({ kind: "absent", text: combined, alt_type: absentAltType });
   }
 
   return (

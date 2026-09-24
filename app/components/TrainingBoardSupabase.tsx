@@ -175,6 +175,9 @@ export default function TrainingBoardSupabase({
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showAbsentForm, setShowAbsentForm] = useState(false);
+  // 実施報告・未実施報告を送信中かどうか（二重送信防止）
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const reportSubmitLock = useRef(false);
   // 「◯人/◯人 提出済み」を押すと出る未提出者ポップアップ
   const [showMissingPopup, setShowMissingPopup] = useState(false);
   // 実施報告・未実施報告は名前だけ並べ、押した人の詳細だけ開く
@@ -717,24 +720,57 @@ export default function TrainingBoardSupabase({
     text: string,
     parentId: string | null = null,
     altType: string | null = null
-  ) {
-    if (!selectedId || !text.trim()) return;
-    const { error } = await supabase.from("comments").insert({
-      menu_id: selectedId,
-      author_id: profile.id,
-      kind,
-      parent_id: parentId,
-      text: text.trim(),
-      alt_type: altType,
-    });
-    if (error) {
-      setErrorMsg(error.message);
-      return;
+  ): Promise<boolean> {
+    if (!selectedId || !text.trim()) return false;
+    const isReport = (kind === "report" || kind === "absent") && !parentId;
+    // 実施報告・未実施報告の二重送信を防ぐ（ボタンの連打・通信の遅れで同じ報告が何件も入らないように）
+    if (isReport) {
+      if (reportSubmitLock.current) return false;
+      reportSubmitLock.current = true;
+      setSubmittingReport(true);
     }
-    await loadComments(selectedId);
-    if (kind === "report" || kind === "absent") {
-      await loadSubmissionSummary(menus.map((m) => m.id));
-      setTaskRefreshSignal((n) => n + 1);
+    try {
+      if (isReport) {
+        // すでに自分の報告があれば、新しく作らずに表示を更新するだけにする
+        const { data: existing } = await supabase
+          .from("comments")
+          .select("id")
+          .eq("menu_id", selectedId)
+          .eq("author_id", profile.id)
+          .in("kind", ["report", "absent"])
+          .is("parent_id", null)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          await loadComments(selectedId);
+          return true;
+        }
+      }
+      const { error } = await supabase.from("comments").insert({
+        menu_id: selectedId,
+        author_id: profile.id,
+        kind,
+        parent_id: parentId,
+        text: text.trim(),
+        alt_type: altType,
+      });
+      if (error) {
+        // 23505 = 同じ報告がすでにある（データベース側の重複防止に引っかかった）
+        if (error.code !== "23505") {
+          setErrorMsg(error.message);
+          return false;
+        }
+      }
+      await loadComments(selectedId);
+      if (kind === "report" || kind === "absent") {
+        await loadSubmissionSummary(menus.map((m) => m.id));
+        setTaskRefreshSignal((n) => n + 1);
+      }
+      return true;
+    } finally {
+      if (isReport) {
+        reportSubmitLock.current = false;
+        setSubmittingReport(false);
+      }
     }
   }
 
@@ -777,8 +813,8 @@ export default function TrainingBoardSupabase({
 
   async function handleAddReport(e: React.FormEvent) {
     e.preventDefault();
-    await submitComment("report", reportText);
-    setReportText("");
+    const ok = await submitComment("report", reportText);
+    if (ok) setReportText("");
   }
 
   async function handleAddAbsent(e: React.FormEvent) {
@@ -791,7 +827,8 @@ export default function TrainingBoardSupabase({
         ? "ウェイト"
         : "その他";
     const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
-    await submitComment("absent", combined, null, absentAltType);
+    const ok = await submitComment("absent", combined, null, absentAltType);
+    if (!ok) return;
     setAbsentReason("");
     setAbsentAltType("running");
     setAbsentAlternative("");
@@ -1352,7 +1389,7 @@ export default function TrainingBoardSupabase({
                           report={r}
                           replies={repliesOf(r.id)}
                           onReply={(text) =>
-                            submitComment("opinion", text, r.id)
+                            submitComment("opinion", text, r.id).then(() => {})
                           }
                           currentUserId={profile.id}
                           onUpdate={(text) => handleUpdateComment(r.id, text)}
@@ -1399,9 +1436,10 @@ export default function TrainingBoardSupabase({
                   />
                   <button
                     type="submit"
-                    className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700"
+                    disabled={submittingReport || !reportText.trim()}
+                    className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
                   >
-                    実施報告を提出する
+                    {submittingReport ? "提出中…" : "実施報告を提出する"}
                   </button>
                 </form>
               )}
@@ -1463,7 +1501,7 @@ export default function TrainingBoardSupabase({
                           report={c}
                           replies={repliesOf(c.id)}
                           onReply={(text) =>
-                            submitComment("opinion", text, c.id)
+                            submitComment("opinion", text, c.id).then(() => {})
                           }
                           tone="neutral"
                           currentUserId={profile.id}
@@ -1539,9 +1577,10 @@ export default function TrainingBoardSupabase({
                 </label>
                 <button
                   type="submit"
-                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700"
+                  disabled={submittingReport}
+                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700 disabled:opacity-50"
                 >
-                  未実施報告を提出する
+                  {submittingReport ? "提出中…" : "未実施報告を提出する"}
                 </button>
               </form>
               )}
