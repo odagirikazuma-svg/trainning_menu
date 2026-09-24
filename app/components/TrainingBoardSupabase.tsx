@@ -167,6 +167,7 @@ export default function TrainingBoardSupabase({
   const [commentText, setCommentText] = useState("");
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
+  const [showAbsentForm, setShowAbsentForm] = useState(false);
   const [showMissingPopup, setShowMissingPopup] = useState(false);
   const [expandedReportIds, setExpandedReportIds] = useState<Set<string>>(
     new Set()
@@ -309,6 +310,12 @@ export default function TrainingBoardSupabase({
     if (selectedId) loadComments(selectedId);
     setShowCommentForm(false);
     setShowReportForm(false);
+    setShowAbsentForm(false);
+    // 別のメニューに切り替えたら、書きかけの報告内容は必ずリセットする
+    setReportText("");
+    setAbsentReason("");
+    setAbsentAltType("");
+    setAbsentAlternative("");
     setShowMissingPopup(false);
     setExpandedReportIds(new Set());
     setExpandedAbsentIds(new Set());
@@ -1268,7 +1275,22 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
                   未実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
-              ) : !showReportForm ? null : reportOpen ? (
+              ) : !reportOpen ? (
+                <p className="rounded-lg bg-amber-950/40 p-3 text-xs text-amber-700">
+                  まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
+                </p>
+              ) : !showReportForm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReportForm(true);
+                    setShowAbsentForm(false);
+                  }}
+                  className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700"
+                >
+                  実施報告を書く
+                </button>
+              ) : (
                 <form onSubmit={handleAddReport} className="flex flex-col gap-2">
                   <textarea
                     value={reportText}
@@ -1284,10 +1306,6 @@ export default function TrainingBoardSupabase({
                     実施報告を提出する
                   </button>
                 </form>
-              ) : (
-                <p className="rounded-lg bg-amber-950/40 p-3 text-xs text-amber-700">
-                  まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
-                </p>
               )}
             </section>
 
@@ -1370,7 +1388,18 @@ export default function TrainingBoardSupabase({
                 <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
                   実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
                 </p>
-              ) : !showReportForm ? null : (
+              ) : !showAbsentForm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAbsentForm(true);
+                    setShowReportForm(false);
+                  }}
+                  className="self-start rounded-lg bg-neutral-700 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-600"
+                >
+                  未実施報告を書く
+                </button>
+              ) : (
               <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
                 <label className="flex flex-col text-[11px] text-neutral-400">
                   未実施の理由
