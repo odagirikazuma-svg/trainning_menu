@@ -1815,7 +1815,7 @@ export default function MemberHome({
           });
         }
 
-        return <TaskQueuePopup tasks={queueTasks} />;
+        return <TaskQueuePopup tasks={queueTasks} startWithList />;
       })()}
         </>
       )}

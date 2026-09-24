@@ -23,9 +23,17 @@ export type QueueTask = {
  *
  * 「キャンセル」「閉じる」を押すとポップアップを閉じ、ヘッダー右上のバッジからいつでも再開できる。
  */
-export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
+export default function TaskQueuePopup({
+  tasks,
+  startWithList = false,
+}: {
+  tasks: QueueTask[];
+  // true のとき、自動でポップアップが開いたときも1件ずつではなく「未提出のタスク」一覧から始める
+  startWithList?: boolean;
+}) {
+  const initialView = startWithList ? "list" : "queue";
   const [open, setOpen] = useState(true);
-  const [view, setView] = useState<"queue" | "list" | "detail">("queue");
+  const [view, setView] = useState<"queue" | "list" | "detail">(initialView);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
 
@@ -43,7 +51,7 @@ export default function TaskQueuePopup({ tasks }: { tasks: QueueTask[] }) {
   useEffect(() => {
     // 新しいタスクが増えたら、閉じていても自動で再度ポップアップを開く（順番表示モード）
     if (pending.length > 0 && !open) {
-      setView("queue");
+      setView(initialView);
       setOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
