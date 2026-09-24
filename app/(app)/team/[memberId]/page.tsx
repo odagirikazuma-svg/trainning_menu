@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
+import { useProfile } from "../../../components/shell/AppShell";
+import AdminPendingTasks from "../../../components/AdminPendingTasks";
 import {
   currentGrade,
   Location,
@@ -21,6 +23,7 @@ type MemberInfo = {
   role: Role;
   home_location: Location | null;
   entry_year: number | null;
+  created_at: string;
 };
 
 type NextMatchInfo = {
@@ -292,6 +295,10 @@ function MemberDayView({
 }) {
   const router = useRouter();
   const supabase = createClient();
+  // 閲覧している人（管理者のときだけ、この部員の未提出タスクを表示する）
+  const { profile: viewer } = useProfile();
+  const isAdminViewer = viewer.role === "coach";
+  const recordHeadingRef = useRef<HTMLParagraphElement>(null);
   const [date, setDate] = useState(initialDate);
   const [calendarViewMode, setCalendarViewMode] = useState<"month" | "week">(
     "week"
@@ -323,7 +330,7 @@ function MemberDayView({
       setLoadingMember(true);
       const { data: memberData, error: memberError } = await supabase
         .from("profiles")
-        .select("id, team_id, display_name, role, home_location, entry_year")
+        .select("id, team_id, display_name, role, home_location, entry_year, created_at")
         .eq("id", memberId)
         .maybeSingle();
 
@@ -623,6 +630,19 @@ function MemberDayView({
   const matchDays = nextMatch ? daysUntil(nextMatch.date) : null;
   const todayStr = toDateKey(new Date());
 
+  // 未提出タスクの日付を押したら、カレンダーをその日に合わせて、その日の記録までスクロールする
+  function jumpToDate(d: string) {
+    const [y, m, day] = d.split("-").map(Number);
+    setDate(d);
+    setCalendarCursor(new Date(y, m - 1, day));
+    requestAnimationFrame(() =>
+      recordHeadingRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col bg-background text-foreground">
       <header
@@ -671,6 +691,14 @@ function MemberDayView({
           )}
         </div>
 
+        {isAdminViewer &&
+          member &&
+          member.role !== "coach" &&
+          member.role !== "manager" &&
+          member.role !== "ob" && (
+          <AdminPendingTasks member={member} onSelectDate={jumpToDate} />
+        )}
+
         {/* カレンダー（月表示/週表示を切り替え可能。ここから日付を選ぶと下の詳細が切り替わる） */}
         <MemberCalendar
           viewMode={calendarViewMode}
@@ -682,7 +710,10 @@ function MemberDayView({
           todayDate={todayStr}
           marks={calendarMarks}
         />
-        <p className="text-center text-sm font-semibold text-foreground">
+        <p
+          ref={recordHeadingRef}
+          className="scroll-mt-32 text-center text-sm font-semibold text-foreground"
+        >
           {formatMonthDay(date)}の記録
         </p>
 
