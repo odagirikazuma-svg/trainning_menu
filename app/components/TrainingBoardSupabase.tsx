@@ -1206,7 +1206,7 @@ export default function TrainingBoardSupabase({
           </section>
         ) : selected ? (
           <>
-            <section className="rounded-lg border border-neutral-800 p-4">
+            <section className="rounded-lg border border-border-color bg-surface p-4 text-foreground">
               {editingMenu ? (
                 <form onSubmit={handleUpdateMenu} className="flex flex-col gap-2">
                   <input
@@ -1257,11 +1257,11 @@ export default function TrainingBoardSupabase({
                       <>（編集: {selected.editor.display_name}）</>
                     )}
                   </div>
-                  <h2 className="mb-2 text-lg font-bold">
+                  <h2 className="mb-2 text-lg font-bold text-foreground">
                     {selected.title ||
                       formatFullDateTime(selected.date, selected.start_time)}
                   </h2>
-                  <p className="whitespace-pre-wrap text-sm text-neutral-100">
+                  <p className="whitespace-pre-wrap text-sm text-foreground">
                     {selected.content}
                   </p>
                   {canCreateMenu(profile.role) &&
@@ -2315,7 +2315,7 @@ function MenuCalendar({
                     : "border-border-color"
               } ${
                 isViewDate
-                  ? ""
+                  ? "text-neutral-900 dark:text-neutral-100"
                   : isOff || schedule?.is_off
                     ? "bg-neutral-200 font-medium text-neutral-600 active:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-400 dark:active:bg-neutral-700"
                     : schedule?.day_type === "camp"
