@@ -1548,14 +1548,6 @@ function MonthlyCalendar({
                 </span>
               ))}
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
-                合宿
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-red-100 dark:bg-red-950/40" />
-                試合
-              </span>
-              <span className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />
                 オフ
               </span>
@@ -1565,14 +1557,6 @@ function MonthlyCalendar({
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-100 ring-1 ring-emerald-400 dark:bg-emerald-900/60 dark:ring-emerald-700" />
                 全員提出済み
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-pink-100 dark:bg-pink-950/40" />
-                合宿
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded bg-red-100 dark:bg-red-950/40" />
-                試合
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded bg-neutral-200 dark:bg-neutral-900" />

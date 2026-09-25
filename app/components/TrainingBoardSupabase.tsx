@@ -2192,17 +2192,6 @@ function MenuCalendar({
 
   const todayKey = toDateKey(new Date());
 
-  // その日のメニューのうち、対象部員が実施報告or未実施報告を提出しきっていないか判定
-  // （過去の日付のみ対象。今日・未来はまだ提出期間中なので対象外）
-  function isIncomplete(dayMenus: MenuRow[]): boolean {
-    return dayMenus.some((m) => {
-      if (m.is_off) return false;
-      const total = m.is_joint ? memberCounts.all : memberCounts[m.location];
-      const respondedCount = submissionMap[m.id]?.respondedAuthors.size ?? 0;
-      return respondedCount < total;
-    });
-  }
-
   function handlePrev() {
     if (viewMode === "month") {
       setCursor(new Date(year, month - 1, 1));
@@ -2292,8 +2281,6 @@ function MenuCalendar({
           const schedule = scheduleByDate.get(key);
           const isToday = key === todayKey;
           const isViewDate = key === viewDate;
-          const isPast = key < todayKey;
-          const incomplete = hasMenu && isPast && isIncomplete(dayMenus);
           const weekday = date.getDay();
           return (
             <button
@@ -2344,9 +2331,6 @@ function MenuCalendar({
               >
                 {date.getDate()}
               </span>
-              {incomplete && (
-                <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
-              )}
               {schedule && schedule.is_off && (
                 <span className="text-[length:calc(8px+var(--fs-add-mini))] font-medium text-neutral-500 dark:text-neutral-500">
                   オフ
@@ -2411,10 +2395,6 @@ function MenuCalendar({
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded border border-amber-400 bg-amber-100 dark:bg-amber-950/40" />
           表示中の日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-          未提出の部員がいる日
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded bg-purple-100 dark:bg-purple-950/40" />
