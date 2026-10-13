@@ -9,8 +9,22 @@ import {
   locationLabel,
   SessionType,
   sessionTypeDotColor,
-  sessionTypeLabel,
 } from "../lib/types";
+
+// セルの幅が狭くても全体が表示されるよう、セッション種別は1文字の略称で表示する
+// （M=マット、R=ラン、W=ウェイト）
+const sessionTypeShortLabel: Record<SessionType, string> = {
+  mat: "M",
+  running: "R",
+  weight: "W",
+};
+
+// "07:00" や "07:00:00" -> "7:00"（時の十の位の0を表示しない）
+function formatShortTime(time: string | null) {
+  if (!time) return "各自";
+  const [h, m] = time.split(":");
+  return `${Number(h)}:${m}`;
+}
 
 const dayTypeFillColorDark: Record<DayType, string> = {
   practice: "",
@@ -200,7 +214,7 @@ export default function ScheduleOverviewCalendar({
                       day.day_type === "match" ||
                       day.day_type === "away") && (
                       <span
-                        className={`max-w-full truncate rounded px-0.5 text-[8px] font-semibold ${dayTypeFillColorDark[day.day_type]}`}
+                        className={`max-w-full break-all rounded px-0.5 text-[8px] font-semibold leading-tight ${dayTypeFillColorDark[day.day_type]}`}
                       >
                         {day.event_name || dayTypeLabel[day.day_type]}
                       </span>
@@ -215,9 +229,9 @@ export default function ScheduleOverviewCalendar({
                         <span
                           className={`inline-block h-1 w-1 shrink-0 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                         />
-                        <span className="truncate text-[8px] text-neutral-600 dark:text-neutral-300">
-                          {sessionTypeLabel[s.session_type]}
-                          {s.start_time ? s.start_time.slice(0, 5) : "各自"}
+                        <span className="whitespace-nowrap text-[8px] text-neutral-600 dark:text-neutral-300">
+                          {sessionTypeShortLabel[s.session_type]}
+                          {formatShortTime(s.start_time)}
                         </span>
                       </span>
                     ))}
