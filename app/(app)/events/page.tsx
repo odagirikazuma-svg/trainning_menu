@@ -1854,12 +1854,12 @@ function WeightMaxCoachManagement({
                 if (!diff) return null;
                 return (
                   <span
-                    className={`ml-1 text-[length:calc(10px+var(--fs-add))] ${
+                    className={`ml-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
                       diff.zero
                         ? "text-neutral-500"
                         : diff.positive
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
                     }`}
                   >
                     ({diff.text})
@@ -1867,8 +1867,8 @@ function WeightMaxCoachManagement({
                 );
               };
               return (
-                <div className="max-w-md overflow-x-auto rounded-lg border border-border-color">
-                  <table className="w-full table-fixed text-[length:calc(11px+var(--fs-add))]">
+                <div className="max-w-md overflow-x-auto rounded-lg border border-neutral-300 bg-surface dark:border-neutral-700">
+                  <table className="w-full table-fixed text-[length:calc(12px+var(--fs-add))]">
                     <colgroup>
                       <col className="w-[34%]" />
                       <col className="w-[22%]" />
@@ -1876,15 +1876,15 @@ function WeightMaxCoachManagement({
                       <col className="w-[22%]" />
                     </colgroup>
                     <thead>
-                      <tr className="border-b border-border-color bg-background text-neutral-500 dark:text-neutral-400">
-                        <th className="px-1.5 py-1.5 text-left font-medium">氏名</th>
-                        <th className="px-1 py-1.5 text-right font-medium">
+                      <tr className="border-b border-neutral-300 bg-surface-2 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
+                        <th className="px-2 py-2 text-left font-semibold">氏名</th>
+                        <th className="px-1.5 py-2 text-right font-semibold">
                           ベンチ
                         </th>
-                        <th className="px-1 py-1.5 text-right font-medium">
+                        <th className="px-1.5 py-2 text-right font-semibold">
                           スクワット
                         </th>
-                        <th className="px-1 py-1.5 text-right font-medium">
+                        <th className="px-1.5 py-2 text-right font-semibold">
                           デッド
                         </th>
                       </tr>
@@ -1893,33 +1893,33 @@ function WeightMaxCoachManagement({
                       {rows.map((r) => (
                         <tr
                           key={r.id}
-                          className="border-b border-border-color last:border-b-0"
+                          className="border-b border-neutral-200 last:border-b-0 dark:border-neutral-800"
                         >
-                          <td className="truncate px-1.5 py-1.5 text-foreground">
+                          <td className="truncate px-2 py-2.5 text-[length:calc(13px+var(--fs-add))] font-medium text-foreground">
                             {r.display_name}
                           </td>
-                          <td className="px-1 py-1.5 text-right text-foreground">
+                          <td className="px-1.5 py-2.5 text-right text-[length:calc(13px+var(--fs-add))] font-semibold tabular-nums text-foreground">
                             {r.bench ?? "―"}
                             {r.bench != null && (
-                              <span className="text-neutral-500 dark:text-neutral-400">
+                              <span className="text-[length:calc(11px+var(--fs-add))] font-normal text-neutral-500 dark:text-neutral-400">
                                 kg
                               </span>
                             )}
                             {diffSpan(r.bench, r.id, "bench")}
                           </td>
-                          <td className="px-1 py-1.5 text-right text-foreground">
+                          <td className="px-1.5 py-2.5 text-right text-[length:calc(13px+var(--fs-add))] font-semibold tabular-nums text-foreground">
                             {r.squat ?? "―"}
                             {r.squat != null && (
-                              <span className="text-neutral-500 dark:text-neutral-400">
+                              <span className="text-[length:calc(11px+var(--fs-add))] font-normal text-neutral-500 dark:text-neutral-400">
                                 kg
                               </span>
                             )}
                             {diffSpan(r.squat, r.id, "squat")}
                           </td>
-                          <td className="px-1 py-1.5 text-right text-foreground">
+                          <td className="px-1.5 py-2.5 text-right text-[length:calc(13px+var(--fs-add))] font-semibold tabular-nums text-foreground">
                             {r.deadlift ?? "―"}
                             {r.deadlift != null && (
-                              <span className="text-neutral-500 dark:text-neutral-400">
+                              <span className="text-[length:calc(11px+var(--fs-add))] font-normal text-neutral-500 dark:text-neutral-400">
                                 kg
                               </span>
                             )}
