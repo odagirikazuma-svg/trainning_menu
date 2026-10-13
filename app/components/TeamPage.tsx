@@ -879,6 +879,10 @@ export default function TeamPage({
                   await loadMonthSchedule();
                   if (selectedScheduleDate) await loadDayDetail(selectedScheduleDate);
                 }}
+                onCopied={async () => {
+                  await loadMonthSchedule();
+                  if (selectedScheduleDate) await loadDayDetail(selectedScheduleDate);
+                }}
               />
             </div>
           )}
@@ -949,6 +953,9 @@ export default function TeamPage({
                           setEditingSchedule(false);
                           await loadMonthSchedule();
                           await loadDayDetail(selectedScheduleDate);
+                        }}
+                        onCopied={async () => {
+                          await loadMonthSchedule();
                         }}
                       />
                     </div>

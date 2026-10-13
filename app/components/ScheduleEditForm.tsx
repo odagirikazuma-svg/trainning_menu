@@ -61,6 +61,9 @@ export type ScheduleEditFormProps = {
   existingDay?: ScheduleDayPrefill | null;
   onCancel: () => void;
   onSaved: () => void | Promise<void>;
+  // 「他の日にコピー」を実行した後に呼ばれる。フォームは閉じずに、
+  // 呼び出し側のカレンダー・時間割表示だけを再読み込みするために使う。
+  onCopied?: () => void | Promise<void>;
 };
 
 // "YYYY-MM-DD" -> "7月24日"
@@ -114,6 +117,7 @@ export default function ScheduleEditForm({
   existingDay = null,
   onCancel,
   onSaved,
+  onCopied,
 }: ScheduleEditFormProps) {
   const supabase = createClient();
 
@@ -149,8 +153,16 @@ export default function ScheduleEditForm({
   // ---- 単日モード「他の日にもコピー」機能 ----
   const [showCopyToDates, setShowCopyToDates] = useState(false);
   const [copyTargetDates, setCopyTargetDates] = useState<string[]>([]);
-  const [copyDateInput, setCopyDateInput] = useState("");
   const [savingCopyToDates, setSavingCopyToDates] = useState(false);
+  const [copyResult, setCopyResult] = useState<string | null>(null);
+  const [copyCursor, setCopyCursor] = useState(() => {
+    const base = new Date(
+      Number(date.slice(0, 4)),
+      Number(date.slice(5, 7)) - 1,
+      1
+    );
+    return base;
+  });
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -552,20 +564,15 @@ export default function ScheduleEditForm({
     await onSaved();
   }
 
-  function handleAddCopyDate() {
-    if (!copyDateInput) return;
-    if (copyDateInput === date) {
-      setCopyDateInput("");
-      return;
-    }
+  // カレンダー上で日付をタップするたびに、コピー先に追加／解除する
+  function handleToggleCopyDate(dateStr: string) {
+    if (dateStr === date) return;
+    setCopyResult(null);
     setCopyTargetDates((prev) =>
-      prev.includes(copyDateInput) ? prev : [...prev, copyDateInput].sort()
+      prev.includes(dateStr)
+        ? prev.filter((d) => d !== dateStr)
+        : [...prev, dateStr].sort()
     );
-    setCopyDateInput("");
-  }
-
-  function handleRemoveCopyDate(dateStr: string) {
-    setCopyTargetDates((prev) => prev.filter((d) => d !== dateStr));
   }
 
   async function handleCopyScheduleToDates() {
@@ -594,10 +601,13 @@ export default function ScheduleEditForm({
       }
     }
 
+    const copiedCount = copyTargetDates.length;
     setShowCopyToDates(false);
     setCopyTargetDates([]);
-    setCopyDateInput("");
     setSavingCopyToDates(false);
+    setCopyResult(`${copiedCount}日分にコピーしました。`);
+    // 画面を再読み込みしなくても、コピー先の日の表示が最新になるよう親に通知する
+    await onCopied?.();
   }
 
   const showSessionsEditor =
@@ -867,53 +877,89 @@ export default function ScheduleEditForm({
       {mode === "single" && (
         <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2">
           <button
-            onClick={() => setShowCopyToDates((v) => !v)}
+            onClick={() => {
+              setCopyResult(null);
+              setShowCopyToDates(true);
+            }}
             className="self-start text-xs font-medium text-neutral-300 underline"
           >
-            {showCopyToDates ? "他の日へのコピーを閉じる" : "この内容を他の日にもコピーする"}
+            この内容を他の日にもコピーする
           </button>
+          {copyResult && (
+            <p className="rounded bg-emerald-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-emerald-400">
+              {copyResult}
+            </p>
+          )}
           {showCopyToDates && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                下でコピー先の日付を1つずつ追加し、今設定している内容(区分・セッション)をまとめてコピーします。保存する前に、まずこちらを実行してください。
-              </p>
-              {copyTargetDates.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {copyTargetDates.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => handleRemoveCopyDate(d)}
-                      className="flex items-center gap-1 rounded bg-red-950/40 px-2 py-1 text-xs text-red-400"
-                    >
-                      {formatMonthDay(d)}
-                      <span className="text-red-500">✕</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={copyDateInput}
-                  onChange={(e) => setCopyDateInput(e.target.value)}
-                  className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
-                />
-                <button
-                  onClick={handleAddCopyDate}
-                  className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
-                >
-                  日付を追加
-                </button>
-              </div>
-              <button
-                onClick={handleCopyScheduleToDates}
-                disabled={savingCopyToDates}
-                className="self-start rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+              onClick={() => !savingCopyToDates && setShowCopyToDates(false)}
+            >
+              <div
+                className="flex max-h-[90vh] w-full max-w-sm flex-col gap-3 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-lg"
+                onClick={(e) => e.stopPropagation()}
               >
-                {savingCopyToDates
-                  ? "コピー中…"
-                  : `選んだ${copyTargetDates.length}日にコピーする`}
-              </button>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-neutral-100">
+                    コピー先の日を選択
+                  </h3>
+                  <button
+                    onClick={() => setShowCopyToDates(false)}
+                    disabled={savingCopyToDates}
+                    aria-label="閉じる"
+                    className="text-neutral-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+                  {formatMonthDay(date)}に設定している内容（区分・セッション）を、タップした日にコピーします。複数の日を選べます。
+                </p>
+                <CopyDatePicker
+                  cursor={copyCursor}
+                  onCursorChange={setCopyCursor}
+                  sourceDate={date}
+                  selectedDates={copyTargetDates}
+                  onToggle={handleToggleCopyDate}
+                />
+                {copyTargetDates.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {copyTargetDates.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => handleToggleCopyDate(d)}
+                        className="flex items-center gap-1 rounded bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                      >
+                        {formatMonthDay(d)}
+                        <span className="text-red-500">✕</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {errorMsg && (
+                  <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">
+                    {errorMsg}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCopyScheduleToDates}
+                    disabled={savingCopyToDates || copyTargetDates.length === 0}
+                    className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+                  >
+                    {savingCopyToDates
+                      ? "コピー中…"
+                      : `選んだ${copyTargetDates.length}日にコピーする`}
+                  </button>
+                  <button
+                    onClick={() => setShowCopyToDates(false)}
+                    disabled={savingCopyToDates}
+                    className="flex-1 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-300"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -986,6 +1032,100 @@ export function ScheduleTimeSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+// 「他の日にコピー」用の月カレンダー。タップした日を複数選択できる。
+function CopyDatePicker({
+  cursor,
+  onCursorChange,
+  sourceDate,
+  selectedDates,
+  onToggle,
+}: {
+  cursor: Date;
+  onCursorChange: (d: Date) => void;
+  sourceDate: string;
+  selectedDates: string[];
+  onToggle: (dateStr: string) => void;
+}) {
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => onCursorChange(new Date(year, month - 1, 1))}
+          aria-label="前の月"
+          className="px-3 py-1 text-sm text-neutral-300"
+        >
+          ＜
+        </button>
+        <span className="text-sm font-semibold text-neutral-100">
+          {year}年{month + 1}月
+        </span>
+        <button
+          type="button"
+          onClick={() => onCursorChange(new Date(year, month + 1, 1))}
+          aria-label="次の月"
+          className="px-3 py-1 text-sm text-neutral-300"
+        >
+          ＞
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px]">
+        {weekdayLabels.map((w, i) => (
+          <span
+            key={w}
+            className={
+              i === 0
+                ? "text-red-400"
+                : i === 6
+                  ? "text-blue-400"
+                  : "text-neutral-500"
+            }
+          >
+            {w}
+          </span>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <span key={`e${i}`} />;
+          const key = toDateKey(new Date(year, month, day));
+          const isSource = key === sourceDate;
+          const isSelected = selectedDates.includes(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={isSource}
+              onClick={() => onToggle(key)}
+              className={`flex h-9 items-center justify-center rounded text-xs ${
+                isSource
+                  ? "border border-neutral-600 text-neutral-600"
+                  : isSelected
+                    ? "bg-red-600 font-semibold text-white"
+                    : "border border-neutral-800 text-neutral-200 active:bg-neutral-800"
+              }`}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-neutral-500">
+        枠線のみの日はコピー元です。選択した日は赤で表示されます。
+      </p>
     </div>
   );
 }

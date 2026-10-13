@@ -232,6 +232,8 @@ export default function TrainingBoardSupabase({
   >(new Map());
   const [jointNoticeDate, setJointNoticeDate] = useState<string | null>(null);
   const [viewDate, setViewDate] = useState<string>(() => toDateKey(new Date()));
+  // 時間割を保存・コピーしたあとに、下の練習スケジュールのカレンダーを再読み込みさせるためのカウンタ
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
 
   useEffect(() => {
     // 練習に参加しうる部員を、コーチ・マネージャー・OBを除いて拠点ごとに集計する
@@ -936,6 +938,11 @@ export default function TrainingBoardSupabase({
                 onSaved={async () => {
                   setEditingViewDateSchedule(false);
                   await loadViewDateSchedule();
+                  setScheduleRefreshKey((k) => k + 1);
+                }}
+                onCopied={async () => {
+                  await loadViewDateSchedule();
+                  setScheduleRefreshKey((k) => k + 1);
                 }}
               />
             )}
@@ -963,6 +970,7 @@ export default function TrainingBoardSupabase({
                 onCancel={() => setShowBulkScheduleForm(false)}
                 onSaved={async () => {
                   await loadViewDateSchedule();
+                  setScheduleRefreshKey((k) => k + 1);
                 }}
               />
             )}
@@ -1739,6 +1747,7 @@ export default function TrainingBoardSupabase({
             }
             teamId={profile.team_id}
             location={activeLocation}
+            refreshKey={scheduleRefreshKey}
           />
         </section>
 
@@ -2037,6 +2046,7 @@ function MenuCalendar({
   onSelectEmpty,
   teamId,
   location,
+  refreshKey,
 }: {
   menus: MenuRow[];
   viewDate: string;
@@ -2051,6 +2061,7 @@ function MenuCalendar({
   onSelectEmpty: (date: string) => void;
   teamId: string;
   location: Location;
+  refreshKey: number;
 }) {
   const supabase = createClient();
   const { defaultCalendarView } = useCalendarViewPref();
@@ -2181,7 +2192,7 @@ function MenuCalendar({
       setScheduleByDate(map);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeStart, rangeEnd, location]);
+  }, [rangeStart, rangeEnd, location, refreshKey]);
 
   const menusByDate = new Map<string, MenuRow[]>();
   for (const m of menus) {

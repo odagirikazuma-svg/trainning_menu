@@ -820,6 +820,10 @@ function SectionRegistrationSection({
             setResetKey((k) => k + 1);
             setCalendarRefreshKey((k) => k + 1);
           }}
+          onCopied={() => {
+            // フォームは開いたまま、カレンダーだけ最新の状態に更新する
+            setCalendarRefreshKey((k) => k + 1);
+          }}
         />
       )}
     </div>
