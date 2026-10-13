@@ -24,6 +24,7 @@ import {
   NewMemberRegistrationSection,
 } from "../../components/MemberManagementSection";
 import CollapsibleSection from "../../components/shell/CollapsibleSection";
+import MemberExemptionSection from "../../components/MemberExemptionSection";
 import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
@@ -863,6 +864,9 @@ export default function SettingsPage() {
             </CollapsibleSection>
             <CollapsibleSection title="新規メンバー登録">
               <NewMemberRegistrationSection profile={profile} />
+            </CollapsibleSection>
+            <CollapsibleSection title="免除設定">
+              <MemberExemptionSection profile={profile} />
             </CollapsibleSection>
           </SettingsGroup>
 

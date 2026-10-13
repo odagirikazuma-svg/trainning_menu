@@ -16,6 +16,7 @@ import {
   sessionTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import { isExemptOn, loadExemptions } from "../lib/exemptions";
 import ScheduleEditForm, {
   ScheduleDayPrefill,
 } from "./ScheduleEditForm";
@@ -184,6 +185,7 @@ export default function TeamPage({
       location: Location;
       entryYear: number | null;
       isPending: boolean;
+      isExempt: boolean;
       matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
       selfStatus: "not_required" | "not_started" | "done" | "missing";
@@ -583,6 +585,13 @@ export default function TeamPage({
     }
 
     const allRealIds = [...realIdsByLoc.tama, ...realIdsByLoc.otsuka];
+    // 免除期間中の部員は、その日の分母・提出人数から外す
+    const exemptions = await loadExemptions(
+      supabase,
+      profile.team_id,
+      rangeStart,
+      rangeEnd
+    );
     const selfLoggedKeys = new Set<string>();
     if (allRealIds.length > 0) {
       const { data: logData, error: logError } = await supabase
@@ -620,9 +629,14 @@ export default function TeamPage({
         const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
         if (!day || day.isOff) continue;
         if (!day.hasMat && !day.hasNonMat) continue;
-        const locTotal = requiredByLoc[loc].length;
+        const exemptIds = realIdsByLoc[loc].filter((id) =>
+          isExemptOn(exemptions, id, dateKey)
+        );
+        const locTotal = requiredByLoc[loc].length - exemptIds.length;
+        if (locTotal <= 0) continue;
         let locSubmitted = 0;
         for (const id of realIdsByLoc[loc]) {
+          if (isExemptOn(exemptions, id, dateKey)) continue;
           const matOk =
             !day.hasMat || submittedMatKeys.has(`${id}:${loc}:${dateKey}`);
           const selfOk = !day.hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
@@ -740,6 +754,12 @@ export default function TeamPage({
       ...requiredByLoc.tama.filter((m) => !m.isPending).map((m) => m.id),
       ...requiredByLoc.otsuka.filter((m) => !m.isPending).map((m) => m.id),
     ];
+    const dayExemptions = await loadExemptions(
+      supabase,
+      profile.team_id,
+      dateStr,
+      dateStr
+    );
     let selfLogByAuthor = new Map<string, string>();
     if (allRealIds.length > 0) {
       const { data: logData } = await supabase
@@ -761,6 +781,7 @@ export default function TeamPage({
       location: Location;
       entryYear: number | null;
       isPending: boolean;
+      isExempt: boolean;
       matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
       selfStatus: "not_required" | "not_started" | "done" | "missing";
@@ -782,6 +803,7 @@ export default function TeamPage({
           location: loc,
           entryYear: m.entry_year,
           isPending: !!m.isPending,
+          isExempt: !m.isPending && isExemptOn(dayExemptions, m.id, dateStr),
           matStatus: !hasMat
             ? ("not_required" as const)
             : !day.matStarted
@@ -1210,11 +1232,13 @@ export default function TeamPage({
                             d.selfStatus === "done";
                           const notStarted =
                             !d.isPending &&
+                            !d.isExempt &&
                             !resolved &&
                             (d.matStatus === "not_started" ||
                               d.selfStatus === "not_started");
                           const allDone =
                             !d.isPending &&
+                            !d.isExempt &&
                             !notStarted &&
                             (d.matStatus === "not_required" ||
                               d.matStatus !== "missing") &&
@@ -1232,7 +1256,9 @@ export default function TeamPage({
                               className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
                                 d.isPending
                                   ? "border-neutral-800 bg-neutral-900 text-neutral-600"
-                                  : notStarted
+                                  : d.isExempt
+                                    ? "border-amber-900/50 bg-amber-950/20 text-neutral-300 active:bg-amber-950/40"
+                                    : notStarted
                                     ? "border-neutral-800 bg-neutral-900 text-neutral-400"
                                     : allDone
                                       ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
@@ -1243,6 +1269,10 @@ export default function TeamPage({
                               {d.isPending ? (
                                 <span className="shrink-0 text-[10px] text-neutral-600">
                                   未登録
+                                </span>
+                              ) : d.isExempt ? (
+                                <span className="shrink-0 rounded bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                                  免除
                                 </span>
                               ) : notStarted ? (
                                 <span className="shrink-0 text-[10px] text-neutral-500">

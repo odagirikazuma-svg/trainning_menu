@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
 import { useProfile } from "../../../components/shell/AppShell";
 import AdminPendingTasks from "../../../components/AdminPendingTasks";
+import { isExemptOn, loadExemptions } from "../../../lib/exemptions";
 import {
   currentGrade,
   Location,
@@ -70,9 +71,9 @@ const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
 
 type DetailState = {
   menu: MenuInfo | null;
-  matStatus: "not_required" | "report" | "absent" | "missing";
+  matStatus: "not_required" | "report" | "absent" | "missing" | "exempt";
   matText: string | null;
-  selfStatus: "not_required" | "done" | "missing";
+  selfStatus: "not_required" | "done" | "missing" | "exempt";
   selfText: string | null;
   selfType: TrainingType | null;
   selfTitle: string | null;
@@ -506,6 +507,17 @@ function MemberDayView({
         }
       }
 
+      // 免除期間中で未提出の日は「未提出」ではなく「免除」と表示する
+      const dayExemptions = await loadExemptions(
+        supabase,
+        member.team_id,
+        date,
+        date,
+        memberId
+      );
+      const exemptToday = isExemptOn(dayExemptions, memberId, date);
+      if (matStatus === "missing" && exemptToday) matStatus = "exempt";
+
       let selfStatus: DetailState["selfStatus"] = "not_required";
       let selfText: string | null = null;
       let selfType: TrainingType | null = null;
@@ -526,7 +538,7 @@ function MemberDayView({
           selfType = log.type;
           selfTitle = log.title;
         } else {
-          selfStatus = "missing";
+          selfStatus = exemptToday ? "exempt" : "missing";
         }
       }
 
@@ -749,7 +761,11 @@ function MemberDayView({
                   )}
                 </div>
               )}
-              {detail?.matStatus === "missing" ? (
+              {detail?.matStatus === "exempt" ? (
+                <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-300">
+                  免除期間中です。
+                </p>
+              ) : detail?.matStatus === "missing" ? (
                 <p className="rounded-lg bg-red-950/40 p-3 text-xs text-red-400">
                   実施報告・未実施報告ともに未提出です。
                 </p>
@@ -776,6 +792,10 @@ function MemberDayView({
           {detail?.selfStatus === "not_required" ? (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               この日はトレーニングの予定はありません。
+            </p>
+          ) : detail?.selfStatus === "exempt" ? (
+            <p className="rounded-lg bg-amber-950/30 p-3 text-xs text-amber-300">
+              免除期間中です。
             </p>
           ) : detail?.selfStatus === "missing" ? (
             <p className="rounded-lg bg-red-950/40 p-3 text-xs text-red-400">
