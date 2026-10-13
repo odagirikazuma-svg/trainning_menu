@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import type { Location, SessionType } from "../lib/types";
+import { isExemptOn, loadExemptions } from "../lib/exemptions";
 
 /**
  * 管理者が部員のマイページ(閲覧)を開いたときに出す「未提出タスク」欄。
@@ -108,6 +109,14 @@ export default function AdminPendingTasks({
           toDateKey(oneMonthAgo) > joined ? toDateKey(oneMonthAgo) : joined;
         const loc = member.home_location;
         const result: PendingItem[] = [];
+        // 免除期間中の日は未提出タスクに数えない
+        const exemptions = await loadExemptions(
+          supabase,
+          member.team_id,
+          rangeStart,
+          todayStr,
+          member.id
+        );
 
         if (loc) {
           // マット日報：所属拠点のメニュー＋全体練習のメニュー
@@ -143,9 +152,11 @@ export default function AdminPendingTasks({
             ...((joint.data ?? []) as MenuRow[]),
           ])
             menuMap.set(m.id, m);
-          const openMenus = Array.from(menuMap.values()).filter((m) =>
-            !m.start_time ? true : now >= new Date(`${m.date}T${m.start_time}`)
-          );
+          const openMenus = Array.from(menuMap.values())
+            .filter((m) => !isExemptOn(exemptions, member.id, m.date))
+            .filter((m) =>
+              !m.start_time ? true : now >= new Date(`${m.date}T${m.start_time}`)
+            );
 
           if (openMenus.length > 0) {
             const { data: commentData, error: commentError } = await supabase
@@ -192,7 +203,8 @@ export default function AdminPendingTasks({
             }[]
           )
             .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-            .map((row) => row.date);
+            .map((row) => row.date)
+            .filter((d) => !isExemptOn(exemptions, member.id, d));
 
           if (selfDates.length > 0) {
             const { data: logData, error: logError } = await supabase

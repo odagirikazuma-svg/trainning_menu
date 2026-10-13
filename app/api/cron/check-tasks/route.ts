@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { isExemptOn, type ExemptionRow } from "../../../lib/exemptions";
 
 export const dynamic = "force-dynamic";
 
@@ -337,6 +338,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 免除期間（練習報告・自主トレのみ対象）。免除中の日はタスクとして数えない
+  const { data: exemptionRows } = await supabase
+    .from("member_exemptions")
+    .select("member_id, start_date, end_date")
+    .in("team_id", teamIds)
+    .lte("start_date", todayStr)
+    .gte("end_date", rangeStart);
+  const exemptions = (exemptionRows ?? []) as ExemptionRow[];
+
   // --- 各部員の未完了タスクの有無を判定 ---
   const membersNeedingNotification: string[] = [];
 
@@ -350,6 +360,7 @@ export async function GET(request: NextRequest) {
           menu.team_id === m.team_id &&
           (menu.location === m.home_location || menu.is_joint) &&
           menu.date >= joinedDate &&
+          !isExemptOn(exemptions, m.id, menu.date) &&
           isReportOpen(menu.date, menu.start_time)
       );
       const hasUnrespondedMenu = applicableMenus.some(
@@ -368,6 +379,7 @@ export async function GET(request: NextRequest) {
         const key = `${m.team_id}:${m.home_location}:${dateStr}`;
         if (
           nonMatDatesByTeamLocation.has(key) &&
+          !isExemptOn(exemptions, m.id, dateStr) &&
           !loggedKeys.has(`${m.id}:${dateStr}`)
         ) {
           hasIncomplete = true;

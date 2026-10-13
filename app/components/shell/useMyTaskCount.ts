@@ -5,6 +5,7 @@ import { createClient } from "../../lib/supabase/client";
 import type { Profile } from "../AuthGate";
 import type { Location, SessionType } from "../../lib/types";
 import { useTasksChangedSignal } from "./taskRefreshBus";
+import { isExemptOn, loadExemptions } from "../../lib/exemptions";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -75,6 +76,14 @@ export function useMyTaskCount(profile: Profile | null): number {
         toDateKey(oneMonthAgo) > joinedDate ? toDateKey(oneMonthAgo) : joinedDate;
 
       if (effectiveHomeLocation) {
+        // 管理者が登録した免除期間中の日は、練習・自主トレのタスクに数えない
+        const exemptions = await loadExemptions(
+          supabase,
+          profile!.team_id,
+          rangeStart,
+          todayStr,
+          profile!.id
+        );
         const { data: ownMenuData } = await supabase
           .from("menus")
           .select("id, date, start_time")
@@ -109,11 +118,13 @@ export function useMyTaskCount(profile: Profile | null): number {
         }[])
           menuMap.set(m.id, m);
 
-        const openMenus = Array.from(menuMap.values()).filter((m) =>
-          !m.start_time
-            ? true
-            : new Date() >= new Date(`${m.date}T${m.start_time}`)
-        );
+        const openMenus = Array.from(menuMap.values())
+          .filter((m) => !isExemptOn(exemptions, profile!.id, m.date))
+          .filter((m) =>
+            !m.start_time
+              ? true
+              : new Date() >= new Date(`${m.date}T${m.start_time}`)
+          );
 
         if (openMenus.length > 0) {
           const { data: commentData } = await supabase
@@ -150,7 +161,8 @@ export function useMyTaskCount(profile: Profile | null): number {
           }[]
         )
           .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-          .map((row) => row.date);
+          .map((row) => row.date)
+          .filter((d) => !isExemptOn(exemptions, profile!.id, d));
 
         if (nonMatDates.length > 0) {
           const { data: logData } = await supabase

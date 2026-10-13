@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { isStaffRole, Location, locationLabel, locations } from "../../lib/types";
 import type { Profile } from "../AuthGate";
+import { isExemptOn, loadExemptions } from "../../lib/exemptions";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -36,12 +37,15 @@ async function countSubmission(
   dateStr: string,
   members: MemberRow[]
 ): Promise<{ submitted: number; total: number } | null> {
+  // 免除期間中の部員は、その日の分母・提出人数から外す
+  const exemptions = await loadExemptions(supabase, teamId, dateStr, dateStr);
   const requiredMembers = members.filter(
     (m) =>
       m.role !== "coach" &&
       m.role !== "manager" &&
       m.role !== "ob" &&
-      (m.home_location === loc || (loc === "tama" && m.home_location == null))
+      (m.home_location === loc || (loc === "tama" && m.home_location == null)) &&
+      !isExemptOn(exemptions, m.id, dateStr)
   );
   const total = requiredMembers.length;
   if (total === 0) return null;

@@ -4,6 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
+  formatExemptionDate,
+  isExemptOn,
+  loadExemptions,
+  type ExemptionRow,
+} from "../lib/exemptions";
+import {
   DayType,
   dayTypeLabel,
   getTitleColorBySlot,
@@ -168,6 +174,10 @@ export default function MemberHome({
 
   const [todoMenus, setTodoMenus] = useState<TodoMenuRow[]>([]);
   const [selfTrainingPending, setSelfTrainingPending] = useState<string[]>([]);
+  // 今日が管理者による免除期間中なら、その期間（バナー表示用）
+  const [activeExemption, setActiveExemption] = useState<ExemptionRow | null>(
+    null
+  );
   const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -375,6 +385,7 @@ export default function MemberHome({
     if (effectiveHomeLocation) loadTodo();
     else setLoadingTodo(false);
     loadSelfTrainingTodo();
+    loadActiveExemption();
     loadNextMatch();
     loadLogForDate(todayStr);
     loadMemoForDate(todayStr);
@@ -400,9 +411,22 @@ export default function MemberHome({
     }
     if (effectiveHomeLocation) loadTodo();
     loadSelfTrainingTodo();
+    loadActiveExemption();
     loadCalendarData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
+
+  // 今日が免除期間中かどうかを調べる（マイページ上部のお知らせ表示用）
+  async function loadActiveExemption() {
+    const rows = await loadExemptions(
+      supabase,
+      profile.team_id,
+      todayStr,
+      todayStr,
+      profile.id
+    );
+    setActiveExemption(rows[0] ?? null);
+  }
 
   async function loadTodo() {
     setLoadingTodo(true);
@@ -451,9 +475,17 @@ export default function MemberHome({
     for (const m of (jointMenuData ?? []) as unknown as TodoMenuRow[]) {
       menuMap.set(m.id, m);
     }
-    const menus = Array.from(menuMap.values()).sort((a, b) =>
-      b.date.localeCompare(a.date)
+    // 管理者が登録した免除期間中の日のメニューは、実施報告のタスクに出さない
+    const exemptions = await loadExemptions(
+      supabase,
+      profile.team_id,
+      rangeStart,
+      todayStr,
+      profile.id
     );
+    const menus = Array.from(menuMap.values())
+      .filter((m) => !isExemptOn(exemptions, profile.id, m.date))
+      .sort((a, b) => b.date.localeCompare(a.date));
     const openMenus = menus.filter((m) => isMenuReportOpen(m));
 
     if (openMenus.length === 0) {
@@ -500,6 +532,15 @@ export default function MemberHome({
         ? toDateKey(oneMonthAgo)
         : joinedDate;
 
+    // 管理者が登録した免除期間中の日は、自主トレ記録のタスクに出さない
+    const selfExemptions = await loadExemptions(
+      supabase,
+      profile.team_id,
+      rangeStart,
+      todayStr,
+      profile.id
+    );
+
     const { data: scheduleData, error: scheduleError } = await supabase
       .from("schedule_days")
       .select(
@@ -522,7 +563,8 @@ export default function MemberHome({
       sessions: { session_type: SessionType }[];
     }[])
       .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-      .map((row) => row.date);
+      .map((row) => row.date)
+      .filter((d) => !isExemptOn(selfExemptions, profile.id, d));
 
     if (nonMatDates.length === 0) {
       setSelfTrainingPending([]);
@@ -1557,10 +1599,19 @@ export default function MemberHome({
         ...((ownMenus ?? []) as { id: string; date: string; start_time: string | null }[]),
         ...((jointMenus ?? []) as { id: string; date: string; start_time: string | null }[]),
       ];
-      const pastMenus = menuRows.filter((m) => {
-        if (!m.start_time) return true;
-        return new Date() >= new Date(`${m.date}T${m.start_time}`);
-      });
+      const calendarExemptions = await loadExemptions(
+        supabase,
+        profile.team_id,
+        rangeStart,
+        rangeEnd,
+        profile.id
+      );
+      const pastMenus = menuRows
+        .filter((m) => !isExemptOn(calendarExemptions, profile.id, m.date))
+        .filter((m) => {
+          if (!m.start_time) return true;
+          return new Date() >= new Date(`${m.date}T${m.start_time}`);
+        });
       if (pastMenus.length > 0) {
         const { data: myComments } = await supabase
           .from("comments")
@@ -1630,6 +1681,19 @@ export default function MemberHome({
 
       {!isManager && (
         <>
+      {/* 免除期間中のお知らせ（管理者が登録した期間。理由は部員には表示しない） */}
+      {activeExemption && (
+        <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-amber-300">
+          <p className="font-semibold">
+            管理者により免除されています（
+            {formatExemptionDate(activeExemption.start_date)}〜
+            {formatExemptionDate(activeExemption.end_date)}）
+          </p>
+          <p className="mt-1 text-amber-300/80">
+            この期間の練習の実施報告・自主トレの記録は不要です。怪我の経過報告やイベントの提出は、これまで通りお願いします。
+          </p>
+        </div>
+      )}
       {/* タスク一覧（練習タスク・怪我タスク） */}
       {isOb && (
         <div className="flex items-center justify-end border-t border-neutral-800 pt-4">

@@ -21,6 +21,7 @@ import {
   trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import { isExemptOn, loadExemptions, type ExemptionRow } from "../lib/exemptions";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
@@ -210,6 +211,11 @@ export default function TrainingBoardSupabase({
     otsuka: number;
     all: number;
   }>({ tama: 0, otsuka: 0, all: 0 });
+  // 免除期間の人数調整用：練習に参加しうる部員(id・拠点)と、免除期間の一覧
+  const [memberRows, setMemberRows] = useState<
+    { id: string; home_location: Location | null }[]
+  >([]);
+  const [boardExemptions, setBoardExemptions] = useState<ExemptionRow[]>([]);
   const [locationRoster, setLocationRoster] = useState<
     { id: string; display_name: string }[]
   >([]);
@@ -240,15 +246,34 @@ export default function TrainingBoardSupabase({
     // （マネージャーは実施報告の提出義務がないため、分母から除外する）
     supabase
       .from("profiles")
-      .select("home_location")
+      .select("id, home_location")
       .eq("team_id", profile.team_id)
       .not("role", "in", "(coach,manager,ob)")
       .then(({ data }) => {
-        const rows = (data ?? []) as { home_location: Location | null }[];
+        const rows = (data ?? []) as {
+          id: string;
+          home_location: Location | null;
+        }[];
+        setMemberRows(rows);
         const tama = rows.filter((r) => r.home_location === "tama").length;
         const otsuka = rows.filter((r) => r.home_location === "otsuka").length;
         setMemberCounts({ tama, otsuka, all: rows.length });
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // 免除期間（直近約3か月前〜1年先）を読み込む。免除中の部員は人数・未提出者から外す
+    const from = new Date();
+    from.setMonth(from.getMonth() - 3);
+    const to = new Date();
+    to.setFullYear(to.getFullYear() + 1);
+    loadExemptions(
+      supabase,
+      profile.team_id,
+      toDateKey(from),
+      toDateKey(to)
+    ).then(setBoardExemptions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -860,11 +885,17 @@ export default function TrainingBoardSupabase({
   const reportSubmittedCount = selectedSubmission
     ? selectedSubmission.reportAuthors.size
     : 0;
-  const selectedMemberTotal = selected
-    ? selected.is_joint
-      ? memberCounts.all
-      : memberCounts[selected.location]
-    : 0;
+  // そのメニューの対象人数（その日に免除期間中の部員は除く）
+  function totalFor(m: { date: string; is_joint: boolean; location: Location }) {
+    const base = m.is_joint ? memberCounts.all : memberCounts[m.location];
+    const exempt = memberRows.filter(
+      (r) =>
+        (m.is_joint || r.home_location === m.location) &&
+        isExemptOn(boardExemptions, r.id, m.date)
+    ).length;
+    return Math.max(0, base - exempt);
+  }
+  const selectedMemberTotal = selected ? totalFor(selected) : 0;
 
   function selectMenu(id: string) {
     const m = menus.find((mm) => mm.id === id);
@@ -1639,7 +1670,9 @@ export default function TrainingBoardSupabase({
                         dayWeightLogs.map((l) => l.author_id)
                       );
                       const missing = locationRoster.filter(
-                        (m) => !loggedIds.has(m.id)
+                        (m) =>
+                          !loggedIds.has(m.id) &&
+                          !isExemptOn(boardExemptions, m.id, viewDate)
                       );
                       return missing.length === 0 ? (
                         <p className="text-xs text-neutral-500">
@@ -1780,7 +1813,10 @@ export default function TrainingBoardSupabase({
               const reportedIds = new Set(reports.map((r) => r.author_id));
               const absentIds = new Set(absentReports.map((c) => c.author_id));
               const missing = locationRoster.filter(
-                (m) => !reportedIds.has(m.id) && !absentIds.has(m.id)
+                (m) =>
+                  !reportedIds.has(m.id) &&
+                  !absentIds.has(m.id) &&
+                  !(selected && isExemptOn(boardExemptions, m.id, selected.date))
               );
               return missing.length === 0 ? (
                 <p className="text-xs text-neutral-500">全員提出済みです。</p>
