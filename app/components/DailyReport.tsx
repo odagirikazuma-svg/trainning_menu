@@ -226,6 +226,10 @@ export default function DailyReport({
   const [editingTraining, setEditingTraining] = useState(false);
   const [memo, setMemo] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
+  // タイムラインのカードの開閉（押して切り替えた分だけ覚える）
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // 週の帯の「●提出済み」用：その週に自分が何か提出した日
+  const [weekSubmitted, setWeekSubmitted] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [copying, setCopying] = useState(false);
   // タイトル候補の整理（間違えて付けたタイトルを候補から消す）
@@ -240,6 +244,47 @@ export default function DailyReport({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, refreshKey]);
 
+  // 週の帯の●（その週に提出したことがある日）
+  const weekKey = (() => {
+    const [y, m, d] = date.split("-").map(Number);
+    return shiftDate(date, -((new Date(y, m - 1, d).getDay() + 6) % 7));
+  })();
+  useEffect(() => {
+    if (isPopup) return;
+    let cancelled = false;
+    (async () => {
+      const from = weekKey;
+      const to = shiftDate(weekKey, 6);
+      const [reports, logs] = await Promise.all([
+        supabase
+          .from("comments")
+          .select("menu:menus!inner(date)")
+          .eq("author_id", profile.id)
+          .in("kind", ["report", "absent"])
+          .is("parent_id", null)
+          .gte("menu.date", from)
+          .lte("menu.date", to),
+        supabase
+          .from("weight_logs")
+          .select("date")
+          .eq("author_id", profile.id)
+          .gte("date", from)
+          .lte("date", to),
+      ]);
+      if (cancelled) return;
+      const set = new Set<string>();
+      for (const r of (reports.data ?? []) as unknown as { menu: { date: string } | null }[]) {
+        if (r.menu) set.add(r.menu.date);
+      }
+      for (const l of (logs.data ?? []) as { date: string }[]) set.add(l.date);
+      setWeekSubmitted(set);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekKey, refreshKey, profile.id]);
+
   async function load(resetDrafts: boolean) {
     const seq = ++loadSeq.current;
     setLoading(true);
@@ -250,6 +295,7 @@ export default function DailyReport({
       setEditingTraining(false);
       setMissing([]);
       setNotice(null);
+      setExpanded({});
     }
 
     // 1) その日のマットメニュー（所属拠点のもの＋全体練習）
@@ -399,7 +445,6 @@ export default function DailyReport({
 
   const reportByMenu = new Map(myReports.map((r) => [r.menu_id, r]));
   const openMenus = menus.filter((m) => isMenuOpen(m));
-  const upcomingMenus = menus.filter((m) => !isMenuOpen(m));
   const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id));
   const nonMatSessions = sessions.filter((s) => s.session_type !== "mat");
   const trainingRequired = !exempt && nonMatSessions.length > 0;
@@ -712,7 +757,6 @@ export default function DailyReport({
 
   // ---- 表示 ----
 
-  const matDoneCount = openMenus.filter((m) => reportByMenu.has(m.id)).length;
   const dayComplete =
     !loading &&
     pendingMenus.length === 0 &&
@@ -1124,81 +1168,255 @@ export default function DailyReport({
     );
   }
 
-  const sectionTitle = (text: string, right?: React.ReactNode) => (
-    <div className="flex items-center justify-between gap-2">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        {text}
-      </h3>
-      {right}
-    </div>
-  );
+  // ---- 案A：1日のタイムライン ----
+  type TimelineItem = {
+    key: string;
+    time: string | null;
+    kind: "mat" | "training";
+    done: boolean;
+    upcoming: boolean;
+    menu?: DayMenu;
+  };
+  const firstNonMatTime = nonMatSessions.find((s) => s.start_time)?.start_time ?? null;
+  const timeline: TimelineItem[] = [
+    ...menus.map((m) => ({
+      key: `mat-${m.id}`,
+      time: m.start_time,
+      kind: "mat" as const,
+      done: reportByMenu.has(m.id),
+      upcoming: !isMenuOpen(m),
+      menu: m,
+    })),
+    {
+      key: "training",
+      time: firstNonMatTime,
+      kind: "training" as const,
+      done: !!log,
+      upcoming: false,
+    },
+  ].sort((a, b) => {
+    const ta = a.time ?? (a.kind === "training" ? "99:99" : "00:00");
+    const tb = b.time ?? (b.kind === "training" ? "99:99" : "00:00");
+    return ta.localeCompare(tb);
+  });
+  const remaining =
+    (exempt ? 0 : pendingMenus.length) + (trainingRequired && !log ? 1 : 0);
 
-  const statusChip = (done: boolean, text: string) => (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${
-        done ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-400"
-      }`}
-    >
-      {text}
-    </span>
-  );
+  function isExpanded(item: TimelineItem) {
+    if (item.key in expanded) return expanded[item.key];
+    // 提出済み・開始前は閉じた状態、残っているものは開いた状態から始める
+    return !item.done && !item.upcoming;
+  }
+  function toggle(item: TimelineItem) {
+    setExpanded((prev) => ({ ...prev, [item.key]: !isExpanded(item) }));
+  }
+
+  function itemTitle(item: TimelineItem) {
+    if (item.kind === "mat" && item.menu) {
+      const place = item.menu.is_joint
+        ? `全体練習・${locationLabel[item.menu.location]}`
+        : locationLabel[item.menu.location];
+      return { icon: "🤼", title: "マット練習", sub: place };
+    }
+    const types = nonMatSessions.map((s) => sessionTypeLabel[s.session_type]);
+    const icon = log?.type === "running" || (!log && nonMatSessions[0]?.session_type === "running") ? "🏃" : "🏋️";
+    return {
+      icon,
+      title: "トレーニング",
+      sub: log
+        ? `${trainingTypeLabel[log.type]}${log.title ? `・${log.title}` : ""}`
+        : types.length > 0
+          ? Array.from(new Set(types)).join("・")
+          : "任意（自主トレをした日に）",
+    };
+  }
+
+  function itemStatus(item: TimelineItem) {
+    if (item.done) return { text: "✓ 提出済み", cls: "bg-emerald-600 text-white" };
+    if (item.upcoming) return { text: "開始前", cls: "bg-neutral-800 text-neutral-400" };
+    if (item.kind === "training" && !trainingRequired)
+      return { text: "任意", cls: "bg-neutral-800 text-neutral-400" };
+    if (exempt) return { text: "免除", cls: "bg-amber-900/60 text-amber-300" };
+    return { text: "未提出", cls: "bg-red-600 text-white" };
+  }
+
+  function renderItemBody(item: TimelineItem) {
+    if (item.kind === "mat" && item.menu) {
+      const m = item.menu;
+      const r = reportByMenu.get(m.id);
+      if (item.upcoming) {
+        return (
+          <p className="text-xs text-neutral-500">
+            開始時刻（{m.start_time?.slice(0, 5)}）を過ぎると報告できるようになります。
+          </p>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-2">
+          {m.content ? (
+            <details
+              className="rounded-lg bg-neutral-800 px-3 py-2 text-xs text-neutral-300"
+              open={!r && !isPopup}
+            >
+              <summary className="cursor-pointer text-neutral-400">今日のメニュー</summary>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-100">{m.content}</p>
+            </details>
+          ) : (
+            <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+              メニューは未記入です。やった内容を自分の言葉で書いてください。
+            </p>
+          )}
+          {r ? renderSubmittedReport(m, r) : renderMatForm(m.id)}
+        </div>
+      );
+    }
+    // トレーニング
+    return log && !editingTraining ? (
+      <div className="flex flex-col gap-2">
+        <div className="rounded-lg border border-sky-900/60 bg-sky-950/30 p-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-300">
+              {trainingTypeLabel[log.type]}
+              {log.title ? `・${log.title}` : ""}
+              {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingTraining(true)}
+              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 active:text-neutral-200"
+            >
+              修正する
+            </button>
+          </div>
+          <SetSummary blocks={savedBlocks} />
+          {log.content && log.content !== blocksSummaryText(savedBlocks) && (
+            <p
+              className={`whitespace-pre-wrap text-sm text-neutral-100 ${
+                savedBlocks.length > 0 ? "mt-2 border-t border-sky-900/50 pt-2" : ""
+              }`}
+            >
+              {log.content}
+            </p>
+          )}
+        </div>
+        {!isPopup && <TrainingCommentThread weightLogId={log.id} profile={profile} />}
+      </div>
+    ) : (
+      renderTrainingForm()
+    );
+  }
+
+  // 週の帯（月曜はじまり）
+  const [dy, dm, dd] = date.split("-").map(Number);
+  const dObj = new Date(dy, dm - 1, dd);
+  const weekStartStr = shiftDate(date, -((dObj.getDay() + 6) % 7));
+  const weekDays = Array.from({ length: 7 }, (_, i) => shiftDate(weekStartStr, i));
+  const pendingSet = new Set(pendingDates);
 
   return (
     <div className="flex flex-col gap-4">
       {!isPopup && onDateChange && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => onDateChange(shiftDate(date, -1))}
-              aria-label="前の日"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 active:bg-neutral-800"
-            >
-              ◀
-            </button>
-            <div className="flex flex-col items-center">
-              <span className="text-base font-bold text-foreground">
+          <div className="flex items-end justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="text-lg font-bold text-foreground">
                 {formatMonthDayWeek(date)}の日報
               </span>
-              {date !== todayStr && (
-                <button
-                  type="button"
-                  onClick={() => onDateChange(todayStr)}
-                  className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+              {!loading && !isFuture && (
+                <span
+                  className={`text-xs font-semibold ${
+                    remaining > 0 ? "text-red-400" : dayComplete ? "text-emerald-400" : "text-neutral-500"
+                  }`}
                 >
-                  今日に戻る
-                </button>
+                  {remaining > 0
+                    ? `あと${remaining}件`
+                    : dayComplete
+                      ? "この日はすべて提出済み"
+                      : "提出が必要な練習はありません"}
+                </span>
               )}
             </div>
+            {date !== todayStr && (
+              <button
+                type="button"
+                onClick={() => onDateChange(todayStr)}
+                className="rounded-full border border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+              >
+                今日へ
+              </button>
+            )}
+          </div>
+
+          {/* 週の帯：●提出済み ○未提出 */}
+          <div className="flex items-stretch gap-1">
             <button
               type="button"
-              onClick={() => onDateChange(shiftDate(date, 1))}
-              disabled={date >= todayStr}
-              aria-label="次の日"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 active:bg-neutral-800 disabled:opacity-30"
+              onClick={() => onDateChange(shiftDate(date, -7))}
+              aria-label="前の週"
+              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-800"
             >
-              ▶
+              ‹
+            </button>
+            {weekDays.map((d) => {
+              const [, , day] = d.split("-").map(Number);
+              const w = "月火水木金土日"[weekDays.indexOf(d)];
+              const future = d > todayStr;
+              const selected = d === date;
+              const pending = pendingSet.has(d);
+              const submitted = weekSubmitted.has(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={future}
+                  onClick={() => onDateChange(d)}
+                  className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 ${
+                    selected
+                      ? "bg-red-600 text-white"
+                      : "bg-neutral-900 text-neutral-300 active:bg-neutral-800"
+                  } disabled:opacity-30`}
+                >
+                  <span
+                    className={`text-[length:calc(9px+var(--fs-add))] ${
+                      selected ? "text-white/80" : w === "日" ? "text-red-400" : w === "土" ? "text-sky-400" : "text-neutral-500"
+                    }`}
+                  >
+                    {w}
+                  </span>
+                  <span className={`text-sm font-bold ${d === todayStr && !selected ? "underline" : ""}`}>
+                    {day}
+                  </span>
+                  <span className="h-2 text-[8px] leading-none">
+                    {pending ? (
+                      <span className={selected ? "text-white" : "text-red-400"}>○</span>
+                    ) : submitted ? (
+                      <span className={selected ? "text-white" : "text-emerald-400"}>●</span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                const next = shiftDate(date, 7);
+                onDateChange(next > todayStr ? todayStr : next);
+              }}
+              disabled={shiftDate(weekStartStr, 7) > todayStr}
+              aria-label="次の週"
+              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-800 disabled:opacity-30"
+            >
+              ›
             </button>
           </div>
-          {pendingDates.filter((d) => d !== date).length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2">
-              <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-red-400">
-                未提出の日：
-              </span>
-              {pendingDates
-                .filter((d) => d !== date)
-                .map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => onDateChange(d)}
-                    className="rounded-full border border-red-800 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] text-red-300 active:bg-red-950"
-                  >
-                    {formatMonthDayWeek(d)}
-                  </button>
-                ))}
-            </div>
+          {pendingDates.filter((d) => d < weekStartStr).length > 0 && (
+            <button
+              type="button"
+              onClick={() => onDateChange(pendingDates.filter((d) => d < weekStartStr)[0])}
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-red-400 underline decoration-dotted"
+            >
+              前の週にも未提出があります（{pendingDates.filter((d) => d < weekStartStr).length}日）
+            </button>
           )}
         </div>
       )}
@@ -1223,135 +1441,84 @@ export default function DailyReport({
               この日は管理者により免除されています。日報の提出は不要です（書いた分は記録として残ります）。
             </p>
           )}
+          {menus.length === 0 && isOffDay && (
+            <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+              この日はオフです。自主トレをした場合は、トレーニングに記録できます。
+            </p>
+          )}
 
-          {/* マット練習 */}
-          <section className="flex flex-col gap-3">
-            {sectionTitle(
-              "マット練習",
-              openMenus.length > 0
-                ? statusChip(
-                    matDoneCount === openMenus.length,
-                    `${matDoneCount}/${openMenus.length} 提出済み`
-                  )
-                : undefined
-            )}
-            {menus.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
-                {isOffDay
-                  ? "この日はオフです。"
-                  : "この日のマット練習はありません。"}
-              </p>
-            ) : (
-              <>
-                {openMenus.map((m) => {
-                  const r = reportByMenu.get(m.id);
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex flex-col gap-2 rounded-xl border p-3 ${
-                        r ? "border-neutral-800 bg-neutral-900/60" : "border-violet-800/70 bg-neutral-900"
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-neutral-100">
-                        {menuHeading(m)}
-                      </p>
-                      {m.content ? (
-                        <details className="rounded-lg bg-neutral-800 px-3 py-2 text-xs text-neutral-300" open={!r && !isPopup}>
-                          <summary className="cursor-pointer text-neutral-400">
-                            今日のメニュー
-                          </summary>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-100">
-                            {m.content}
-                          </p>
-                        </details>
-                      ) : (
-                        <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                          メニューは未記入です。やった内容を自分の言葉で書いてください。
-                        </p>
-                      )}
-                      {r ? renderSubmittedReport(m, r) : renderMatForm(m.id)}
-                    </div>
-                  );
-                })}
-                {upcomingMenus.map((m) => (
-                  <div
-                    key={m.id}
-                    className="rounded-xl border border-dashed border-neutral-800 p-3 text-xs text-neutral-500"
-                  >
-                    <p className="font-semibold text-neutral-400">{menuHeading(m)}</p>
-                    <p className="mt-1">開始時刻を過ぎると報告できるようになります。</p>
-                  </div>
-                ))}
-              </>
-            )}
-          </section>
-
-          {/* トレーニング */}
-          <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-            {sectionTitle(
-              trainingRequired ? "トレーニング" : "トレーニング（任意）",
-              log
-                ? statusChip(true, "提出済み")
-                : trainingRequired
-                  ? statusChip(false, "未提出")
-                  : undefined
-            )}
-            {nonMatSessions.length > 0 && (
-              <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                この日の予定：
-                {nonMatSessions
-                  .map(
-                    (s) =>
-                      `${sessionTypeLabel[s.session_type]}${
-                        s.start_time ? ` ${s.start_time.slice(0, 5)}〜` : ""
-                      }`
-                  )
-                  .join("、")}
-              </p>
-            )}
-            {log && !editingTraining ? (
-              <div className="flex flex-col gap-2">
-                <div className="rounded-lg border border-sky-900/60 bg-sky-950/30 p-3">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-300">
-                      {trainingTypeLabel[log.type]}
-                      {log.title ? `・${log.title}` : ""}
-                      {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
+          {/* タイムライン */}
+          <ol className="relative flex flex-col gap-3">
+            <span
+              aria-hidden
+              className="absolute bottom-3 left-[2.4rem] top-3 w-px bg-neutral-700"
+            />
+            {timeline.map((item) => {
+              const t = itemTitle(item);
+              const st = itemStatus(item);
+              const open = isExpanded(item);
+              return (
+                <li key={item.key} className="relative flex gap-3">
+                  <div className="flex w-[2rem] shrink-0 flex-col items-end pt-3">
+                    <span className="text-[length:calc(10px+var(--fs-add))] font-semibold text-neutral-400">
+                      {item.time ? item.time.slice(0, 5) : "—"}
                     </span>
+                  </div>
+                  <span
+                    aria-hidden
+                    className={`relative z-10 mt-[0.95rem] h-3 w-3 shrink-0 rounded-full border-2 ${
+                      item.done
+                        ? "border-emerald-500 bg-emerald-500"
+                        : item.upcoming || (item.kind === "training" && !trainingRequired)
+                          ? "border-neutral-600 bg-background"
+                          : "border-red-500 bg-background"
+                    }`}
+                  />
+                  <div
+                    className={`min-w-0 flex-1 overflow-hidden rounded-xl border ${
+                      item.done
+                        ? "border-neutral-800 bg-neutral-900/60"
+                        : item.upcoming
+                          ? "border-dashed border-neutral-800 bg-transparent"
+                          : "border-neutral-700 bg-neutral-900"
+                    }`}
+                  >
                     <button
                       type="button"
-                      onClick={() => setEditingTraining(true)}
-                      className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 active:text-neutral-200"
+                      onClick={() => toggle(item)}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
                     >
-                      修正する
+                      <span className="text-lg leading-none">{t.icon}</span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-sm font-semibold text-neutral-100">{t.title}</span>
+                        <span className="truncate text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+                          {t.sub}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${st.cls}`}
+                      >
+                        {st.text}
+                      </span>
+                      <span className="shrink-0 text-neutral-500">{open ? "▴" : "▾"}</span>
                     </button>
+                    {open && (
+                      <div className="border-t border-neutral-800 px-3 pb-3 pt-2.5">
+                        {renderItemBody(item)}
+                      </div>
+                    )}
                   </div>
-                  <SetSummary blocks={savedBlocks} />
-                  {log.content && log.content !== blocksSummaryText(savedBlocks) && (
-                    <p
-                      className={`whitespace-pre-wrap text-sm text-neutral-100 ${
-                        savedBlocks.length > 0 ? "mt-2 border-t border-sky-900/50 pt-2" : ""
-                      }`}
-                    >
-                      {log.content}
-                    </p>
-                  )}
-                </div>
-                {!isPopup && (
-                  <TrainingCommentThread weightLogId={log.id} profile={profile} />
-                )}
-              </div>
-            ) : (
-              renderTrainingForm()
-            )}
-          </section>
+                </li>
+              );
+            })}
+          </ol>
 
           {/* 一言メモ（自分だけ） */}
           {!isPopup && (
-            <section className="flex flex-col gap-1 border-t border-neutral-800 pt-4">
+            <section className="flex flex-col gap-1 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-xs font-semibold text-neutral-400">
-                  一言メモ（体調など・自分だけが見られます）
+                  📝 一言メモ（体調など・自分だけが見られます）
                 </label>
                 <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                   {memo.length}/20
@@ -1368,21 +1535,23 @@ export default function DailyReport({
             </section>
           )}
 
-          {/* 提出 */}
-          <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-            {missing.length > 0 && (
-              <ul className="flex flex-col gap-1 rounded-lg border border-red-900/60 bg-red-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-red-300">
-                {missing.map((p) => (
-                  <li key={p}>・{p}</li>
-                ))}
-              </ul>
-            )}
-            {dayComplete && (
-              <p className="rounded-lg bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-400">
-                ✓ この日の日報はすべて提出済みです
-              </p>
-            )}
-            {(!dayComplete || hasOptionalToSubmit) && (
+          {/* 提出（画面の下に固定） */}
+          {dayComplete && !hasOptionalToSubmit ? (
+            <p className="rounded-lg bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-400">
+              ✓ この日の日報はすべて提出済みです
+            </p>
+          ) : (
+            <div
+              className={`${isPopup ? "" : "sticky z-20"} flex flex-col gap-2 rounded-xl border border-neutral-700 bg-background/95 p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.35)] backdrop-blur`}
+              style={isPopup ? undefined : { bottom: "calc(144px + env(safe-area-inset-bottom))" }}
+            >
+              {missing.length > 0 && (
+                <ul className="flex max-h-28 flex-col gap-1 overflow-y-auto rounded-lg border border-red-900/60 bg-red-950/30 p-2 text-[length:calc(11px+var(--fs-add))] text-red-300">
+                  {missing.map((p) => (
+                    <li key={p}>・{p}</li>
+                  ))}
+                </ul>
+              )}
               <button
                 type="button"
                 onClick={handleSubmit}
@@ -1391,12 +1560,14 @@ export default function DailyReport({
               >
                 {submitting
                   ? "提出中…"
-                  : dayComplete
-                    ? "追加分を提出する"
-                    : "日報を提出する"}
+                  : remaining > 0
+                    ? `あと${remaining}件 ― 日報を提出する`
+                    : dayComplete
+                      ? "追加分を提出する"
+                      : "日報を提出する"}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </div>
