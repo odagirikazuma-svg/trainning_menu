@@ -1504,7 +1504,7 @@ export default function MemberHome({
         <SubTabBar<HomeSubTab>
           items={[
             { value: "daily", label: "日報", badge: pendingDailyCount },
-            { value: "training", label: "トレーニング" },
+            { value: "training", label: "振り返り" },
             { value: "injury", label: "怪我の記録" },
           ]}
           active={homeSubTab}
@@ -1718,7 +1718,7 @@ export default function MemberHome({
         </>
       )}
 
-      {/* トレーニング：目標・集計・分析 */}
+      {/* 振り返り：集計・分析・推移 */}
       {!isManager && homeSubTab === "training" && (
         <TrainingInsights profile={profile} refreshKey={reportRefreshKey} />
       )}

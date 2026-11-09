@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../components/shell/AppShell";
+import GoalsSettingsSection from "../../components/GoalsSettingsSection";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
 import {
   useCalendarViewPref,
@@ -947,6 +948,9 @@ export default function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup icon={myPageIcon} iconAlt="マイページ" title="マイページ">
+            <CollapsibleSection title="目標（年間・月間）">
+              <GoalsSettingsSection />
+            </CollapsibleSection>
             <CollapsibleSection title="プロフィールアイコンの設定">
               <IconSection />
             </CollapsibleSection>

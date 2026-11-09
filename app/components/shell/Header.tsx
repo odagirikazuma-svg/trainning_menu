@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { isStaffRole, Location, locationLabel, locations } from "../../lib/types";
+import { GOALS_CHANGED_EVENT, goalTerms, type GoalTerm } from "../../lib/goals";
 import type { Profile } from "../AuthGate";
 import { isExemptOn, loadExemptions } from "../../lib/exemptions";
 
@@ -114,6 +115,87 @@ async function countSubmission(
   return { submitted, total };
 }
 
+/**
+ * ヘッダーの目標表示。年間目標と月間目標を5秒ごとにふわっと切り替える。
+ * 目標は設定タブで編集し、保存されたら GOALS_CHANGED_EVENT で読み直す。
+ */
+function GoalTicker({ profile }: { profile: Profile }) {
+  const [goals, setGoals] = useState<{ term: GoalTerm; content: string }[] | null>(null);
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    async function load() {
+      const { data, error } = await supabase
+        .from("member_goals")
+        .select("term, content")
+        .eq("author_id", profile.id)
+        .in("term", ["long", "short"]);
+      if (cancelled) return;
+      if (error) {
+        setGoals([]);
+        return;
+      }
+      const rows = (data ?? []) as { term: GoalTerm; content: string }[];
+      // 年間 → 月間の順に並べ、空のものは出さない
+      setGoals(
+        goalTerms
+          .map(({ term }) => rows.find((r) => r.term === term))
+          .filter((r): r is { term: GoalTerm; content: string } => !!r && r.content.trim() !== "")
+      );
+      setIndex(0);
+      setVisible(true);
+    }
+    load();
+    window.addEventListener(GOALS_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(GOALS_CHANGED_EVENT, load);
+    };
+  }, [profile.id]);
+
+  useEffect(() => {
+    if (!goals || goals.length < 2) return;
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(() => {
+      setVisible(false);
+      fadeTimer = setTimeout(() => {
+        setIndex((i) => (i + 1) % goals.length);
+        setVisible(true);
+      }, 300);
+    }, 5000);
+    return () => {
+      clearInterval(timer);
+      if (fadeTimer) clearTimeout(fadeTimer);
+    };
+  }, [goals]);
+
+  if (goals === null) return null;
+  if (goals.length === 0) {
+    return (
+      <span className="text-[length:calc(10px+var(--fs-add))] text-white/60">
+        設定タブから年間目標・月間目標を登録しよう
+      </span>
+    );
+  }
+  const g = goals[index % goals.length];
+  const label = goalTerms.find((t) => t.term === g.term)?.label ?? "";
+  return (
+    <span
+      className={`flex min-w-0 items-baseline gap-1.5 transition-opacity duration-300 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <span className="shrink-0 rounded bg-white/20 px-1 text-[length:calc(9px+var(--fs-add))] font-bold leading-tight text-white">
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-xs font-semibold text-white/90">{g.content}</span>
+    </span>
+  );
+}
+
 function MemberHeaderInfo({ profile }: { profile: Profile }) {
   const [nextMatch, setNextMatch] = useState<{
     name: string;
@@ -145,6 +227,7 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
       <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
+      <GoalTicker profile={profile} />
       {nextMatch ? (
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="shrink-0 text-[length:calc(10px+var(--fs-add))] font-semibold leading-none text-white/70">

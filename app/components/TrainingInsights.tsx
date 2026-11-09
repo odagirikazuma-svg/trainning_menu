@@ -7,27 +7,11 @@ import { Location, SessionType, TrainingType, trainingTypeLabel } from "../lib/t
 import type { Profile } from "./AuthGate";
 
 /**
- * マイページ「トレーニング」タブの上半分。
- * - 目標（長期・中期・短期）
+ * マイページ「振り返り」タブの上半分。（目標は設定タブで編集し、ヘッダーに表示する）
  * - 直近4週間のまとめ（日報の提出率・連続提出・練習回数）
  * - 週ごとの練習量（12週）・よくやるメニュー・ひとことコメント
  * - ウェイトMAX・体組成の推移（イベントで提出した記録）
  */
-
-type GoalTerm = "long" | "mid" | "short";
-const goalTerms: { term: GoalTerm; label: string; hint: string }[] = [
-  { term: "long", label: "長期目標", hint: "例：全日本学生で優勝する" },
-  { term: "mid", label: "中期目標", hint: "例：次のリーグ戦でレギュラーをとる" },
-  { term: "short", label: "短期目標", hint: "例：今月中にBP100kgを挙げる" },
-];
-
-type GoalRow = {
-  id: string;
-  term: GoalTerm;
-  content: string;
-  target_date: string | null;
-  updated_at: string;
-};
 
 type Bucket = "mat" | TrainingType;
 const bucketOrder: Bucket[] = ["mat", "weight", "running", "other"];
@@ -130,72 +114,13 @@ export default function TrainingInsights({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [maxRows, setMaxRows] = useState<MaxRow[]>([]);
   const [bodyRows, setBodyRows] = useState<BodyRow[]>([]);
-  const [goals, setGoals] = useState<GoalRow[]>([]);
-  const [goalsAvailable, setGoalsAvailable] = useState(true);
-  const [editingGoals, setEditingGoals] = useState(false);
-  const [goalDrafts, setGoalDrafts] = useState<
-    Record<GoalTerm, { content: string; target_date: string }>
-  >({
-    long: { content: "", target_date: "" },
-    mid: { content: "", target_date: "" },
-    short: { content: "", target_date: "" },
-  });
-  const [savingGoals, setSavingGoals] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadSummary();
     loadRecords();
-    loadGoals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
-
-  async function loadGoals() {
-    const { data, error } = await supabase
-      .from("member_goals")
-      .select("id, term, content, target_date, updated_at")
-      .eq("author_id", profile.id);
-    if (error) {
-      // テーブルがまだ無い（SQL未実行）場合は、目標欄だけ準備中表示にする
-      setGoalsAvailable(false);
-      return;
-    }
-    setGoalsAvailable(true);
-    setGoals((data ?? []) as GoalRow[]);
-  }
-
-  function startEditGoals() {
-    const next = { ...goalDrafts };
-    for (const { term } of goalTerms) {
-      const g = goals.find((x) => x.term === term);
-      next[term] = { content: g?.content ?? "", target_date: g?.target_date ?? "" };
-    }
-    setGoalDrafts(next);
-    setEditingGoals(true);
-  }
-
-  async function saveGoals() {
-    setSavingGoals(true);
-    setErrorMsg(null);
-    const rows = goalTerms.map(({ term }) => ({
-      team_id: profile.team_id,
-      author_id: profile.id,
-      term,
-      content: goalDrafts[term].content.trim(),
-      target_date: goalDrafts[term].target_date || null,
-      updated_at: new Date().toISOString(),
-    }));
-    const { error } = await supabase
-      .from("member_goals")
-      .upsert(rows, { onConflict: "author_id,term" });
-    setSavingGoals(false);
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    setEditingGoals(false);
-    await loadGoals();
-  }
 
   async function loadSummary() {
     const joined = toDateKey(new Date(profile.created_at));
@@ -528,109 +453,6 @@ export default function TrainingInsights({
       {errorMsg && (
         <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">{errorMsg}</p>
       )}
-
-      {/* 目標 */}
-      <section className="flex flex-col gap-2">
-        {sectionTitle(
-          "目標",
-          goalsAvailable && !editingGoals ? (
-            <button
-              type="button"
-              onClick={startEditGoals}
-              className="rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
-            >
-              {goals.some((g) => g.content) ? "編集する" : "目標を設定する"}
-            </button>
-          ) : undefined
-        )}
-        {!goalsAvailable ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
-            目標の設定は準備中です。
-          </p>
-        ) : editingGoals ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-            {goalTerms.map(({ term, label, hint }) => (
-              <div key={term} className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-neutral-300">{label}</span>
-                <textarea
-                  value={goalDrafts[term].content}
-                  onChange={(e) =>
-                    setGoalDrafts((p) => ({
-                      ...p,
-                      [term]: { ...p[term], content: e.target.value },
-                    }))
-                  }
-                  rows={2}
-                  placeholder={hint}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
-                />
-                <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                  期限（任意）
-                  <input
-                    type="date"
-                    value={goalDrafts[term].target_date}
-                    onChange={(e) =>
-                      setGoalDrafts((p) => ({
-                        ...p,
-                        [term]: { ...p[term], target_date: e.target.value },
-                      }))
-                    }
-                    className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-100"
-                  />
-                </label>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={saveGoals}
-                disabled={savingGoals}
-                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-              >
-                {savingGoals ? "保存中…" : "保存する"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingGoals(false)}
-                className="rounded-lg border border-neutral-700 px-4 py-2 text-xs text-neutral-300"
-              >
-                キャンセル
-              </button>
-            </div>
-          </div>
-        ) : !goals.some((g) => g.content) ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
-            まだ目標が設定されていません。長期・中期・短期の目標を書いておきましょう。
-          </p>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {goalTerms.map(({ term, label }) => {
-              const g = goals.find((x) => x.term === term);
-              if (!g?.content) return null;
-              const left = g.target_date ? daysBetween(todayStr, g.target_date) : null;
-              return (
-                <div
-                  key={term}
-                  className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-                >
-                  <div className="mb-0.5 flex items-center justify-between gap-2">
-                    <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-red-400">
-                      {label}
-                    </span>
-                    {g.target_date && (
-                      <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-                        {formatMonthDay(g.target_date)}まで
-                        {left != null && left >= 0 ? `（あと${left}日）` : "（期限切れ）"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm text-neutral-100">{g.content}</p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
       {/* 直近4週間のまとめ */}
       <section className="flex flex-col gap-2">
