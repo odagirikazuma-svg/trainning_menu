@@ -18,6 +18,14 @@ import {
 import type { Profile } from "./AuthGate";
 import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
 import { RecentTypeLogs, TrainingCommentThread } from "./TrainingShared";
+import SetLogger, {
+  blocksHaveData,
+  blocksSummaryText,
+  loadSetsForLog,
+  saveSetsForLog,
+  SetSummary,
+  type ExerciseBlock,
+} from "./SetLogger";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
 
 /**
@@ -209,6 +217,9 @@ export default function DailyReport({
   const [matDrafts, setMatDrafts] = useState<Record<string, MatDraft>>({});
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [training, setTraining] = useState<TrainingDraft>(emptyTrainingDraft);
+  // 種目ごとのセット記録（重量・回数・時間）
+  const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
+  const [savedBlocks, setSavedBlocks] = useState<ExerciseBlock[]>([]);
   const [editingTraining, setEditingTraining] = useState(false);
   const [memo, setMemo] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
@@ -350,7 +361,11 @@ export default function DailyReport({
     setIsOffDay(offDay);
     setExempt(isExemptOn(exemptions, profile.id, date));
     const logRow = (logRes.data as TrainingLog | null) ?? null;
+    const logBlocks = logRow ? await loadSetsForLog(supabase, logRow.id) : [];
+    if (seq !== loadSeq.current) return;
     setLog(logRow);
+    setSavedBlocks(logBlocks);
+    if (resetDrafts) setBlocks(logBlocks);
     if (resetDrafts) {
       setTraining(
         logRow
@@ -358,7 +373,8 @@ export default function DailyReport({
               type: logRow.type,
               startTime: logRow.start_time ? logRow.start_time.slice(0, 5) : "",
               title: logRow.title ?? "",
-              content: logRow.content,
+              content:
+                logRow.content === blocksSummaryText(logBlocks) ? "" : logRow.content,
             }
           : emptyTrainingDraft
       );
@@ -419,10 +435,14 @@ export default function DailyReport({
       }
     }
     const touched =
-      !!training.type || training.content.trim() !== "" || training.title.trim() !== "";
+      !!training.type ||
+      training.content.trim() !== "" ||
+      training.title.trim() !== "" ||
+      blocks.length > 0;
     if (!log && (trainingRequired || touched)) {
       if (!training.type) problems.push("トレーニング：ラン／ウェイト／その他を選んでください");
-      if (!training.content.trim()) problems.push("トレーニング：実施した内容を書いてください");
+      if (!training.content.trim() && !blocksHaveData(blocks))
+        problems.push("トレーニング：種目の記録か、実施した内容のどちらかを書いてください");
     }
     if (training.startTime && training.startTime < "06:00") {
       problems.push("トレーニング：開始時間はその日の6時以降で入力してください");
@@ -438,7 +458,8 @@ export default function DailyReport({
       return;
     }
     const matToSend = pendingMenus.filter((m) => draftOf(m.id).mode);
-    const sendTraining = !log && !!training.type && training.content.trim() !== "";
+    const sendTraining =
+      !log && !!training.type && (training.content.trim() !== "" || blocksHaveData(blocks));
     const sendMemo = memo.slice(0, 20) !== memoSaved;
     if (matToSend.length === 0 && !sendTraining && !sendMemo) {
       setMissing(["提出する内容がまだありません。"]);
@@ -480,20 +501,28 @@ export default function DailyReport({
 
       if (sendTraining) {
         const title = training.title.trim();
-        const { error } = await supabase.from("weight_logs").upsert(
+        const { data: saved, error } = await supabase.from("weight_logs").upsert(
           {
             team_id: profile.team_id,
             author_id: profile.id,
             date,
-            content: training.content,
+            content: training.content.trim() || blocksSummaryText(blocks),
             type: training.type,
             title: title || null,
             start_time: training.startTime || null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "author_id,date" }
-        );
+        ).select("id").single();
         if (error) throw new Error(error.message);
+        const setError = await saveSetsForLog(supabase, {
+          teamId: profile.team_id,
+          authorId: profile.id,
+          logId: (saved as { id: string }).id,
+          date,
+          blocks,
+        });
+        if (setError) throw new Error(setError);
       }
 
       if (sendMemo) await saveMemo();
@@ -571,8 +600,8 @@ export default function DailyReport({
   }
 
   async function handleUpdateTraining() {
-    if (!training.type || !training.content.trim()) {
-      setMissing(["トレーニング：種類と内容を入力してください"]);
+    if (!training.type || (!training.content.trim() && !blocksHaveData(blocks))) {
+      setMissing(["トレーニング：種類と、種目の記録か内容を入力してください"]);
       return;
     }
     if (training.startTime && training.startTime < "06:00") {
@@ -584,16 +613,25 @@ export default function DailyReport({
     const { error } = await supabase
       .from("weight_logs")
       .update({
-        content: training.content,
+        content: training.content.trim() || blocksSummaryText(blocks),
         type: training.type,
         title: title || null,
         start_time: training.startTime || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", log!.id);
+    const setError = error
+      ? null
+      : await saveSetsForLog(supabase, {
+          teamId: profile.team_id,
+          authorId: profile.id,
+          logId: log!.id,
+          date,
+          blocks,
+        });
     setSubmitting(false);
-    if (error) {
-      setErrorMsg(error.message);
+    if (error || setError) {
+      setErrorMsg(error?.message ?? setError);
       return;
     }
     await load(true);
@@ -607,7 +645,7 @@ export default function DailyReport({
     setCopying(true);
     let query = supabase
       .from("weight_logs")
-      .select("content, title, date")
+      .select("id, content, title, date")
       .eq("author_id", profile.id)
       .eq("type", training.type)
       .lt("date", date)
@@ -617,14 +655,16 @@ export default function DailyReport({
     const { data } = await query;
     setCopying(false);
     const prev = (data ?? [])[0] as
-      | { content: string; title: string | null; date: string }
+      | { id: string; content: string; title: string | null; date: string }
       | undefined;
     if (!prev) {
       setMissing(["コピーできる前回の記録がありません。"]);
       return;
     }
+    const prevBlocks = await loadSetsForLog(supabase, prev.id);
+    if (prevBlocks.length > 0) setBlocks(prevBlocks);
     updateTraining({
-      content: prev.content,
+      content: prev.content === blocksSummaryText(prevBlocks) ? "" : prev.content,
       title: training.title.trim() ? training.title : (prev.title ?? ""),
     });
   }
@@ -655,7 +695,10 @@ export default function DailyReport({
     (openMenus.length > 0 || !!log);
   const trainingTouched =
     !log &&
-    (!!training.type || training.content.trim() !== "" || training.title.trim() !== "");
+    (!!training.type ||
+      training.content.trim() !== "" ||
+      training.title.trim() !== "" ||
+      blocks.length > 0);
   const hasOptionalToSubmit = trainingTouched || memo.slice(0, 20) !== memoSaved;
 
   const inputCls =
@@ -909,13 +952,30 @@ export default function DailyReport({
             )}
           </>
         )}
+        {type && (
+          <SetLogger
+            supabase={supabase}
+            profile={profile}
+            date={date}
+            blocks={blocks}
+            onChange={(next) => {
+              setBlocks(next);
+              setMissing([]);
+            }}
+          />
+        )}
+        {type && (
+          <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+            メモ・その他の内容{blocksHaveData(blocks) ? "（任意）" : ""}
+          </span>
+        )}
         <textarea
           value={training.content}
           onChange={(e) => updateTraining({ content: e.target.value })}
           placeholder={
             "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
           }
-          rows={isPopup ? 6 : 8}
+          rows={blocksHaveData(blocks) ? 3 : isPopup ? 6 : 8}
           className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
             activeColor
               ? `${activeColor.border} ${activeColor.fill}`
@@ -932,8 +992,8 @@ export default function DailyReport({
             {copying
               ? "読み込み中…"
               : training.title.trim()
-                ? `前回の「${training.title.trim()}」をコピー`
-                : `前回の${trainingTypeLabel[type]}をコピー`}
+                ? `前回の「${training.title.trim()}」を丸ごとコピー`
+                : `前回の${trainingTypeLabel[type]}を丸ごとコピー`}
           </button>
         )}
         {editingTraining && (
@@ -950,12 +1010,14 @@ export default function DailyReport({
               type="button"
               onClick={() => {
                 setEditingTraining(false);
+                setBlocks(savedBlocks);
                 if (log)
                   setTraining({
                     type: log.type,
                     startTime: log.start_time ? log.start_time.slice(0, 5) : "",
                     title: log.title ?? "",
-                    content: log.content,
+                    content:
+                      log.content === blocksSummaryText(savedBlocks) ? "" : log.content,
                   });
               }}
               className="rounded-lg border border-neutral-700 px-3 py-2 text-xs text-neutral-300"
@@ -1189,9 +1251,16 @@ export default function DailyReport({
                       修正する
                     </button>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                    {log.content}
-                  </p>
+                  <SetSummary blocks={savedBlocks} />
+                  {log.content && log.content !== blocksSummaryText(savedBlocks) && (
+                    <p
+                      className={`whitespace-pre-wrap text-sm text-neutral-100 ${
+                        savedBlocks.length > 0 ? "mt-2 border-t border-sky-900/50 pt-2" : ""
+                      }`}
+                    >
+                      {log.content}
+                    </p>
+                  )}
                 </div>
                 {!isPopup && (
                   <TrainingCommentThread weightLogId={log.id} profile={profile} />

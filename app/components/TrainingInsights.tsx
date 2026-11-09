@@ -5,6 +5,7 @@ import { createClient } from "../lib/supabase/client";
 import { isExemptOn, loadExemptions } from "../lib/exemptions";
 import { Location, SessionType, TrainingType, trainingTypeLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import ExerciseProgress from "./ExerciseProgress";
 
 /**
  * マイページ「振り返り」タブの上半分。（目標は設定タブで編集し、ヘッダーに表示する）
@@ -493,6 +494,9 @@ export default function TrainingInsights({
           </>
         )}
       </section>
+
+      {/* 種目ごとの記録・自己ベスト（日報で入れた数値から） */}
+      <ExerciseProgress profile={profile} refreshKey={refreshKey} />
 
       {/* 週ごとの練習量 */}
       {summary && (
