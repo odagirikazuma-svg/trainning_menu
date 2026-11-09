@@ -28,6 +28,7 @@ import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
 import DailyReport from "./DailyReport";
 import TrainingInsights from "./TrainingInsights";
 import GoalsSettingsSection from "./GoalsSettingsSection";
+import DayRecordPanel from "./DayRecordPanel";
 import { useGoalTasks } from "./shell/useGoalTasks";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
@@ -1469,10 +1470,14 @@ export default function MemberHome({
   });
   const [reportRefreshKey, setReportRefreshKey] = useState(0);
 
-  // トレーニングのカレンダーで日付を押したら、その日の日報を開く
+  // 振り返りのカレンダーで日付を押したら、カレンダーの下にその日の記録を出す（もう一度押すと閉じる）
   function handleSelectCalendarDate(dateStr: string) {
-    setSelectedCalendarDate(dateStr);
-    setReportDate(dateStr > todayStr ? todayStr : dateStr);
+    setSelectedCalendarDate((prev) => (prev === dateStr ? null : dateStr));
+  }
+
+  // 日報タブの指定した日へ移動する（タスクのポップアップから）
+  function openDailyReport(date: string) {
+    setReportDate(date);
     setHomeSubTab("daily");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1716,17 +1721,19 @@ export default function MemberHome({
             badgeLabel: `日報 未提出${isOverdue ? "（期限切れ）" : ""}`,
             title: `${formatMonthDayWeek(date)}の日報（${parts.join("・")}）`,
             urgent: isOverdue,
-            content: (
-              <DailyReport
-                key={`daily-${date}`}
-                profile={profile}
-                date={date}
-                variant="popup"
-                titleOptions={titleOptionsByType}
-                titleColors={titleColorByType}
-                onSubmitted={handleDailySubmitted}
-                onTitlesChanged={loadTitleOptions}
-              />
+            // 押したら、その日の日報（このページの日報欄）へ移動する
+            onOpen: () => openDailyReport(date),
+            content: (close: () => void) => (
+              <button
+                type="button"
+                onClick={() => {
+                  openDailyReport(date);
+                  close();
+                }}
+                className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-white active:bg-emerald-700"
+              >
+                {formatMonthDayWeek(date)}の日報を書く
+              </button>
             ),
           });
         }
@@ -1746,7 +1753,7 @@ export default function MemberHome({
         <TrainingInsights profile={profile} refreshKey={reportRefreshKey} />
       )}
 
-      {/* カレンダー（トレーニングの記録）。日付を押すとその日の日報が開く */}
+      {/* カレンダー（トレーニングの記録）。日付を押すと、その下にその日の記録が出る */}
       {(isManager || homeSubTab === "training") && (
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1770,6 +1777,15 @@ export default function MemberHome({
           memoPreviews={calendarMemoPreviews}
           titleColorByType={titleColorByType}
         />
+        {!isManager && selectedCalendarDate && (
+          <DayRecordPanel
+            key={`${selectedCalendarDate}-${reportRefreshKey}`}
+            profile={profile}
+            date={selectedCalendarDate}
+            onOpenDaily={(d) => openDailyReport(d > todayStr ? todayStr : d)}
+            onClose={() => setSelectedCalendarDate(null)}
+          />
+        )}
       </section>
       )}
 

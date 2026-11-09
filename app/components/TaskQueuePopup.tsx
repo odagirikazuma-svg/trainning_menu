@@ -17,6 +17,8 @@ export type QueueTask = {
   // 通常はReactNodeをそのまま渡す。ポップアップを閉じる操作（closeを呼ぶ）を
   // ボタン等に組み込みたい場合は関数形式で渡す（例：イベントページの「入力へ進む」）。
   content: React.ReactNode | ((close: () => void) => React.ReactNode);
+  // 指定すると、一覧でタスクを押したときに中身を開かず、この処理（画面の該当箇所へ移動など）を行って閉じる
+  onOpen?: () => void;
 };
 
 // 種類ごとの見た目（左の色帯・ラベルの色）。ひと目でマット日報かトレ報か分かるようにする
@@ -171,6 +173,12 @@ export default function TaskQueuePopup({
   }
 
   function handleSelect(key: string) {
+    const task = tasks.find((t) => t.key === key);
+    if (task?.onOpen) {
+      task.onOpen();
+      handleClose();
+      return;
+    }
     setSelectedKey(key);
     setView("detail");
   }

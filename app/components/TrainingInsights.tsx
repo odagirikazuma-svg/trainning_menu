@@ -6,10 +6,20 @@ import { isExemptOn, loadExemptions } from "../lib/exemptions";
 import { Location, SessionType, TrainingType, trainingTypeLabel } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import ExerciseProgress from "./ExerciseProgress";
+import MatchReflectionList from "./MatchReflectionList";
+import {
+  balanceLabel,
+  computeDailyLoad,
+  e1rm,
+  loadBalance,
+  type BalanceStatus,
+  type LoadSetRow,
+} from "../lib/trainingLoad";
 
 /**
  * マイページ「振り返り」タブの上半分。（目標は設定タブで編集し、ヘッダーに表示する）
- * - 直近4週間のまとめ（日報の提出率・連続提出・練習回数）
+ * - 直近4週間のまとめ（日報の提出率・連続提出・練習負荷・平均強度・自己ベスト更新・負荷バランス）
+ * - 試合の振り返り（イベントで提出したもの）
  * - 週ごとの練習量（12週）・よくやるメニュー・ひとことコメント
  * - ウェイトMAX・体組成の推移（イベントで提出した記録）
  */
@@ -42,6 +52,16 @@ type Summary = {
   weeks: { label: string; counts: Record<Bucket, number> }[];
   topTitles: { title: string; type: TrainingType; count: number }[];
   lastByType: Partial<Record<TrainingType, string>>;
+  // ---- 強度・負荷（日報で数値を入れたウェイトのセットから） ----
+  hasLoad: boolean;
+  load4w: number;
+  loadPrev4w: number;
+  intensity4w: number | null; // メインセットの平均相対強度（%）
+  intensityPrev4w: number | null;
+  pbCount4w: number;
+  balance: { ratio: number | null; status: BalanceStatus | null };
+  dailyLoads: { date: string; load: number; intensity: number | null }[]; // 直近28日
+  improving: { name: string; from: number; to: number }[];
 };
 
 type MaxRow = {
@@ -322,7 +342,86 @@ export default function TrainingInsights({
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
+    // ---- 強度・負荷 ----
+    const setsSince = addDays(todayStr, -365);
+    const setQuery = (cols: string) =>
+      supabase
+        .from("training_sets")
+        .select(cols)
+        .eq("author_id", profile.id)
+        .gte("date", setsSince)
+        .lte("date", todayStr)
+        .order("date", { ascending: true })
+        .limit(5000);
+    const base = "date, exercise_id, set_no, weight_kg, reps, exercise:exercises(name)";
+    let setRes = await setQuery(`${base}, is_warmup`);
+    if (setRes.error) setRes = await setQuery(base);
+    const setRows = ((setRes.error ? [] : setRes.data) ?? []) as unknown as (LoadSetRow & {
+      exercise: { name: string } | null;
+    })[];
+    const dayLoads = computeDailyLoad(setRows);
+    const dailyLoads: Summary["dailyLoads"] = [];
+    for (let i = 27; i >= 0; i--) {
+      const d = addDays(todayStr, -i);
+      const dl = dayLoads.get(d);
+      dailyLoads.push({
+        date: d,
+        load: dl?.load ?? 0,
+        intensity:
+          dl && dl.intensities.length > 0
+            ? dl.intensities.reduce((a, b) => a + b, 0) / dl.intensities.length
+            : null,
+      });
+    }
+    let load4w = 0,
+      loadPrev4w = 0,
+      acute7 = 0,
+      pbCount4w = 0;
+    const int4w: number[] = [];
+    const intPrev: number[] = [];
+    const acuteStart = addDays(todayStr, -6);
+    for (const [d, dl] of dayLoads) {
+      if (d >= recentStart) {
+        load4w += dl.load;
+        int4w.push(...dl.intensities);
+        pbCount4w += dl.pbExerciseIds.length;
+        if (d >= acuteStart) acute7 += dl.load;
+      } else if (d >= prevStart) {
+        loadPrev4w += dl.load;
+        intPrev.push(...dl.intensities);
+      }
+    }
+    const avgPct = (xs: number[]) =>
+      xs.length > 0 ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) : null;
+
+    // 伸びている種目：直近4週の推定MAXの最高 と それより前の最高 を比べる
+    const bestBefore = new Map<string, number>();
+    const bestRecent = new Map<string, number>();
+    const exName = new Map<string, string>();
+    for (const r of setRows) {
+      if (r.weight_kg == null || !r.reps) continue;
+      const v = e1rm(Number(r.weight_kg), r.reps);
+      if (!v) continue;
+      exName.set(r.exercise_id, r.exercise?.name ?? "");
+      const m = r.date >= recentStart ? bestRecent : bestBefore;
+      m.set(r.exercise_id, Math.max(m.get(r.exercise_id) ?? 0, v));
+    }
+    const improving = Array.from(bestRecent.entries())
+      .filter(([id, v]) => (bestBefore.get(id) ?? 0) > 0 && v > bestBefore.get(id)!)
+      .map(([id, v]) => ({ name: exName.get(id) ?? "", from: bestBefore.get(id)!, to: v }))
+      .sort((a, b) => b.to / b.from - a.to / a.from)
+      .slice(0, 3);
+
     setSummary({
+      hasLoad: setRows.some((r) => r.weight_kg != null && (r.reps ?? 0) > 0),
+      load4w,
+      loadPrev4w,
+      intensity4w: avgPct(int4w),
+      intensityPrev4w: avgPct(intPrev),
+      pbCount4w,
+      balance: loadBalance(acute7, load4w),
+      dailyLoads,
+      improving,
       rate: required > 0 ? Math.round((done / required) * 100) : null,
       done,
       required,
@@ -416,6 +515,17 @@ export default function TrainingInsights({
       }
     }
     if (s.streak >= 5) out.push(`${s.streak}日連続で日報を出せています。この調子！`);
+    for (const im of s.improving) {
+      const pct = Math.round((im.to / im.from - 1) * 1000) / 10;
+      out.push(
+        `「${im.name}」の推定MAXが ${Math.round(im.from * 10) / 10}kg → ${Math.round(im.to * 10) / 10}kg に伸びています（+${pct}%）。`
+      );
+    }
+    if (s.hasLoad && s.loadPrev4w > 0) {
+      const pct = Math.round((s.load4w / s.loadPrev4w - 1) * 100);
+      if (Math.abs(pct) >= 10)
+        out.push(`練習負荷は前の4週間より${pct > 0 ? `${pct}%増えて` : `${-pct}%減って`}います。`);
+    }
     if (s.topTitles[0]) {
       out.push(`いちばん多いメニューは「${s.topTitles[0].title}」（${s.topTitles[0].count}回）。`);
     }
@@ -474,16 +584,40 @@ export default function TrainingInsights({
               )}
               {tile("連続提出", `${summary.streak}日`, "練習があった日で数えています")}
               {tile(
-                "マット練習",
-                `${summary.matDone}回`,
-                summary.matAbsent > 0 ? `未実施 ${summary.matAbsent}回` : null
+                "練習負荷（4週合計）",
+                summary.hasLoad ? `${Math.round(summary.load4w)}` : "—",
+                summary.hasLoad && summary.loadPrev4w > 0
+                  ? `前の4週 ${Math.round(summary.loadPrev4w)}（${
+                      summary.load4w >= summary.loadPrev4w ? "+" : "−"
+                    }${Math.abs(Math.round((summary.load4w / summary.loadPrev4w - 1) * 100))}%）`
+                  : "ウェイトの数値記録から計算"
               )}
               {tile(
-                "トレーニング",
-                `${summary.counts.weight + summary.counts.running + summary.counts.other}回`,
-                `ウェイト${summary.counts.weight}・ラン${summary.counts.running}・その他${summary.counts.other}`
+                "平均強度",
+                summary.intensity4w != null ? `${summary.intensity4w}%` : "—",
+                summary.intensityPrev4w != null
+                  ? `前の4週 ${summary.intensityPrev4w}%・MAXに対する重さ`
+                  : "メインセットの重さ÷推定MAX"
+              )}
+              {tile(
+                "自己ベスト更新",
+                `${summary.pbCount4w}回`,
+                summary.improving[0] ? `いちばん伸びた：${summary.improving[0].name}` : "推定MAXの更新回数"
+              )}
+              {tile(
+                "マット練習",
+                `${summary.matDone}回`,
+                summary.matAbsent > 0 ? `未実施 ${summary.matAbsent}回` : "実施報告の回数"
               )}
             </div>
+
+            {summary.hasLoad && (
+              <DailyLoadChart
+                days={summary.dailyLoads}
+                balance={summary.balance}
+                todayStr={todayStr}
+              />
+            )}
             {insights(summary).length > 0 && (
               <ul className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-[length:calc(12px+var(--fs-add))] text-neutral-300">
                 {insights(summary).map((t) => (
@@ -497,6 +631,9 @@ export default function TrainingInsights({
 
       {/* 種目ごとの記録・自己ベスト（日報で入れた数値から） */}
       <ExerciseProgress profile={profile} refreshKey={refreshKey} />
+
+      {/* 試合の振り返り（イベントで提出したもの） */}
+      <MatchReflectionList profile={profile} />
 
       {/* 週ごとの練習量 */}
       {summary && (
@@ -673,6 +810,85 @@ function RecordTable<T extends { date: string }>({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// 毎日の練習負荷（直近28日）と、負荷バランス（直近7日 ÷ 4週平均）
+function DailyLoadChart({
+  days,
+  balance,
+  todayStr,
+}: {
+  days: { date: string; load: number; intensity: number | null }[];
+  balance: { ratio: number | null; status: BalanceStatus | null };
+  todayStr: string;
+}) {
+  const [active, setActive] = useState<string | null>(null);
+  const max = Math.max(1, ...days.map((d) => d.load));
+  const act = days.find((d) => d.date === active) ?? null;
+  const statusStyle: Record<BalanceStatus, string> = {
+    low: "border-sky-800 bg-sky-950/30 text-sky-300",
+    good: "border-emerald-800 bg-emerald-950/30 text-emerald-300",
+    high: "border-amber-800 bg-amber-950/30 text-amber-300",
+    danger: "border-red-800 bg-red-950/30 text-red-300",
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-neutral-200">毎日の練習負荷（28日）</span>
+        {balance.status && balance.ratio != null && (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${statusStyle[balance.status]}`}
+          >
+            負荷バランス {balance.ratio.toFixed(2)}・{balanceLabel[balance.status].label}
+          </span>
+        )}
+      </div>
+      <div className="flex h-24 items-end gap-[2px]">
+        {days.map((d) => (
+          <button
+            key={d.date}
+            type="button"
+            onClick={() => setActive(d.date === active ? null : d.date)}
+            className="flex h-full flex-1 items-end"
+            aria-label={`${d.date} 負荷${Math.round(d.load)}`}
+          >
+            <span
+              className={`w-full rounded-t ${
+                d.date === active
+                  ? "bg-red-400"
+                  : d.date === todayStr
+                    ? "bg-red-600"
+                    : d.load > 0
+                      ? "bg-red-600/60"
+                      : "bg-neutral-800"
+              }`}
+              style={{ height: d.load > 0 ? `${Math.max(4, (d.load / max) * 100)}%` : "2px" }}
+            />
+          </button>
+        ))}
+      </div>
+      <div className="flex justify-between text-[length:calc(9px+var(--fs-add))] text-neutral-500">
+        <span>{formatMonthDay(days[0].date)}</span>
+        <span>今日</span>
+      </div>
+      {act ? (
+        <p className="rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
+          {formatMonthDay(act.date)}：負荷 {Math.round(act.load * 10) / 10}
+          {act.intensity != null ? `・平均強度 ${Math.round(act.intensity * 100)}%` : "・ウェイトの記録なし"}
+        </p>
+      ) : (
+        balance.status && (
+          <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            {balanceLabel[balance.status].note}
+          </p>
+        )
+      )}
+      <p className="text-[length:calc(9px+var(--fs-add))] leading-relaxed text-neutral-500">
+        ※練習負荷＝メインセットの「回数×強度」の合計（強度＝重量÷その時点の推定MAX）。例：MAX100kgで80kg×8回なら 8×0.8＝6.4。
+        負荷バランス＝直近7日の負荷÷4週間の1週あたり平均（0.8〜1.3がちょうどいい範囲）。マット練習は数値が無いため含みません。
+      </p>
     </div>
   );
 }
