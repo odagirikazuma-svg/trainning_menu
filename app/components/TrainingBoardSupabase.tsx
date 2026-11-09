@@ -656,11 +656,39 @@ export default function TrainingBoardSupabase({
         error = res2.error;
       }
     } else {
-      const res = await supabase.from("menus").insert({
+      // 時間割から自動で用意された「空のメニュー枠」が同じ日・同じ開始時刻にあれば、
+      // 新しく作らずにその枠へ書き込む（二重登録を防ぐ）
+      const targetLocation =
+        newMenuType === "joint" ? newJointLocation : activeLocation;
+      let placeholderQuery = supabase
+        .from("menus")
+        .select("id")
+        .eq("team_id", profile.team_id)
+        .eq("location", targetLocation)
+        .eq("date", newDate)
+        .eq("is_off", false)
+        .eq("content", "");
+      placeholderQuery = newStartTime
+        ? placeholderQuery.eq("start_time", newStartTime)
+        : placeholderQuery.is("start_time", null);
+      const { data: placeholder } = await placeholderQuery
+        .limit(1)
+        .maybeSingle();
+      const res = placeholder
+        ? await supabase
+            .from("menus")
+            .update({
+              content: newContent,
+              created_by: profile.id,
+              last_edited_by: null,
+              last_edited_at: null,
+            })
+            .eq("id", (placeholder as { id: string }).id)
+        : await supabase.from("menus").insert({
         ...basePayload,
         title: "",
         content: newContent,
-        location: newMenuType === "joint" ? newJointLocation : activeLocation,
+        location: targetLocation,
         start_time: newStartTime || null,
         is_joint: newMenuType === "joint",
         is_off: false,
@@ -723,15 +751,29 @@ export default function TrainingBoardSupabase({
   async function handleUpdateMenu(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedId || !editDate || !editContent) return;
+    // 自動で用意された空の枠に初めて書き込む場合は「作成」として記録する
+    const editingTarget =
+      menus.find((m) => m.id === selectedId) ??
+      (crossLocationMenu?.id === selectedId ? crossLocationMenu : null);
+    const isFillingPlaceholder = !!editingTarget && !editingTarget.content;
     const { error } = await supabase
       .from("menus")
-      .update({
-        date: editDate,
-        start_time: editStartTime || null,
-        content: editContent,
-        last_edited_by: profile.id,
-        last_edited_at: new Date().toISOString(),
-      })
+      .update(
+        isFillingPlaceholder
+          ? {
+              date: editDate,
+              start_time: editStartTime || null,
+              content: editContent,
+              created_by: profile.id,
+            }
+          : {
+              date: editDate,
+              start_time: editStartTime || null,
+              content: editContent,
+              last_edited_by: profile.id,
+              last_edited_at: new Date().toISOString(),
+            }
+      )
       .eq("id", selectedId);
 
     if (error) {
@@ -1291,7 +1333,11 @@ export default function TrainingBoardSupabase({
                     {locationLabel[selected.location]}・{selected.date}
                     {selected.start_time &&
                       `・${selected.start_time.slice(0, 5)}〜`}
-                    ・作成者: {selected.creator?.display_name ?? "不明"}
+                    {selected.content ? (
+                      <>・作成者: {selected.creator?.display_name ?? "不明"}</>
+                    ) : (
+                      <>・メニュー未記入</>
+                    )}
                     {selected.editor && (
                       <>（編集: {selected.editor.display_name}）</>
                     )}
@@ -1300,19 +1346,35 @@ export default function TrainingBoardSupabase({
                     {selected.title ||
                       formatFullDateTime(selected.date, selected.start_time)}
                   </h2>
-                  <p className="whitespace-pre-wrap text-sm text-foreground">
-                    {selected.content}
-                  </p>
+                  {selected.content ? (
+                    <p className="whitespace-pre-wrap text-sm text-foreground">
+                      {selected.content}
+                    </p>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-sm text-neutral-400">
+                      このセッションのメニューはまだ書かれていません。
+                      {!isCoachView && "練習後の実施報告・未実施報告は、このまま提出できます。"}
+                    </p>
+                  )}
                   {canCreateMenu(profile.role) &&
-                    !isReportOpen(selected) &&
+                    (!isReportOpen(selected) || !selected.content) &&
                     selected.location === activeLocation && (
                       <div className="mt-2 flex justify-end">
-                        <button
-                          onClick={() => startEditingMenu(selected)}
-                          className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
-                        >
-                          編集する
-                        </button>
+                        {selected.content ? (
+                          <button
+                            onClick={() => startEditingMenu(selected)}
+                            className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+                          >
+                            編集する
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => startEditingMenu(selected)}
+                            className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
+                          >
+                            このセッションのメニューを書く
+                          </button>
+                        )}
                       </div>
                     )}
                 </>

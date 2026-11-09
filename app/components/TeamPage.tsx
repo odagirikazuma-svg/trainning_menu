@@ -1101,7 +1101,11 @@ export default function TeamPage({
                                   {matMenuDetail.title || "練習メニュー"}
                                 </h4>
                                 <p className="whitespace-pre-wrap text-sm text-neutral-100">
-                                  {matMenuDetail.content}
+                                  {matMenuDetail.content || (
+                                    <span className="text-neutral-500">
+                                      メニューはまだ書かれていません。
+                                    </span>
+                                  )}
                                 </p>
                                 {canEditMatMenu &&
                                   !isPastSession(
