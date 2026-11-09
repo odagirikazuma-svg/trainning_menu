@@ -15,7 +15,14 @@ type SupabaseBrowserClient = ReturnType<typeof createClient>;
 
 export type Measure = "reps" | "time";
 export type Exercise = { id: string; name: string; measure: Measure };
-export type SetDraft = { weight: string; reps: string; min: string; sec: string };
+// warmup = ウォーミングアップのセット（分析の「メインセット」から外す）
+export type SetDraft = {
+  weight: string;
+  reps: string;
+  min: string;
+  sec: string;
+  warmup: boolean;
+};
 export type ExerciseBlock = { key: string; exercise: Exercise; sets: SetDraft[] };
 
 type SetRow = {
@@ -25,6 +32,7 @@ type SetRow = {
   weight_kg: number | null;
   reps: number | null;
   seconds: number | null;
+  is_warmup?: boolean | null;
   exercise: Exercise | null;
 };
 
@@ -37,7 +45,7 @@ function newKey() {
 }
 
 export function emptySet(): SetDraft {
-  return { weight: "", reps: "", min: "", sec: "" };
+  return { weight: "", reps: "", min: "", sec: "", warmup: false };
 }
 
 function toNum(s: string): number | null {
@@ -81,6 +89,7 @@ function rowToDraft(r: SetRow): SetDraft {
     reps: r.reps != null ? String(r.reps) : "",
     min: r.seconds != null ? String(Math.floor(r.seconds / 60)) : "",
     sec: r.seconds != null ? String(r.seconds % 60) : "",
+    warmup: !!r.is_warmup,
   };
 }
 
@@ -102,6 +111,9 @@ function rowsToBlocks(rows: SetRow[]): ExerciseBlock[] {
 }
 
 const SET_COLUMNS =
+  "exercise_id, exercise_order, set_no, weight_kg, reps, seconds, is_warmup, exercise:exercises(id, name, measure)";
+// is_warmup 列がまだ無いDB向けの読み込み列
+const SET_COLUMNS_LEGACY =
   "exercise_id, exercise_order, set_no, weight_kg, reps, seconds, exercise:exercises(id, name, measure)";
 
 /** トレ報1件分のセット記録を読み込む（テーブル未作成の環境では空） */
@@ -109,12 +121,18 @@ export async function loadSetsForLog(
   supabase: SupabaseBrowserClient,
   logId: string
 ): Promise<ExerciseBlock[]> {
-  const { data, error } = await supabase
+  let res: { data: unknown[] | null; error: unknown } = await supabase
     .from("training_sets")
     .select(SET_COLUMNS)
     .eq("weight_log_id", logId);
-  if (error) return [];
-  return rowsToBlocks((data ?? []) as unknown as SetRow[]);
+  if (res.error) {
+    res = await supabase
+      .from("training_sets")
+      .select(SET_COLUMNS_LEGACY)
+      .eq("weight_log_id", logId);
+  }
+  if (res.error) return [];
+  return rowsToBlocks((res.data ?? []) as unknown as SetRow[]);
 }
 
 /** トレ報1件分のセット記録を、入力内容で置き換える */
@@ -139,6 +157,7 @@ export async function saveSetsForLog(
         weight_kg: toNum(s.weight),
         reps: b.exercise.measure === "reps" ? Math.round(toNum(s.reps) ?? 0) : null,
         seconds: b.exercise.measure === "time" ? setSeconds(s) : null,
+        is_warmup: s.warmup,
       });
     }
   });
@@ -152,6 +171,14 @@ export async function saveSetsForLog(
   }
   if (rows.length === 0) return null;
   const { error } = await supabase.from("training_sets").insert(rows);
+  if (error && error.message.includes("is_warmup")) {
+    // is_warmup 列がまだ無いDBでは、アップの印なしで保存する
+    const { error: retryError } = await supabase
+      .from("training_sets")
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      .insert(rows.map(({ is_warmup: _omit, ...rest }) => rest));
+    return retryError ? retryError.message : null;
+  }
   return error ? error.message : null;
 }
 
@@ -162,21 +189,25 @@ async function loadPreviousSets(
   exerciseId: string,
   beforeDate: string
 ): Promise<SetDraft[] | null> {
-  const { data } = await supabase
-    .from("training_sets")
-    .select("date, set_no, weight_kg, reps, seconds")
-    .eq("author_id", authorId)
-    .eq("exercise_id", exerciseId)
-    .lt("date", beforeDate)
-    .order("date", { ascending: false })
-    .order("set_no", { ascending: true })
-    .limit(40);
-  const rows = (data ?? []) as {
+  const query = (cols: string) =>
+    supabase
+      .from("training_sets")
+      .select(cols)
+      .eq("author_id", authorId)
+      .eq("exercise_id", exerciseId)
+      .lt("date", beforeDate)
+      .order("date", { ascending: false })
+      .order("set_no", { ascending: true })
+      .limit(40);
+  let { data, error } = await query("date, set_no, weight_kg, reps, seconds, is_warmup");
+  if (error) ({ data, error } = await query("date, set_no, weight_kg, reps, seconds"));
+  const rows = (data ?? []) as unknown as {
     date: string;
     set_no: number;
     weight_kg: number | null;
     reps: number | null;
     seconds: number | null;
+    is_warmup: boolean | null;
   }[];
   if (rows.length === 0) return null;
   const last = rows[0].date;
@@ -205,7 +236,8 @@ function setText(measure: Measure, s: SetDraft) {
   const w = toNum(s.weight);
   const main =
     measure === "reps" ? `${Math.round(toNum(s.reps) ?? 0)}回` : formatSeconds(setSeconds(s) ?? 0);
-  return w != null ? `${formatWeight(w)}×${main}` : main;
+  const body = w != null ? `${formatWeight(w)}×${main}` : main;
+  return s.warmup ? `(アップ)${body}` : body;
 }
 
 /**
@@ -372,7 +404,15 @@ export default function SetLogger({
   function addSet(bi: number) {
     update(
       blocks.map((b, i) =>
-        i !== bi ? b : { ...b, sets: [...b.sets, { ...(b.sets[b.sets.length - 1] ?? emptySet()) }] }
+        i !== bi
+          ? b
+          : {
+              ...b,
+              sets: [
+                ...b.sets,
+                { ...(b.sets[b.sets.length - 1] ?? emptySet()), warmup: false },
+              ],
+            }
       )
     );
   }
@@ -457,14 +497,25 @@ export default function SetLogger({
               ✕
             </button>
           </div>
-          <div className="grid grid-cols-[1.5rem_1fr_1fr_1.5rem] items-center gap-x-2 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+          <div className="grid grid-cols-[2rem_1fr_1fr_1.5rem] items-center gap-x-2 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
             <span />
             <span className="text-center">重量kg（任意）</span>
             <span className="text-center">{b.exercise.measure === "reps" ? "回数" : "時間（分・秒）"}</span>
             <span />
             {b.sets.map((s, si) => (
               <div key={si} className="contents">
-                <span className="text-center text-xs text-neutral-400">{si + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => updateSet(bi, si, { warmup: !s.warmup })}
+                  aria-label={s.warmup ? "アップを解除" : "アップにする"}
+                  className={`rounded py-1 text-center text-[length:calc(10px+var(--fs-add))] font-bold ${
+                    s.warmup
+                      ? "bg-amber-600/80 text-white"
+                      : "text-neutral-400 active:bg-neutral-800"
+                  }`}
+                >
+                  {s.warmup ? "UP" : si + 1 - b.sets.slice(0, si).filter((x) => x.warmup).length}
+                </button>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -514,6 +565,9 @@ export default function SetLogger({
               </div>
             ))}
           </div>
+          <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+            左の番号を押すと「UP（ウォーミングアップ）」になり、練習の質の計算から外れます。
+          </p>
           <button
             type="button"
             onClick={() => addSet(bi)}

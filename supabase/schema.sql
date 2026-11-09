@@ -1326,3 +1326,7 @@ create policy "training_sets_delete_self" on training_sets
   for delete using (author_id = auth.uid());
 
 notify pgrst, 'reload schema';
+
+alter table training_sets add column if not exists is_warmup boolean not null default false;
+
+notify pgrst, 'reload schema';

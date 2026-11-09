@@ -11,6 +11,11 @@ import { formatSeconds, type Measure } from "./SetLogger";
  * - 重量×回数の種目：推定MAX（1RM、Brzycki式）で比べる
  * - 重量なしの回数の種目：1セットの最高回数
  * - 時間の種目：1セットの最長時間
+ *
+ * あわせて「メインセット（ウォーミングアップを除いたセット）」の
+ * 平均（練習の質）と練習量（重量×回数の合計）も出す。
+ * アップは日報で「UP」を付けたセット。どのセットにも付いていない日は、
+ * その日の最高重量の70%未満のセットをアップとみなす。
  */
 
 type Row = {
@@ -20,15 +25,22 @@ type Row = {
   weight_kg: number | null;
   reps: number | null;
   seconds: number | null;
+  is_warmup?: boolean | null;
   exercise: { id: string; name: string; measure: Measure } | null;
 };
 
 type MetricKind = "e1rm" | "reps" | "time";
+type SetItem = { w: number | null; r: number | null; s: number | null; warmup: boolean };
 type Session = {
   date: string;
+  // その日いちばん高く出たセット（推定MAX／最高回数／最長時間）
   value: number;
+  // メインセットの平均（練習の質）
+  mainAvg: number | null;
+  // メインセットの練習量（重量×回数の合計。重量なしは合計回数、時間は合計秒）
+  mainVolume: number;
   volume: number;
-  sets: { w: number | null; r: number | null; s: number | null }[];
+  sets: SetItem[];
 };
 type ExerciseStats = {
   id: string;
@@ -71,13 +83,26 @@ const kindLabel: Record<MetricKind, string> = {
 
 function formatValue(kind: MetricKind, v: number) {
   if (kind === "e1rm") return `${round1(v)}kg`;
-  if (kind === "reps") return `${v}回`;
-  return formatSeconds(v);
+  if (kind === "reps") return `${round1(v)}回`;
+  return formatSeconds(Math.round(v));
 }
 
-function setLabel(set: { w: number | null; r: number | null; s: number | null }) {
+function setLabel(set: SetItem) {
   const main = set.s != null ? formatSeconds(set.s) : `${set.r ?? 0}回`;
-  return set.w != null ? `${Number(set.w)}kg×${main}` : main;
+  const body = set.w != null ? `${Number(set.w)}kg×${main}` : main;
+  return set.warmup ? `(アップ)${body}` : body;
+}
+
+const volumeLabel: Record<MetricKind, string> = {
+  e1rm: "練習量（重量×回数）",
+  reps: "練習量（合計回数）",
+  time: "練習量（合計時間）",
+};
+
+function formatVolume(kind: MetricKind, v: number) {
+  if (kind === "e1rm") return `${Math.round(v).toLocaleString()}kg`;
+  if (kind === "reps") return `${Math.round(v)}回`;
+  return formatSeconds(Math.round(v));
 }
 
 export default function ExerciseProgress({
@@ -98,15 +123,18 @@ export default function ExerciseProgress({
     (async () => {
       const since = new Date();
       since.setFullYear(since.getFullYear() - 1);
-      const { data, error } = await supabase
-        .from("training_sets")
-        .select(
-          "date, exercise_id, set_no, weight_kg, reps, seconds, exercise:exercises(id, name, measure)"
-        )
-        .eq("author_id", profile.id)
-        .gte("date", toDateKey(since))
-        .order("date", { ascending: true })
-        .limit(5000);
+      const query = (cols: string) =>
+        supabase
+          .from("training_sets")
+          .select(cols)
+          .eq("author_id", profile.id)
+          .gte("date", toDateKey(since))
+          .order("date", { ascending: true })
+          .limit(5000);
+      const base = "date, exercise_id, set_no, weight_kg, reps, seconds";
+      const ex = "exercise:exercises(id, name, measure)";
+      let { data, error } = await query(`${base}, is_warmup, ${ex}`);
+      if (error) ({ data, error } = await query(`${base}, ${ex}`));
       if (cancelled) return;
       if (error) {
         setAvailable(false);
@@ -143,34 +171,44 @@ export default function ExerciseProgress({
         byDate.set(r.date, l);
       }
       const sessions: Session[] = [];
-      for (const [date, sets] of byDate) {
-        let value = 0;
-        let volume = 0;
-        for (const s of sets) {
-          const w = s.weight_kg != null ? Number(s.weight_kg) : null;
-          if (kind === "e1rm" && w != null && s.reps) {
-            value = Math.max(value, e1rm(w, s.reps) ?? 0);
-          } else if (kind === "reps") {
-            value = Math.max(value, s.reps ?? 0);
-          } else if (kind === "time") {
-            value = Math.max(value, s.seconds ?? 0);
-          }
-          if (w != null && s.reps) volume += w * s.reps;
-        }
+      for (const [date, rawSets] of byDate) {
+        const items: SetItem[] = rawSets
+          .slice()
+          .sort((a, b) => a.set_no - b.set_no)
+          .map((s) => ({
+            w: s.weight_kg != null ? Number(s.weight_kg) : null,
+            r: s.reps,
+            s: s.seconds,
+            warmup: !!s.is_warmup,
+          }));
+        // アップの印が無い日は、最高重量の70%未満をアップとみなす
+        const marked = items.some((x) => x.warmup);
+        const topW = Math.max(0, ...items.map((x) => x.w ?? 0));
+        const sets = marked
+          ? items
+          : items.map((x) => ({
+              ...x,
+              warmup: kind === "e1rm" && x.w != null && topW > 0 && x.w < topW * 0.7,
+            }));
+        const main = sets.filter((x) => !x.warmup);
+
+        const metric = (x: SetItem): number | null => {
+          if (kind === "e1rm") return x.w != null && x.r ? e1rm(x.w, x.r) : null;
+          if (kind === "reps") return x.r ?? null;
+          return x.s ?? null;
+        };
+        const value = Math.max(0, ...sets.map((x) => metric(x) ?? 0));
         if (value <= 0) continue;
-        sessions.push({
-          date,
-          value,
-          volume,
-          sets: sets
-            .slice()
-            .sort((a, b) => a.set_no - b.set_no)
-            .map((s) => ({
-              w: s.weight_kg != null ? Number(s.weight_kg) : null,
-              r: s.reps,
-              s: s.seconds,
-            })),
-        });
+        const mainValues = main.map(metric).filter((v): v is number => v != null && v > 0);
+        const mainAvg =
+          mainValues.length > 0 ? mainValues.reduce((a, b) => a + b, 0) / mainValues.length : null;
+        const mainVolume = main.reduce((a, x) => {
+          if (kind === "e1rm") return a + (x.w != null && x.r ? x.w * x.r : 0);
+          if (kind === "reps") return a + (x.r ?? 0);
+          return a + (x.s ?? 0);
+        }, 0);
+        const volume = sets.reduce((a, x) => a + (x.w != null && x.r ? x.w * x.r : 0), 0);
+        sessions.push({ date, value, mainAvg, mainVolume, volume, sets });
       }
       if (sessions.length === 0) continue;
       sessions.sort((a, b) => a.date.localeCompare(b.date));
@@ -273,31 +311,54 @@ export default function ExerciseProgress({
 }
 
 function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: string }) {
-  const sessions = stats.sessions.slice(-30);
-  // グラフの点を押したときに、その日の中身を下に出す
+  const sessions = stats.sessions.slice(-20);
+  // グラフの列を押したときに、その日の中身を下に出す
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const active = sessions.find((s) => s.date === activeDate) ?? null;
   const first = sessions[0];
   const last = sessions[sessions.length - 1];
-  const values = sessions.map((s) => s.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const pad = (max - min) * 0.15 || Math.max(1, max * 0.1);
-  const lo = Math.max(0, min - pad);
-  const hi = max + pad;
 
-  // グラフ（viewBox 300×120）
-  const W = 300;
-  const H = 120;
-  const left = 4;
-  const right = 4;
-  const top = 10;
-  const bottom = 10;
-  const x = (i: number) =>
-    sessions.length === 1 ? W / 2 : left + (i * (W - left - right)) / (sessions.length - 1);
-  const y = (v: number) => top + (1 - (v - lo) / (hi - lo)) * (H - top - bottom);
-  const path = sessions.map((s, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(s.value)}`).join(" ");
+  // ---- グラフの寸法（viewBox）。上段＝折れ線（質・MAX）、下段＝棒（練習量）で x 軸を共有する ----
+  const W = 320;
+  const lineTop = 8;
+  const lineH = 92;
+  const gap = 14;
+  const barTop = lineTop + lineH + gap;
+  const barH = 46;
+  const H = barTop + barH + 2;
+  const n = sessions.length;
+  const slot = W / Math.max(n, 1);
+  const cx = (i: number) => slot * i + slot / 2;
 
+  const lineValues = sessions.flatMap((s) => [s.value, s.mainAvg ?? s.value]);
+  const lmin = Math.min(...lineValues);
+  const lmax = Math.max(...lineValues);
+  const lpad = (lmax - lmin) * 0.15 || Math.max(1, lmax * 0.1);
+  const lo = Math.max(0, lmin - lpad);
+  const hi = lmax + lpad;
+  const ly = (v: number) => lineTop + (1 - (v - lo) / (hi - lo)) * lineH;
+
+  const vmax = Math.max(1, ...sessions.map((s) => s.mainVolume));
+  const bh = (v: number) => (v / vmax) * barH;
+  const barW = Math.max(4, Math.min(18, slot * 0.55));
+
+  const pathOf = (pick: (s: Session) => number | null) => {
+    let d = "";
+    let started = false;
+    sessions.forEach((s, i) => {
+      const v = pick(s);
+      if (v == null) {
+        started = false;
+        return;
+      }
+      d += `${started ? "L" : "M"}${cx(i)},${ly(v)} `;
+      started = true;
+    });
+    return d.trim();
+  };
+
+  const recentQuality = sessions.filter((s) => s.mainAvg != null);
+  const lastQ = recentQuality[recentQuality.length - 1];
   const diff = last.value - first.value;
   const recentVolume = stats.sessions
     .filter((s) => {
@@ -305,89 +366,148 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
       const [ty, tm, td] = todayStr.split("-").map(Number);
       return (new Date(ty, tm - 1, td).getTime() - new Date(yy, mm - 1, dd).getTime()) / 86400000 < 28;
     })
-    .reduce((a, s) => a + s.volume, 0);
+    .reduce((a, s) => a + s.mainVolume, 0);
+
+  const tile = (label: string, value: string, sub?: string) => (
+    <div className="flex flex-col">
+      <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">{label}</span>
+      <span className="text-lg font-bold text-foreground">{value}</span>
+      {sub && <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">{sub}</span>}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="grid grid-cols-3 gap-2">
-        <div className="flex flex-col">
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            自己ベスト（{kindLabel[stats.kind]}）
-          </span>
-          <span className="text-lg font-bold text-foreground">
-            {formatValue(stats.kind, stats.best.value)}
-          </span>
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            {formatMonthDay(stats.best.date)}
-          </span>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">前回</span>
-          <span className="text-lg font-bold text-foreground">
-            {formatValue(stats.kind, last.value)}
-          </span>
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            {formatMonthDay(last.date)}
-          </span>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            {sessions.length > 1 ? `${formatMonthDay(first.date)}からの伸び` : "記録回数"}
-          </span>
-          <span className="text-lg font-bold text-foreground">
-            {sessions.length > 1
-              ? `${diff >= 0 ? "+" : "−"}${formatValue(stats.kind, Math.abs(stats.kind === "e1rm" ? round1(diff) : diff))}`
-              : "1回"}
-          </span>
-          {stats.kind === "e1rm" && recentVolume > 0 && (
-            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-              直近4週 総挙上量 {Math.round(recentVolume).toLocaleString()}kg
-            </span>
-          )}
-        </div>
+        {tile(
+          `自己ベスト（${kindLabel[stats.kind]}）`,
+          formatValue(stats.kind, stats.best.value),
+          formatMonthDay(stats.best.date)
+        )}
+        {tile(
+          "前回の練習の質",
+          lastQ?.mainAvg != null ? formatValue(stats.kind, lastQ.mainAvg) : "—",
+          lastQ ? `メインセット平均・${formatMonthDay(lastQ.date)}` : undefined
+        )}
+        {tile(
+          sessions.length > 1 ? `${formatMonthDay(first.date)}からの伸び` : "記録回数",
+          sessions.length > 1
+            ? `${diff >= 0 ? "+" : "−"}${formatValue(stats.kind, Math.abs(stats.kind === "e1rm" ? round1(diff) : diff))}`
+            : "1回",
+          recentVolume > 0
+            ? `直近4週の練習量 ${formatVolume(stats.kind, recentVolume)}`
+            : undefined
+        )}
+      </div>
+
+      {/* 凡例 */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-0.5 w-4 rounded bg-red-500" />
+          メインセット平均（練習の質）
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-0 w-4 border-t-2 border-dashed border-neutral-500" />
+          {kindLabel[stats.kind]}（その日の最高）
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-sky-600/70" />
+          {volumeLabel[stats.kind]}
+        </span>
       </div>
 
       <div>
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-32 w-full" role="img" aria-label={`${stats.name}の推移`}>
-          <line x1={0} x2={W} y1={y(stats.best.value)} y2={y(stats.best.value)} stroke="currentColor" className="text-neutral-700" strokeDasharray="3 3" strokeWidth={1} />
-          {sessions.length > 1 && (
-            <path d={path} fill="none" stroke="#ef4444" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${stats.name}の推移`}>
+          {/* 上段の目盛り線と値 */}
+          {[hi, (hi + lo) / 2, lo].map((v, i) => (
+            <g key={i}>
+              <line x1={0} x2={W} y1={ly(v)} y2={ly(v)} stroke="#404040" strokeWidth={0.5} />
+              <text x={2} y={ly(v) - 2} fontSize={7} fill="#737373">
+                {formatValue(stats.kind, stats.kind === "e1rm" ? round1(v) : Math.round(v))}
+              </text>
+            </g>
+          ))}
+          {/* 下段（練習量）の基準線と最大値 */}
+          <line x1={0} x2={W} y1={barTop + barH} y2={barTop + barH} stroke="#525252" strokeWidth={0.75} />
+          <text x={2} y={barTop + 6} fontSize={7} fill="#737373">
+            {formatVolume(stats.kind, vmax)}
+          </text>
+
+          {/* 押した列のハイライト */}
+          {sessions.map((s, i) =>
+            s.date === activeDate ? (
+              <rect key={`hl-${s.date}`} x={slot * i} y={0} width={slot} height={H} fill="#ffffff" opacity={0.06} />
+            ) : null
+          )}
+
+          {/* 棒：メインセットの練習量 */}
+          {sessions.map((s, i) => (
+            <rect
+              key={`bar-${s.date}`}
+              x={cx(i) - barW / 2}
+              y={barTop + barH - bh(s.mainVolume)}
+              width={barW}
+              height={Math.max(bh(s.mainVolume), s.mainVolume > 0 ? 1.5 : 0)}
+              rx={2}
+              fill="#0284c7"
+              opacity={0.7}
+            />
+          ))}
+
+          {/* 折れ線：その日の最高（点線）とメインセット平均（実線） */}
+          {n > 1 && (
+            <path d={pathOf((s) => s.value)} fill="none" stroke="#737373" strokeWidth={1.25} strokeDasharray="3 3" />
+          )}
+          {n > 1 && (
+            <path
+              d={pathOf((s) => s.mainAvg)}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
           )}
           {sessions.map((s, i) => (
-            <g key={s.date}>
-              <circle
-                cx={x(i)}
-                cy={y(s.value)}
-                r={s.date === stats.best.date ? 4.5 : 3}
-                fill={s.date === stats.best.date ? "#f59e0b" : "#ef4444"}
-                stroke="#171717"
-                strokeWidth={1.5}
-              />
-              <circle
-                cx={x(i)}
-                cy={y(s.value)}
-                r={10}
-                fill="transparent"
-                className="cursor-pointer"
-                onClick={() => setActiveDate(s.date === activeDate ? null : s.date)}
-              >
-                <title>{`${formatMonthDay(s.date)}：${formatValue(stats.kind, s.value)}（${s.sets.map(setLabel).join(" / ")}）`}</title>
-              </circle>
+            <g key={`pt-${s.date}`}>
+              {s.date === stats.best.date && (
+                <circle cx={cx(i)} cy={ly(s.value)} r={3.5} fill="#f59e0b" stroke="#171717" strokeWidth={1} />
+              )}
+              {s.mainAvg != null && (
+                <circle cx={cx(i)} cy={ly(s.mainAvg)} r={2.75} fill="#ef4444" stroke="#171717" strokeWidth={1} />
+              )}
             </g>
+          ))}
+
+          {/* 押せる範囲（列ごと） */}
+          {sessions.map((s, i) => (
+            <rect
+              key={`hit-${s.date}`}
+              x={slot * i}
+              y={0}
+              width={slot}
+              height={H}
+              fill="transparent"
+              className="cursor-pointer"
+              onClick={() => setActiveDate(s.date === activeDate ? null : s.date)}
+            >
+              <title>{formatMonthDay(s.date)}</title>
+            </rect>
           ))}
         </svg>
         <div className="flex justify-between text-[length:calc(9px+var(--fs-add))] text-neutral-500">
           <span>{formatMonthDay(first.date)}</span>
-          <span>
-            {kindLabel[stats.kind]}（点を押すと詳細／黄色が自己ベスト）
-          </span>
+          <span>列を押すとその日の中身／黄色の点が自己ベスト</span>
           <span>{formatMonthDay(last.date)}</span>
         </div>
         {active && (
-          <p className="mt-1 rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
-            {formatMonthDay(active.date)}：{formatValue(stats.kind, active.value)}（
-            {active.sets.map(setLabel).join(" / ")}）
-          </p>
+          <div className="mt-1 flex flex-col gap-0.5 rounded bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200">
+            <span className="font-semibold">
+              {formatMonthDay(active.date)}　質 {active.mainAvg != null ? formatValue(stats.kind, active.mainAvg) : "—"}
+              　最高 {formatValue(stats.kind, active.value)}　練習量 {formatVolume(stats.kind, active.mainVolume)}
+            </span>
+            <span className="text-neutral-400">{active.sets.map(setLabel).join(" / ")}</span>
+          </div>
         )}
       </div>
 
@@ -398,10 +518,22 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           .map((s) => (
             <div key={s.date} className="flex gap-2 text-xs">
               <span className="w-10 shrink-0 text-neutral-500">{formatMonthDay(s.date)}</span>
-              <span className="min-w-0 flex-1 text-neutral-200">{s.sets.map(setLabel).join(" / ")}</span>
-              <span className="shrink-0 text-neutral-400">{formatValue(stats.kind, s.value)}</span>
+              <span className="min-w-0 flex-1 text-neutral-200">
+                {s.sets.map((x, i) => (
+                  <span key={i} className={x.warmup ? "text-neutral-500" : ""}>
+                    {i > 0 && " / "}
+                    {setLabel(x)}
+                  </span>
+                ))}
+              </span>
+              <span className="shrink-0 text-neutral-400">
+                {s.mainAvg != null ? formatValue(stats.kind, s.mainAvg) : "—"}
+              </span>
             </div>
           ))}
+        <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+          右の数字はメインセット平均。グレーの(アップ)はウォーミングアップで、質と練習量の計算から外しています。
+        </p>
       </div>
     </div>
   );
