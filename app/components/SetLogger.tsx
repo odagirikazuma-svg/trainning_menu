@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { createClient } from "../lib/supabase/client";
 import type { Profile } from "./AuthGate";
 
@@ -23,7 +23,13 @@ export type SetDraft = {
   sec: string;
   warmup: boolean;
 };
-export type ExerciseBlock = { key: string; exercise: Exercise; sets: SetDraft[] };
+export type ExerciseBlock = {
+  key: string;
+  exercise: Exercise;
+  sets: SetDraft[];
+  // 前回の記録を自動で入れた状態（「今日の数字に直してください」と案内する）
+  prefilled?: boolean;
+};
 
 type SetRow = {
   exercise_id: string;
@@ -303,6 +309,12 @@ export default function SetLogger({
   const [newMeasure, setNewMeasure] = useState<Measure>("reps");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // 非同期で前回の記録を入れるときに、最新の入力内容を参照するため
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  // 「まとめて追加」：同じ重さ×回数（時間）を、指定したセット数ぶん一気に足す
+  const [bulkKey, setBulkKey] = useState<string | null>(null);
+  const [bulk, setBulk] = useState({ weight: "", reps: "", min: "", sec: "", count: "3" });
   // 編集中の種目（自分が追加した種目だけ、名前・記録方法の修正と削除ができる）
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
@@ -376,10 +388,22 @@ export default function SetLogger({
     onChange(next);
   }
 
-  function addBlock(exercise: Exercise) {
-    update([...blocks, { key: newKey(), exercise, sets: [emptySet()] }]);
+  // 種目を足すときは、前回の記録があればそれを入れた状態で追加する（数字を直すだけで済むように）
+  async function addBlock(exercise: Exercise) {
     setPicking(false);
     setQuery("");
+    const key = newKey();
+    update([...blocks, { key, exercise, sets: [emptySet()] }]);
+    const prev = await loadPreviousSets(supabase, profile.id, exercise.id, date);
+    if (prev && prev.length > 0) {
+      onChange(
+        blocksRef.current.map((b) =>
+          b.key === key && b.sets.every((x) => !setIsFilled(exercise.measure, x))
+            ? { ...b, sets: prev, prefilled: true }
+            : b
+        )
+      );
+    }
   }
 
   async function createExercise() {
@@ -413,9 +437,38 @@ export default function SetLogger({
   function updateSet(bi: number, si: number, patch: Partial<SetDraft>) {
     update(
       blocks.map((b, i) =>
-        i !== bi ? b : { ...b, sets: b.sets.map((s, j) => (j === si ? { ...s, ...patch } : s)) }
+        i !== bi
+          ? b
+          : { ...b, prefilled: false, sets: b.sets.map((s, j) => (j === si ? { ...s, ...patch } : s)) }
       )
     );
+  }
+
+  function applyBulk(bi: number) {
+    const n = Math.min(20, Math.max(1, Math.round(Number(bulk.count) || 0)));
+    const b = blocks[bi];
+    const one: SetDraft = {
+      weight: bulk.weight,
+      reps: bulk.reps,
+      min: bulk.min,
+      sec: bulk.sec,
+      warmup: false,
+    };
+    if (!setIsFilled(b.exercise.measure, one)) {
+      setMessage(b.exercise.measure === "reps" ? "回数を入れてください。" : "時間を入れてください。");
+      return;
+    }
+    // 空のセット行は置き換え、入力済みのセットの後ろに足す
+    const kept = b.sets.filter((x) => setIsFilled(b.exercise.measure, x) || x.weight.trim() !== "");
+    update(
+      blocks.map((x, i) =>
+        i !== bi
+          ? x
+          : { ...x, prefilled: false, sets: [...kept, ...Array.from({ length: n }, () => ({ ...one }))] }
+      )
+    );
+    setBulkKey(null);
+    setBulk({ weight: "", reps: "", min: "", sec: "", count: "3" });
   }
 
   // 新しいセットは、直前のセットと同じ値で始める（重量だけ変える、などが楽になる）
@@ -558,6 +611,7 @@ export default function SetLogger({
                 <input
                   type="text"
                   inputMode="decimal"
+                  onFocus={(e) => e.currentTarget.select()}
                   value={s.weight}
                   onChange={(e) => updateSet(bi, si, { weight: e.target.value })}
                   placeholder="—"
@@ -567,6 +621,7 @@ export default function SetLogger({
                   <input
                     type="text"
                     inputMode="numeric"
+                    onFocus={(e) => e.currentTarget.select()}
                     value={s.reps}
                     onChange={(e) => updateSet(bi, si, { reps: e.target.value })}
                     placeholder="回"
@@ -577,6 +632,7 @@ export default function SetLogger({
                     <input
                       type="text"
                       inputMode="numeric"
+                      onFocus={(e) => e.currentTarget.select()}
                       value={s.min}
                       onChange={(e) => updateSet(bi, si, { min: e.target.value })}
                       placeholder="分"
@@ -586,6 +642,7 @@ export default function SetLogger({
                     <input
                       type="text"
                       inputMode="numeric"
+                      onFocus={(e) => e.currentTarget.select()}
                       value={s.sec}
                       onChange={(e) => updateSet(bi, si, { sec: e.target.value })}
                       placeholder="秒"
@@ -604,16 +661,93 @@ export default function SetLogger({
               </div>
             ))}
           </div>
+          {b.prefilled && (
+            <p className="rounded bg-sky-50 px-2 py-1 text-[length:calc(10px+var(--fs-add))] text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+              前回の記録を入れてあります。今日の数字に直してください（同じならそのままでOK）。
+            </p>
+          )}
           <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
             左の番号を押すと「UP（ウォーミングアップ）」になり、練習の質の計算から外れます。
           </p>
-          <button
-            type="button"
-            onClick={() => addSet(bi)}
-            className="self-start rounded border border-dashed border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
-          >
-            ＋ セットを追加
-          </button>
+          {bulkKey === b.key ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-neutral-100 p-2 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={bulk.weight}
+                onChange={(e) => setBulk((p) => ({ ...p, weight: e.target.value }))}
+                placeholder="kg"
+                className="w-14 rounded border border-neutral-300 bg-white px-1.5 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+              />
+              ×
+              {b.exercise.measure === "reps" ? (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bulk.reps}
+                  onChange={(e) => setBulk((p) => ({ ...p, reps: e.target.value }))}
+                  placeholder="回"
+                  className="w-12 rounded border border-neutral-300 bg-white px-1.5 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                />
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={bulk.min}
+                    onChange={(e) => setBulk((p) => ({ ...p, min: e.target.value }))}
+                    placeholder="分"
+                    className="w-10 rounded border border-neutral-300 bg-white px-1.5 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                  />
+                  :
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={bulk.sec}
+                    onChange={(e) => setBulk((p) => ({ ...p, sec: e.target.value }))}
+                    placeholder="秒"
+                    className="w-10 rounded border border-neutral-300 bg-white px-1.5 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                  />
+                </>
+              )}
+              ×
+              <input
+                type="text"
+                inputMode="numeric"
+                value={bulk.count}
+                onChange={(e) => setBulk((p) => ({ ...p, count: e.target.value }))}
+                className="w-10 rounded border border-neutral-300 bg-white px-1.5 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+              />
+              セット
+              <button
+                type="button"
+                onClick={() => applyBulk(bi)}
+                className="rounded bg-emerald-600 px-2.5 py-1 font-medium text-white active:bg-emerald-700"
+              >
+                追加
+              </button>
+              <button type="button" onClick={() => setBulkKey(null)} className="text-neutral-500">
+                やめる
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => addSet(bi)}
+                className="rounded border border-dashed border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
+              >
+                ＋ セットを追加
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkKey(b.key)}
+                className="rounded border border-dashed border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
+              >
+                ＋ まとめて追加（重さ×回数×セット数）
+              </button>
+            </div>
+          )}
         </div>
       ))}
 

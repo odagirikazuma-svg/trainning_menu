@@ -170,6 +170,40 @@ function menuHeading(m: DayMenu) {
   return `${time}マット練習（${place}）`;
 }
 
+type DraftData = {
+  savedAt: string;
+  matDrafts: Record<string, MatDraft>;
+  training: TrainingDraft;
+  blocks: ExerciseBlock[];
+  memo: string;
+  editingTraining: boolean;
+};
+
+function readDraft(key: string): DraftData | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as DraftData;
+    return d && d.training && Array.isArray(d.blocks) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string, value: string | null) {
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // 保存できない環境（プライベートモードなど）では何もしない
+  }
+}
+
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export default function DailyReport({
   profile,
   date,
@@ -232,6 +266,17 @@ export default function DailyReport({
   const [weekSubmitted, setWeekSubmitted] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [copying, setCopying] = useState(false);
+  // 前回の記録を読み込んだときの案内（例：11月5日(木)の「BIG3」）
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
+  // ひとことメモ欄を開いているか（セット記録があるときは閉じておく）
+  const [memoOpen, setMemoOpen] = useState(false);
+  // ---- 下書き（書きかけの内容を端末に自動保存し、別のタブに移っても消えないようにする） ----
+  const draftKey = `daily-draft:${profile.id}:${date}`;
+  const draftReady = useRef(false);
+  const skipDraftRestore = useRef(false);
+  const latestDraft = useRef<string | null>(null);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   // タイトル候補の整理（間違えて付けたタイトルを候補から消す）
   const [titleEditMode, setTitleEditMode] = useState(false);
   const [removingTitle, setRemovingTitle] = useState<string | null>(null);
@@ -243,6 +288,67 @@ export default function DailyReport({
     load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, refreshKey]);
+
+  // 入力が変わるたびに、少し待ってから下書きとして端末に保存する
+  useEffect(() => {
+    if (!draftReady.current || loading) return;
+    const hasMat = Object.values(matDrafts).some((d) => d.mode);
+    const hasTraining = log
+      ? editingTraining
+      : !!training.type ||
+        training.content.trim() !== "" ||
+        training.title.trim() !== "" ||
+        blocks.length > 0;
+    const hasMemo = memo !== memoSaved;
+    const value =
+      hasMat || hasTraining || hasMemo
+        ? JSON.stringify({
+            savedAt: new Date().toISOString(),
+            matDrafts,
+            training,
+            blocks,
+            memo,
+            editingTraining,
+          } satisfies DraftData)
+        : null;
+    latestDraft.current = value;
+    const t = setTimeout(() => {
+      writeDraft(draftKey, value);
+      setDraftSavedAt(value ? new Date().toISOString() : null);
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matDrafts, training, blocks, memo, editingTraining, loading]);
+
+  // 別のアプリ・タブに切り替えた瞬間にも、待たずに保存する
+  useEffect(() => {
+    const flush = () => {
+      if (draftReady.current) writeDraft(draftKey, latestDraft.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      flush();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [draftKey]);
+
+  function clearDraft() {
+    latestDraft.current = null;
+    writeDraft(draftKey, null);
+    setDraftRestoredAt(null);
+    setDraftSavedAt(null);
+  }
+
+  function discardDraft() {
+    clearDraft();
+    skipDraftRestore.current = true;
+    load(true);
+  }
 
   // 週の帯の●（その週に提出したことがある日）
   const weekKey = (() => {
@@ -296,6 +402,11 @@ export default function DailyReport({
       setMissing([]);
       setNotice(null);
       setExpanded({});
+      setCopiedFrom(null);
+      setMemoOpen(false);
+      setDraftRestoredAt(null);
+      setDraftSavedAt(null);
+      draftReady.current = false;
     }
 
     // 1) その日のデータをまとめて（並行して）読み込む
@@ -423,6 +534,24 @@ export default function DailyReport({
     setMemoId(memoRow?.id ?? null);
     setMemoSaved(memoRow?.content ?? "");
     if (resetDrafts) setMemo(memoRow?.content ?? "");
+    if (resetDrafts) {
+      // 書きかけの下書きがあれば戻す
+      if (!skipDraftRestore.current) {
+        const d = readDraft(draftKey);
+        if (d) {
+          if (d.matDrafts) setMatDrafts(d.matDrafts);
+          if (!logRow || d.editingTraining) {
+            setTraining(d.training);
+            setBlocks(d.blocks);
+            if (logRow && d.editingTraining) setEditingTraining(true);
+          }
+          if (typeof d.memo === "string") setMemo(d.memo);
+          setDraftRestoredAt(d.savedAt);
+        }
+      }
+      skipDraftRestore.current = false;
+      draftReady.current = true;
+    }
     setLoading(false);
   }
 
@@ -566,6 +695,8 @@ export default function DailyReport({
 
       if (sendMemo) await saveMemo();
 
+      clearDraft();
+      skipDraftRestore.current = true;
       await load(true);
       setNotice("日報を提出しました。おつかれさまでした！");
       notifyTasksChanged();
@@ -617,6 +748,8 @@ export default function DailyReport({
       setErrorMsg(error.message);
       return;
     }
+    clearDraft();
+    skipDraftRestore.current = true;
     await load(true);
     setNotice("報告を修正しました。");
     notifyTasksChanged();
@@ -673,6 +806,8 @@ export default function DailyReport({
       setErrorMsg(error?.message ?? setError);
       return;
     }
+    clearDraft();
+    skipDraftRestore.current = true;
     await load(true);
     setNotice("トレーニングの報告を修正しました。");
     await onSubmitted?.();
@@ -698,8 +833,9 @@ export default function DailyReport({
   }
 
   // 前回の同じ種類（タイトルを選んでいれば同じタイトル）の記録を本文にコピーする
-  async function handleCopyPrevious() {
+  async function handleCopyPrevious(titleOverride?: string, silent = false) {
     if (!training.type) return;
+    const wantTitle = (titleOverride ?? training.title).trim();
     setCopying(true);
     let query = supabase
       .from("weight_logs")
@@ -709,22 +845,26 @@ export default function DailyReport({
       .lt("date", date)
       .order("date", { ascending: false })
       .limit(1);
-    if (training.title.trim()) query = query.eq("title", training.title.trim());
+    if (wantTitle) query = query.eq("title", wantTitle);
     const { data } = await query;
     setCopying(false);
     const prev = (data ?? [])[0] as
       | { id: string; content: string; title: string | null; date: string }
       | undefined;
     if (!prev) {
-      setMissing(["コピーできる前回の記録がありません。"]);
+      if (!silent) setMissing(["コピーできる前回の記録がありません。"]);
       return;
     }
     const prevBlocks = await loadSetsForLog(supabase, prev.id);
-    if (prevBlocks.length > 0) setBlocks(prevBlocks);
+    if (prevBlocks.length > 0)
+      setBlocks(prevBlocks.map((b) => ({ ...b, prefilled: true })));
+    const prevMemo = prev.content === blocksSummaryText(prevBlocks) ? "" : prev.content;
     updateTraining({
-      content: prev.content === blocksSummaryText(prevBlocks) ? "" : prev.content,
-      title: training.title.trim() ? training.title : (prev.title ?? ""),
+      // セット記録がある場合、前回のメモまでは写さない（今日の感想を書く欄なので）
+      content: prevBlocks.length > 0 ? training.content : prevMemo,
+      title: wantTitle || (prev.title ?? ""),
     });
+    setCopiedFrom(`${formatMonthDayWeek(prev.date)}の「${wantTitle || trainingTypeLabel[training.type]}」`);
   }
 
   function jumpToBoard(m: DayMenu) {
@@ -1024,7 +1164,13 @@ export default function DailyReport({
                     <button
                       key={t}
                       type="button"
-                      onClick={() => updateTraining({ title: t })}
+                      onClick={() => {
+                        updateTraining({ title: t });
+                        // まだ何も入れていなければ、前回の同じメニューを丸ごと読み込む
+                        if (!blocksHaveData(blocks) && !training.content.trim()) {
+                          handleCopyPrevious(t, true);
+                        }
+                      }}
                       className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
                         selected
                           ? `${c?.border ?? "border-neutral-300 dark:border-neutral-600"} ${c?.fill ?? "bg-neutral-100 dark:bg-neutral-800"} ${c?.text ?? "text-neutral-800 dark:text-neutral-200"}`
@@ -1060,6 +1206,27 @@ export default function DailyReport({
           </>
         )}
         {type && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleCopyPrevious()}
+              disabled={copying}
+              className="rounded-full border border-neutral-300 dark:border-neutral-700 px-3 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
+            >
+              {copying
+                ? "読み込み中…"
+                : training.title.trim()
+                  ? `↺ 前回の「${training.title.trim()}」を丸ごと読み込む`
+                  : `↺ 前回の${trainingTypeLabel[type]}を丸ごと読み込む`}
+            </button>
+            {copiedFrom && (
+              <span className="text-[length:calc(10px+var(--fs-add))] text-sky-700 dark:text-sky-300">
+                {copiedFrom}を読み込みました
+              </span>
+            )}
+          </div>
+        )}
+        {type && (
           <SetLogger
             supabase={supabase}
             profile={profile}
@@ -1071,38 +1238,39 @@ export default function DailyReport({
             }}
           />
         )}
-        {type && (
-          <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-            メモ・その他の内容{blocksHaveData(blocks) ? "（任意）" : ""}
-          </span>
-        )}
-        <textarea
-          value={training.content}
-          onChange={(e) => updateTraining({ content: e.target.value })}
-          placeholder={
-            "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
-          }
-          rows={blocksHaveData(blocks) ? 3 : isPopup ? 6 : 8}
-          className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100 ${
-            activeColor
-              ? `${activeColor.border} ${activeColor.fill}`
-              : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
-          }`}
-        />
-        {type && (
-          <button
-            type="button"
-            onClick={handleCopyPrevious}
-            disabled={copying}
-            className="self-start rounded border border-neutral-300 dark:border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
-          >
-            {copying
-              ? "読み込み中…"
-              : training.title.trim()
-                ? `前回の「${training.title.trim()}」を丸ごとコピー`
-                : `前回の${trainingTypeLabel[type]}を丸ごとコピー`}
-          </button>
-        )}
+        {type &&
+          (memoOpen || training.content.trim() !== "" || !blocksHaveData(blocks) ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+                {blocksHaveData(blocks)
+                  ? "ひとこと（感想・気づき・任意）"
+                  : "メモ（種目を記録しない場合は、ここに内容を書いてください）"}
+              </span>
+              <textarea
+                value={training.content}
+                onChange={(e) => updateTraining({ content: e.target.value })}
+                placeholder={
+                  blocksHaveData(blocks)
+                    ? "例：BPの3セット目で肩に違和感。次回は重量を少し下げる"
+                    : "例：ジョグ30分＋坂ダッシュ10本"
+                }
+                rows={3}
+                className={`rounded-lg border px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 ${
+                  activeColor
+                    ? `${activeColor.border} ${activeColor.fill}`
+                    : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
+                }`}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMemoOpen(true)}
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+            >
+              ＋ ひとこと（感想・気づき）を書く
+            </button>
+          ))}
         {editingTraining && (
           <div className="flex gap-2">
             <button
@@ -1415,6 +1583,20 @@ export default function DailyReport({
       {notice && (
         <p className="rounded bg-emerald-50 dark:bg-emerald-950/40 p-2 text-xs text-emerald-700 dark:text-emerald-400">{notice}</p>
       )}
+      {draftRestoredAt && (
+        <div className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300">
+          <span className="flex-1">
+            📝 書きかけの下書き（{formatTime(draftRestoredAt)}保存）を戻しました。
+          </span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="shrink-0 text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+          >
+            下書きを消す
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
@@ -1539,6 +1721,11 @@ export default function DailyReport({
                     <li key={p}>・{p}</li>
                   ))}
                 </ul>
+              )}
+              {draftSavedAt && (
+                <span className="text-center text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+                  下書きを自動保存しました（{formatTime(draftSavedAt)}）。別の画面に移っても消えません
+                </span>
               )}
               <button
                 type="button"
