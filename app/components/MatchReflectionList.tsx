@@ -90,7 +90,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
         <span className="text-[length:calc(10px+var(--fs-add))] font-semibold text-neutral-500">
           {label}
         </span>
-        <p className="whitespace-pre-wrap text-sm text-neutral-100">{value}</p>
+        <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{value}</p>
       </div>
     ) : null;
 
@@ -98,13 +98,13 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
     <section className="flex flex-col gap-2">
       {sectionTitle}
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+        <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
           まだ提出した試合の振り返りはありません（イベントの「試合の振り返り」で提出すると、ここに並びます）。
         </p>
       ) : (
         <>
           {totals.matches > 0 && (
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
               通算 {totals.matches}試合 {totals.wins}勝{totals.losses}敗
               {totals.matches > 0 && `（勝率 ${Math.round((totals.wins / totals.matches) * 100)}%）`}
             </p>
@@ -115,7 +115,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
               return (
                 <div
                   key={r.event_id}
-                  className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900"
+                  className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900"
                 >
                   <button
                     type="button"
@@ -123,7 +123,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
                     className="flex w-full items-center gap-2 px-3 py-2 text-left"
                   >
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm font-semibold text-neutral-100">
+                      <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                         {r.match_title || r.event?.title || "試合"}
                       </span>
                       <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
@@ -140,7 +140,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
                     <span className="shrink-0 text-neutral-500">{isOpen ? "▴" : "▾"}</span>
                   </button>
                   {isOpen && (
-                    <div className="flex flex-col gap-2 border-t border-neutral-800 px-3 py-2.5">
+                    <div className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 px-3 py-2.5">
                       {field("良かった点", r.good_points)}
                       {field("課題", r.challenges)}
                       {field("反省", r.reflection)}

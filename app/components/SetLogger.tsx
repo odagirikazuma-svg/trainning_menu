@@ -266,8 +266,8 @@ export function SetSummary({ blocks }: { blocks: ExerciseBlock[] }) {
     <div className="flex flex-col gap-1.5">
       {shown.map((b) => (
         <div key={b.key} className="text-sm">
-          <span className="font-semibold text-neutral-100">{b.exercise.name}</span>
-          <span className="ml-2 text-neutral-300">
+          <span className="font-semibold text-neutral-900 dark:text-neutral-100">{b.exercise.name}</span>
+          <span className="ml-2 text-neutral-700 dark:text-neutral-300">
             {b.sets
               .filter((s) => setIsFilled(b.exercise.measure, s))
               .map((s) => setText(b.exercise.measure, s))
@@ -469,21 +469,21 @@ export default function SetLogger({
 
   if (!available) {
     return (
-      <p className="rounded-lg border border-dashed border-neutral-700 p-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+      <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
         種目ごとの数値記録は準備中です（データベースの設定が必要です）。
       </p>
     );
   }
 
   const numCls =
-    "w-full min-w-0 rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-right text-sm text-neutral-100";
+    "w-full min-w-0 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-2 py-1.5 text-right text-sm text-neutral-900 dark:text-neutral-100";
 
   return (
     <div className="flex flex-col gap-2">
       {blocks.map((b, bi) => (
-        <div key={b.key} className="flex flex-col gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5">
+        <div key={b.key} className="flex flex-col gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-2.5">
           <div className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-100">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               {b.exercise.name}
               <span className="ml-1.5 text-[length:calc(10px+var(--fs-add))] font-normal text-neutral-500">
                 {measureLabel[b.exercise.measure]}で記録
@@ -504,7 +504,7 @@ export default function SetLogger({
               type="button"
               onClick={() => copyPrevious(bi)}
               disabled={busy}
-              className="shrink-0 rounded border border-neutral-700 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+              className="shrink-0 rounded border border-neutral-300 dark:border-neutral-700 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
             >
               前回をコピー
             </button>
@@ -521,7 +521,7 @@ export default function SetLogger({
               type="button"
               onClick={() => removeBlock(bi)}
               aria-label="この種目を消す"
-              className="shrink-0 px-1 text-neutral-500 active:text-red-400"
+              className="shrink-0 px-1 text-neutral-500 active:text-red-700 dark:active:text-red-400"
             >
               ✕
             </button>
@@ -550,7 +550,7 @@ export default function SetLogger({
                   className={`rounded py-1 text-center text-[length:calc(10px+var(--fs-add))] font-bold ${
                     s.warmup
                       ? "bg-amber-600/80 text-white"
-                      : "text-neutral-400 active:bg-neutral-800"
+                      : "text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
                   }`}
                 >
                   {s.warmup ? "UP" : si + 1 - b.sets.slice(0, si).filter((x) => x.warmup).length}
@@ -597,7 +597,7 @@ export default function SetLogger({
                   type="button"
                   onClick={() => removeSet(bi, si)}
                   aria-label={`${si + 1}セット目を消す`}
-                  className="text-neutral-500 active:text-red-400"
+                  className="text-neutral-500 active:text-red-700 dark:active:text-red-400"
                 >
                   −
                 </button>
@@ -610,7 +610,7 @@ export default function SetLogger({
           <button
             type="button"
             onClick={() => addSet(bi)}
-            className="self-start rounded border border-dashed border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+            className="self-start rounded border border-dashed border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
           >
             ＋ セットを追加
           </button>
@@ -618,7 +618,7 @@ export default function SetLogger({
       ))}
 
       {picking ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5">
+        <div className="flex flex-col gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-2.5">
           <input
             type="text"
             value={query}
@@ -629,7 +629,7 @@ export default function SetLogger({
               setMessage(null);
             }}
             placeholder="種目名で探す・新しく追加する（例：ベンチプレス）"
-            className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+            className="rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
           />
           {candidates.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -638,7 +638,7 @@ export default function SetLogger({
                   key={e.id}
                   type="button"
                   onClick={() => addBlock(e)}
-                  className="rounded-full border border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-200 active:bg-neutral-800"
+                  className="rounded-full border border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-800"
                 >
                   {e.name}
                   {e.measure === "time" && <span className="ml-1 text-neutral-500">⏱</span>}
@@ -647,19 +647,19 @@ export default function SetLogger({
             </div>
           )}
           {query.trim() && !exactMatch && (
-            <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2">
-              <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <div className="flex flex-col gap-1.5 border-t border-neutral-200 dark:border-neutral-800 pt-2">
+              <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                 「{query.trim()}」を新しい種目として追加（チームのみんなも選べるようになります）
               </span>
               <div className="flex items-center gap-2">
-                <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
                   {(["reps", "time"] as Measure[]).map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setNewMeasure(m)}
                       className={`rounded-md px-3 py-1.5 font-medium ${
-                        newMeasure === m ? "bg-red-600 text-white" : "text-neutral-400"
+                        newMeasure === m ? "bg-red-600 text-white" : "text-neutral-600 dark:text-neutral-400"
                       }`}
                     >
                       {measureLabel[m]}で記録
@@ -678,8 +678,8 @@ export default function SetLogger({
             </div>
           )}
           {myExercises.length > 0 && (
-            <details className="border-t border-neutral-800 pt-2">
-              <summary className="cursor-pointer text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <details className="border-t border-neutral-200 dark:border-neutral-800 pt-2">
+              <summary className="cursor-pointer text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                 自分が追加した種目を直す・消す（{myExercises.length}）
               </summary>
               <div className="mt-2 flex flex-col gap-1.5">
@@ -699,7 +699,7 @@ export default function SetLogger({
                       key={e.id}
                       type="button"
                       onClick={() => setEditingExerciseId(e.id)}
-                      className="flex items-center justify-between rounded border border-neutral-800 px-2.5 py-1.5 text-left text-xs text-neutral-200 active:bg-neutral-800"
+                      className="flex items-center justify-between rounded border border-neutral-200 dark:border-neutral-800 px-2.5 py-1.5 text-left text-xs text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-800"
                     >
                       <span>
                         {e.name}
@@ -727,13 +727,13 @@ export default function SetLogger({
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="rounded-lg border border-dashed border-neutral-600 py-2 text-xs font-medium text-neutral-300 active:bg-neutral-800"
+          className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
         >
           ＋ 種目を追加（重量・回数・時間を記録）
         </button>
       )}
       {message && (
-        <p className="text-[length:calc(11px+var(--fs-add))] text-amber-400">{message}</p>
+        <p className="text-[length:calc(11px+var(--fs-add))] text-amber-700 dark:text-amber-400">{message}</p>
       )}
     </div>
   );
@@ -835,20 +835,20 @@ function ExerciseEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-amber-800/60 bg-amber-950/20 p-2.5">
-      <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+    <div className="flex flex-col gap-2 rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/20 p-2.5">
+      <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
         種目名
         <input
           type="text"
           value={name}
           maxLength={30}
           onChange={(e) => setName(e.target.value)}
-          className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
         />
       </label>
-      <div className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+      <div className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
         記録のしかた
-        <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+        <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
           {(["reps", "time"] as Measure[]).map((m) => (
             <button
               key={m}
@@ -856,7 +856,7 @@ function ExerciseEditor({
               disabled={used}
               onClick={() => setMeasure(m)}
               className={`flex-1 rounded-md py-1.5 font-medium ${
-                (used ? exercise.measure : measure) === m ? "bg-red-600 text-white" : "text-neutral-400"
+                (used ? exercise.measure : measure) === m ? "bg-red-600 text-white" : "text-neutral-600 dark:text-neutral-400"
               } disabled:opacity-60`}
             >
               {measureLabel[m]}で記録
@@ -881,7 +881,7 @@ function ExerciseEditor({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+          className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs text-neutral-700 dark:text-neutral-300"
         >
           やめる
         </button>
@@ -889,7 +889,7 @@ function ExerciseEditor({
           type="button"
           onClick={() => setConfirmDelete(true)}
           disabled={busy || !counts || counts.others > 0}
-          className="ml-auto rounded-lg border border-red-800 px-3 py-1.5 text-xs text-red-400 active:bg-red-950 disabled:opacity-40"
+          className="ml-auto rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 active:bg-red-50 dark:active:bg-red-950 disabled:opacity-40"
         >
           この種目を削除
         </button>
@@ -900,7 +900,7 @@ function ExerciseEditor({
         </p>
       )}
       {confirmDelete && counts && (
-        <div className="flex flex-col gap-2 rounded border border-red-900 bg-red-950/40 p-2 text-xs text-red-200">
+        <div className="flex flex-col gap-2 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-800 dark:text-red-200">
           <span>
             「{exercise.name}」を削除します。
             {counts.mine > 0 ? `あなたのこの種目の記録（${counts.mine}セット）も一緒に消えます。` : ""}
@@ -918,14 +918,14 @@ function ExerciseEditor({
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="rounded border border-neutral-700 px-3 py-1.5 text-neutral-300"
+              className="rounded border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-neutral-700 dark:text-neutral-300"
             >
               やめる
             </button>
           </div>
         </div>
       )}
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
     </div>
   );
 }

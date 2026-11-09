@@ -241,7 +241,7 @@ export default function ExerciseProgress({
     return (
       <section className="flex flex-col gap-2">
         {sectionTitle("種目ごとの記録")}
-        <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+        <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
           日報のトレーニング欄で「種目を追加」して重量・回数・時間を入れると、ここに伸びのグラフと自己ベストが出ます。
         </p>
       </section>
@@ -266,8 +266,8 @@ export default function ExerciseProgress({
               onClick={() => setSelectedId(s.id)}
               className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
                 selected?.id === s.id
-                  ? "border-red-500 bg-red-950/40 text-neutral-100"
-                  : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                  ? "border-red-500 bg-red-50 dark:bg-red-950/40 text-neutral-900 dark:text-neutral-100"
+                  : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
               }`}
             >
               {recentPb(s) && "🏅"}
@@ -280,7 +280,7 @@ export default function ExerciseProgress({
 
       <section className="flex flex-col gap-2">
         {sectionTitle("自己ベスト")}
-        <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
+        <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900">
           {stats.map((s) => (
             <button
               key={s.id}
@@ -288,14 +288,14 @@ export default function ExerciseProgress({
               onClick={() => setSelectedId(s.id)}
               className="flex items-center gap-2 px-3 py-2 text-left text-xs"
             >
-              <span className="min-w-0 flex-1 truncate text-neutral-200">
+              <span className="min-w-0 flex-1 truncate text-neutral-800 dark:text-neutral-200">
                 {recentPb(s) && <span className="mr-1">🏅</span>}
                 {s.name}
               </span>
               <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                 {kindLabel[s.kind]}
               </span>
-              <span className="w-16 text-right font-bold text-neutral-100">
+              <span className="w-16 text-right font-bold text-neutral-900 dark:text-neutral-100">
                 {formatValue(s.kind, s.best.value)}
               </span>
               <span className="w-10 text-right text-neutral-500">{formatMonthDay(s.best.date)}</span>
@@ -377,7 +377,7 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
   );
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
       <div className="grid grid-cols-3 gap-2">
         {tile(
           `自己ベスト（${kindLabel[stats.kind]}）`,
@@ -401,13 +401,13 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
       </div>
 
       {/* 凡例 */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-400">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
         <span className="flex items-center gap-1">
           <span className="inline-block h-0.5 w-4 rounded bg-red-500" />
           メインセット平均（練習の質）
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-0 w-4 border-t-2 border-dashed border-neutral-500" />
+          <span className="inline-block h-0 w-4 border-t-2 border-dashed border-neutral-400 dark:border-neutral-500" />
           {kindLabel[stats.kind]}（その日の最高）
         </span>
         <span className="flex items-center gap-1">
@@ -421,14 +421,14 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           {/* 上段の目盛り線と値 */}
           {[hi, (hi + lo) / 2, lo].map((v, i) => (
             <g key={i}>
-              <line x1={0} x2={W} y1={ly(v)} y2={ly(v)} stroke="#404040" strokeWidth={0.5} />
+              <line x1={0} x2={W} y1={ly(v)} y2={ly(v)} className="stroke-neutral-200 dark:stroke-neutral-700" strokeWidth={0.5} />
               <text x={2} y={ly(v) - 2} fontSize={7} fill="#737373">
                 {formatValue(stats.kind, stats.kind === "e1rm" ? round1(v) : Math.round(v))}
               </text>
             </g>
           ))}
           {/* 下段（練習量）の基準線と最大値 */}
-          <line x1={0} x2={W} y1={barTop + barH} y2={barTop + barH} stroke="#525252" strokeWidth={0.75} />
+          <line x1={0} x2={W} y1={barTop + barH} y2={barTop + barH} className="stroke-neutral-300 dark:stroke-neutral-600" strokeWidth={0.75} />
           <text x={2} y={barTop + 6} fontSize={7} fill="#737373">
             {formatVolume(stats.kind, vmax)}
           </text>
@@ -436,7 +436,7 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           {/* 押した列のハイライト */}
           {sessions.map((s, i) =>
             s.date === activeDate ? (
-              <rect key={`hl-${s.date}`} x={slot * i} y={0} width={slot} height={H} fill="#ffffff" opacity={0.06} />
+              <rect key={`hl-${s.date}`} x={slot * i} y={0} width={slot} height={H} className="fill-neutral-900 dark:fill-white" opacity={0.06} />
             ) : null
           )}
 
@@ -471,10 +471,10 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           {sessions.map((s, i) => (
             <g key={`pt-${s.date}`}>
               {s.date === stats.best.date && (
-                <circle cx={cx(i)} cy={ly(s.value)} r={3.5} fill="#f59e0b" stroke="#171717" strokeWidth={1} />
+                <circle cx={cx(i)} cy={ly(s.value)} r={3.5} fill="#f59e0b" className="stroke-white dark:stroke-neutral-900" strokeWidth={1} />
               )}
               {s.mainAvg != null && (
-                <circle cx={cx(i)} cy={ly(s.mainAvg)} r={2.75} fill="#ef4444" stroke="#171717" strokeWidth={1} />
+                <circle cx={cx(i)} cy={ly(s.mainAvg)} r={2.75} fill="#ef4444" className="stroke-white dark:stroke-neutral-900" strokeWidth={1} />
               )}
             </g>
           ))}
@@ -506,24 +506,24 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           </p>
         )}
         {active && (
-          <div className="mt-1 flex flex-col gap-0.5 rounded bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200">
+          <div className="mt-1 flex flex-col gap-0.5 rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-1.5 text-xs text-neutral-800 dark:text-neutral-200">
             <span className="font-semibold">
               {formatMonthDay(active.date)}　質 {active.mainAvg != null ? formatValue(stats.kind, active.mainAvg) : "—"}
               　最高 {formatValue(stats.kind, active.value)}　練習量 {formatVolume(stats.kind, active.mainVolume)}
             </span>
-            <span className="text-neutral-400">{active.sets.map(setLabel).join(" / ")}</span>
+            <span className="text-neutral-600 dark:text-neutral-400">{active.sets.map(setLabel).join(" / ")}</span>
           </div>
         )}
       </div>
 
-      <div className="flex flex-col gap-1 border-t border-neutral-800 pt-2">
+      <div className="flex flex-col gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-2">
         {stats.sessions
           .slice(-5)
           .reverse()
           .map((s) => (
             <div key={s.date} className="flex gap-2 text-xs">
               <span className="w-10 shrink-0 text-neutral-500">{formatMonthDay(s.date)}</span>
-              <span className="min-w-0 flex-1 text-neutral-200">
+              <span className="min-w-0 flex-1 text-neutral-800 dark:text-neutral-200">
                 {s.sets.map((x, i) => (
                   <span key={i} className={x.warmup ? "text-neutral-500" : ""}>
                     {i > 0 && " / "}
@@ -531,7 +531,7 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
                   </span>
                 ))}
               </span>
-              <span className="shrink-0 text-neutral-400">
+              <span className="shrink-0 text-neutral-600 dark:text-neutral-400">
                 {s.mainAvg != null ? formatValue(stats.kind, s.mainAvg) : "—"}
               </span>
             </div>

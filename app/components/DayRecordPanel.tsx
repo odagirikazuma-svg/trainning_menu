@@ -88,14 +88,14 @@ export default function DayRecordPanel({
   const empty = !loading && mats.length === 0 && !log && !memo;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-700 bg-neutral-900 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-bold text-foreground">{formatMonthDayWeek(date)}の記録</span>
         <button
           type="button"
           onClick={onClose}
           aria-label="閉じる"
-          className="text-neutral-500 active:text-neutral-200"
+          className="text-neutral-500 active:text-neutral-800 dark:active:text-neutral-200"
         >
           ✕
         </button>
@@ -112,11 +112,11 @@ export default function DayRecordPanel({
               key={m.id}
               className={`rounded-lg border p-2.5 ${
                 m.kind === "report"
-                  ? "border-emerald-900/60 bg-emerald-950/30"
-                  : "border-neutral-700 bg-neutral-800"
+                  ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30"
+                  : "border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800"
               }`}
             >
-              <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-300">
+              <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-700 dark:text-neutral-300">
                 マット練習
                 {m.menu
                   ? `（${m.menu.start_time ? `${m.menu.start_time.slice(0, 5)}〜・` : ""}${
@@ -125,12 +125,12 @@ export default function DayRecordPanel({
                   : ""}
                 ・{commentKindLabel[m.kind]}
               </p>
-              <p className="whitespace-pre-wrap text-sm text-neutral-100">{m.text}</p>
+              <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{m.text}</p>
             </div>
           ))}
           {log && (
-            <div className="rounded-lg border border-sky-900/60 bg-sky-950/30 p-2.5">
-              <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-300">
+            <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/30 p-2.5">
+              <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-700 dark:text-sky-300">
                 {trainingTypeLabel[log.type]}
                 {log.title ? `・${log.title}` : ""}
                 {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
@@ -138,8 +138,8 @@ export default function DayRecordPanel({
               <SetSummary blocks={blocks} />
               {log.content && log.content !== blocksSummaryText(blocks) && (
                 <p
-                  className={`whitespace-pre-wrap text-sm text-neutral-100 ${
-                    blocks.length > 0 ? "mt-2 border-t border-sky-900/50 pt-2" : ""
+                  className={`whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100 ${
+                    blocks.length > 0 ? "mt-2 border-t border-sky-200 dark:border-sky-900/50 pt-2" : ""
                   }`}
                 >
                   {log.content}
@@ -148,7 +148,7 @@ export default function DayRecordPanel({
             </div>
           )}
           {memo && (
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
               <span className="font-semibold">一言メモ：</span>
               {memo}
             </p>
@@ -159,7 +159,7 @@ export default function DayRecordPanel({
       <button
         type="button"
         onClick={() => onOpenDaily(date)}
-        className="self-start rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-200 active:bg-neutral-800"
+        className="self-start rounded-lg border border-neutral-300 dark:border-neutral-600 px-3 py-1.5 text-xs text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-800"
       >
         この日の日報を開く（書く・直す）
       </button>

@@ -109,8 +109,8 @@ export default function ReactionBar({
                 .join("、")}
               className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[length:calc(12px+var(--fs-add))] ${
                 isMine
-                  ? "border-red-500 bg-red-950/40 text-neutral-100"
-                  : "border-neutral-700 bg-neutral-900 text-neutral-400 active:bg-neutral-800"
+                  ? "border-red-500 bg-red-50 dark:bg-red-950/40 text-neutral-900 dark:text-neutral-100"
+                  : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
               } disabled:cursor-default`}
             >
               <span>{emoji}</span>
@@ -134,7 +134,7 @@ export default function ReactionBar({
         </p>
       )}
       {errorMsg && (
-        <p className="text-[length:calc(10px+var(--fs-add))] text-red-400">
+        <p className="text-[length:calc(10px+var(--fs-add))] text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}

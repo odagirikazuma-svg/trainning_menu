@@ -93,7 +93,7 @@ export default function GoalsSettingsSection() {
       </p>
       {goalTerms.map(({ term, label, hint }) => (
         <label key={term} className="flex flex-col gap-1">
-          <span className="flex items-center justify-between text-xs font-semibold text-neutral-300">
+          <span className="flex items-center justify-between text-xs font-semibold text-neutral-700 dark:text-neutral-300">
             <span className="flex items-center gap-1.5">
               {term === "short" ? `${label}（${thisMonth}月）` : label}
               {((term === "long" && !saved.long) ||
@@ -116,7 +116,7 @@ export default function GoalsSettingsSection() {
               setMessage(null);
             }}
             placeholder={hint}
-            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+            className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-2 text-sm text-neutral-900 dark:text-neutral-100"
           />
         </label>
       ))}
@@ -133,7 +133,7 @@ export default function GoalsSettingsSection() {
             : "保存する"}
       </button>
       {message && (
-        <p className={`text-xs ${message.ok ? "text-emerald-400" : "text-red-400"}`}>
+        <p className={`text-xs ${message.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
           {message.text}
         </p>
       )}

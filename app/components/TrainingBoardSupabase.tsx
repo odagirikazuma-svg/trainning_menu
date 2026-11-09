@@ -1417,18 +1417,18 @@ export default function TrainingBoardSupabase({
             {(
               <>
             {!isViewOnly && selected && (
-              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+              <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
                 {myReport || myAbsent ? (
-                  <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
+                  <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs text-emerald-700 dark:text-emerald-400">
                     ✓ この練習の日報は提出済みです。修正はマイページの「日報」からできます。
                   </p>
                 ) : !reportOpen ? (
-                  <p className="rounded-lg bg-amber-950/40 p-3 text-xs text-amber-700">
+                  <p className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-700">
                     まだ時間前です。練習開始予定時刻を過ぎると、マイページの「日報」から提出できます。
                   </p>
                 ) : (
-                  <div className="flex flex-col gap-2 rounded-lg border border-violet-800/70 bg-violet-950/20 p-3">
-                    <p className="text-xs text-neutral-300">
+                  <div className="flex flex-col gap-2 rounded-lg border border-violet-300 dark:border-violet-800/70 bg-violet-50 dark:bg-violet-950/20 p-3">
+                    <p className="text-xs text-neutral-700 dark:text-neutral-300">
                       この練習の日報がまだです。日報はマイページから、トレーニングとまとめて提出します。
                     </p>
                     <button
@@ -1496,7 +1496,7 @@ export default function TrainingBoardSupabase({
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
                         <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex items-center gap-1.5 font-medium text-neutral-100">
+                          <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
                             {r.author?.display_name ?? "不明"}
                             {r.author_id === profile.id && (
                               <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">
@@ -1595,7 +1595,7 @@ export default function TrainingBoardSupabase({
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
                         <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex items-center gap-1.5 font-medium text-neutral-100">
+                          <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
                             {c.author?.display_name ?? "不明"}
                             {c.author_id === profile.id && (
                               <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">

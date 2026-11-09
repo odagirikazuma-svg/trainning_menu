@@ -771,9 +771,9 @@ export default function DailyReport({
   const hasOptionalToSubmit = trainingTouched || memo.slice(0, 20) !== memoSaved;
 
   const inputCls =
-    "rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100";
+    "rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100";
   const labelCls =
-    "flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400";
+    "flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400";
 
   function renderMatForm(menuId: string, editingReport?: MyReport) {
     const d = draftOf(menuId);
@@ -786,7 +786,7 @@ export default function DailyReport({
             className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium ${
               d.mode === "report"
                 ? "bg-emerald-600 text-white"
-                : "border border-neutral-700 bg-neutral-900 text-neutral-300 active:bg-neutral-800"
+                : "border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
             }`}
           >
             実施した
@@ -797,7 +797,7 @@ export default function DailyReport({
             className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium ${
               d.mode === "absent"
                 ? "bg-neutral-600 text-white"
-                : "border border-neutral-700 bg-neutral-900 text-neutral-300 active:bg-neutral-800"
+                : "border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
             }`}
           >
             実施できなかった
@@ -809,7 +809,7 @@ export default function DailyReport({
             onChange={(e) => updateDraft(menuId, { text: e.target.value })}
             placeholder="今日の練習の振り返り（できたこと・課題・気づきなど）"
             rows={4}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
           />
         )}
         {d.mode === "absent" && (
@@ -826,7 +826,7 @@ export default function DailyReport({
             </label>
             <div className={labelCls}>
               代替メニューの種類
-              <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+              <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
                 {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
                   <button
                     key={t}
@@ -835,7 +835,7 @@ export default function DailyReport({
                     className={`flex-1 rounded-md py-2 font-medium ${
                       d.altType === t
                         ? "bg-red-600 text-white shadow"
-                        : "text-neutral-400"
+                        : "text-neutral-600 dark:text-neutral-400"
                     }`}
                   >
                     {trainingTypeLabel[t]}
@@ -867,7 +867,7 @@ export default function DailyReport({
             <button
               type="button"
               onClick={() => setEditingReportId(null)}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-xs text-neutral-300"
+              className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
             >
               やめる
             </button>
@@ -885,8 +885,8 @@ export default function DailyReport({
         <div
           className={`rounded-lg border p-3 ${
             r.kind === "report"
-              ? "border-emerald-900/60 bg-emerald-950/30"
-              : "border-neutral-700 bg-neutral-800"
+              ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30"
+              : "border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800"
           }`}
         >
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -900,12 +900,12 @@ export default function DailyReport({
             <button
               type="button"
               onClick={() => startEditReport(r)}
-              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 active:text-neutral-200"
+              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
             >
               修正する
             </button>
           </div>
-          <p className="whitespace-pre-wrap text-sm text-neutral-100">{r.text}</p>
+          <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{r.text}</p>
         </div>
         <ReactionBar
           commentId={r.id}
@@ -917,14 +917,14 @@ export default function DailyReport({
           readOnly
         />
         {myReplies.length > 0 && (
-          <ul className="flex flex-col gap-1.5 border-l-2 border-neutral-700 pl-3">
+          <ul className="flex flex-col gap-1.5 border-l-2 border-neutral-300 dark:border-neutral-700 pl-3">
             {myReplies.map((c) => (
-              <li key={c.id} className="rounded-lg bg-neutral-900 p-2">
+              <li key={c.id} className="rounded-lg bg-neutral-50 dark:bg-neutral-900 p-2">
                 <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                   {c.author ? `${roleLabel[c.author.role]}・${c.author.display_name}` : "不明"}
                   　{formatDateTime(c.created_at)}
                 </p>
-                <p className="whitespace-pre-wrap text-sm text-neutral-100">{c.text}</p>
+                <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{c.text}</p>
               </li>
             ))}
           </ul>
@@ -947,14 +947,14 @@ export default function DailyReport({
     const activeColor = type ? titleColors[type].get(training.title.trim()) : undefined;
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+        <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
           {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => updateTraining({ type: t })}
               className={`flex-1 rounded-md py-2 font-medium ${
-                type === t ? "bg-red-600 text-white shadow" : "text-neutral-400"
+                type === t ? "bg-red-600 text-white shadow" : "text-neutral-600 dark:text-neutral-400"
               }`}
             >
               {trainingTypeLabel[t]}
@@ -1001,21 +1001,21 @@ export default function DailyReport({
                     return removingTitle === t ? (
                       <span
                         key={t}
-                        className="flex items-center gap-1.5 rounded-full border border-red-800 bg-red-950/40 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-red-200"
+                        className="flex items-center gap-1.5 rounded-full border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-red-800 dark:text-red-200"
                       >
                         「{t}」を候補から消す？
                         <button
                           type="button"
                           disabled={submitting}
                           onClick={() => handleRemoveTitle(type, t)}
-                          className="font-bold text-red-400"
+                          className="font-bold text-red-700 dark:text-red-400"
                         >
                           消す
                         </button>
                         <button
                           type="button"
                           onClick={() => setRemovingTitle(null)}
-                          className="text-neutral-400"
+                          className="text-neutral-600 dark:text-neutral-400"
                         >
                           やめる
                         </button>
@@ -1025,10 +1025,10 @@ export default function DailyReport({
                         key={t}
                         type="button"
                         onClick={() => setRemovingTitle(t)}
-                        className="flex items-center gap-1 rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300"
+                        className="flex items-center gap-1 rounded-full border border-dashed border-neutral-300 dark:border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300"
                       >
                         {t}
-                        <span className="text-red-400">✕</span>
+                        <span className="text-red-700 dark:text-red-400">✕</span>
                       </button>
                     );
                   }
@@ -1039,8 +1039,8 @@ export default function DailyReport({
                       onClick={() => updateTraining({ title: t })}
                       className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
                         selected
-                          ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
-                          : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                          ? `${c?.border ?? "border-neutral-300 dark:border-neutral-600"} ${c?.fill ?? "bg-neutral-100 dark:bg-neutral-800"} ${c?.text ?? "text-neutral-800 dark:text-neutral-200"}`
+                          : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
                       }`}
                     >
                       {c && (
@@ -1095,10 +1095,10 @@ export default function DailyReport({
             "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
           }
           rows={blocksHaveData(blocks) ? 3 : isPopup ? 6 : 8}
-          className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
+          className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100 ${
             activeColor
               ? `${activeColor.border} ${activeColor.fill}`
-              : "border-neutral-700 bg-neutral-900"
+              : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
           }`}
         />
         {type && (
@@ -1106,7 +1106,7 @@ export default function DailyReport({
             type="button"
             onClick={handleCopyPrevious}
             disabled={copying}
-            className="self-start rounded border border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+            className="self-start rounded border border-neutral-300 dark:border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
           >
             {copying
               ? "読み込み中…"
@@ -1139,7 +1139,7 @@ export default function DailyReport({
                       log.content === blocksSummaryText(savedBlocks) ? "" : log.content,
                   });
               }}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-xs text-neutral-300"
+              className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
             >
               やめる
             </button>
@@ -1233,10 +1233,10 @@ export default function DailyReport({
 
   function itemStatus(item: TimelineItem) {
     if (item.done) return { text: "✓ 提出済み", cls: "bg-emerald-600 text-white" };
-    if (item.upcoming) return { text: "開始前", cls: "bg-neutral-800 text-neutral-400" };
+    if (item.upcoming) return { text: "開始前", cls: "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400" };
     if (item.kind === "training" && !trainingRequired)
-      return { text: "任意", cls: "bg-neutral-800 text-neutral-400" };
-    if (exempt) return { text: "免除", cls: "bg-amber-900/60 text-amber-300" };
+      return { text: "任意", cls: "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400" };
+    if (exempt) return { text: "免除", cls: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300" };
     return { text: "未提出", cls: "bg-red-600 text-white" };
   }
 
@@ -1255,11 +1255,11 @@ export default function DailyReport({
         <div className="flex flex-col gap-2">
           {m.content ? (
             <details
-              className="rounded-lg bg-neutral-800 px-3 py-2 text-xs text-neutral-300"
+              className="rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
               open={!r && !isPopup}
             >
-              <summary className="cursor-pointer text-neutral-400">今日のメニュー</summary>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-100">{m.content}</p>
+              <summary className="cursor-pointer text-neutral-600 dark:text-neutral-400">今日のメニュー</summary>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{m.content}</p>
             </details>
           ) : (
             <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
@@ -1273,9 +1273,9 @@ export default function DailyReport({
     // トレーニング
     return log && !editingTraining ? (
       <div className="flex flex-col gap-2">
-        <div className="rounded-lg border border-sky-900/60 bg-sky-950/30 p-3">
+        <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/30 p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-300">
+            <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-700 dark:text-sky-300">
               {trainingTypeLabel[log.type]}
               {log.title ? `・${log.title}` : ""}
               {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
@@ -1283,7 +1283,7 @@ export default function DailyReport({
             <button
               type="button"
               onClick={() => setEditingTraining(true)}
-              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 active:text-neutral-200"
+              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
             >
               修正する
             </button>
@@ -1291,8 +1291,8 @@ export default function DailyReport({
           <SetSummary blocks={savedBlocks} />
           {log.content && log.content !== blocksSummaryText(savedBlocks) && (
             <p
-              className={`whitespace-pre-wrap text-sm text-neutral-100 ${
-                savedBlocks.length > 0 ? "mt-2 border-t border-sky-900/50 pt-2" : ""
+              className={`whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100 ${
+                savedBlocks.length > 0 ? "mt-2 border-t border-sky-200 dark:border-sky-900/50 pt-2" : ""
               }`}
             >
               {log.content}
@@ -1325,7 +1325,7 @@ export default function DailyReport({
               {!loading && !isFuture && (
                 <span
                   className={`text-xs font-semibold ${
-                    remaining > 0 ? "text-red-400" : dayComplete ? "text-emerald-400" : "text-neutral-500"
+                    remaining > 0 ? "text-red-700 dark:text-red-400" : dayComplete ? "text-emerald-700 dark:text-emerald-400" : "text-neutral-500"
                   }`}
                 >
                   {remaining > 0
@@ -1340,7 +1340,7 @@ export default function DailyReport({
               <button
                 type="button"
                 onClick={() => onDateChange(todayStr)}
-                className="rounded-full border border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+                className="rounded-full border border-neutral-300 dark:border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
               >
                 今日へ
               </button>
@@ -1353,7 +1353,7 @@ export default function DailyReport({
               type="button"
               onClick={() => onDateChange(shiftDate(date, -7))}
               aria-label="前の週"
-              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-800"
+              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800"
             >
               ‹
             </button>
@@ -1373,12 +1373,12 @@ export default function DailyReport({
                   className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 ${
                     selected
                       ? "bg-red-600 text-white"
-                      : "bg-neutral-900 text-neutral-300 active:bg-neutral-800"
+                      : "bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                   } disabled:opacity-30`}
                 >
                   <span
                     className={`text-[length:calc(9px+var(--fs-add))] ${
-                      selected ? "text-white/80" : w === "日" ? "text-red-400" : w === "土" ? "text-sky-400" : "text-neutral-500"
+                      selected ? "text-white/80" : w === "日" ? "text-red-700 dark:text-red-400" : w === "土" ? "text-sky-700 dark:text-sky-400" : "text-neutral-500"
                     }`}
                   >
                     {w}
@@ -1388,9 +1388,9 @@ export default function DailyReport({
                   </span>
                   <span className="h-2 text-[8px] leading-none">
                     {pending ? (
-                      <span className={selected ? "text-white" : "text-red-400"}>○</span>
+                      <span className={selected ? "text-white" : "text-red-700 dark:text-red-400"}>○</span>
                     ) : submitted ? (
-                      <span className={selected ? "text-white" : "text-emerald-400"}>●</span>
+                      <span className={selected ? "text-white" : "text-emerald-700 dark:text-emerald-400"}>●</span>
                     ) : null}
                   </span>
                 </button>
@@ -1404,7 +1404,7 @@ export default function DailyReport({
               }}
               disabled={shiftDate(weekStartStr, 7) > todayStr}
               aria-label="次の週"
-              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-800 disabled:opacity-30"
+              className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-30"
             >
               ›
             </button>
@@ -1413,7 +1413,7 @@ export default function DailyReport({
             <button
               type="button"
               onClick={() => onDateChange(pendingDates.filter((d) => d < weekStartStr)[0])}
-              className="self-start text-[length:calc(11px+var(--fs-add))] text-red-400 underline decoration-dotted"
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-red-700 dark:text-red-400 underline decoration-dotted"
             >
               前の週にも未提出があります（{pendingDates.filter((d) => d < weekStartStr).length}日）
             </button>
@@ -1422,27 +1422,27 @@ export default function DailyReport({
       )}
 
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">{errorMsg}</p>
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
       {notice && (
-        <p className="rounded bg-emerald-950/40 p-2 text-xs text-emerald-400">{notice}</p>
+        <p className="rounded bg-emerald-50 dark:bg-emerald-950/40 p-2 text-xs text-emerald-700 dark:text-emerald-400">{notice}</p>
       )}
 
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : isFuture ? (
-        <p className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-500">
+        <p className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-xs text-neutral-500">
           まだ来ていない日の日報は書けません。
         </p>
       ) : (
         <>
           {exempt && (
-            <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-amber-300">
+            <p className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-amber-700 dark:text-amber-300">
               この日は管理者により免除されています。日報の提出は不要です（書いた分は記録として残ります）。
             </p>
           )}
           {menus.length === 0 && isOffDay && (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
               この日はオフです。自主トレをした場合は、トレーニングに記録できます。
             </p>
           )}
@@ -1451,7 +1451,7 @@ export default function DailyReport({
           <ol className="relative flex flex-col gap-3">
             <span
               aria-hidden
-              className="absolute bottom-3 left-[2.4rem] top-3 w-px bg-neutral-700"
+              className="absolute bottom-3 left-[2.4rem] top-3 w-px bg-neutral-200 dark:bg-neutral-700"
             />
             {timeline.map((item) => {
               const t = itemTitle(item);
@@ -1460,7 +1460,7 @@ export default function DailyReport({
               return (
                 <li key={item.key} className="relative flex gap-3">
                   <div className="flex w-[2rem] shrink-0 flex-col items-end pt-3">
-                    <span className="text-[length:calc(10px+var(--fs-add))] font-semibold text-neutral-400">
+                    <span className="text-[length:calc(10px+var(--fs-add))] font-semibold text-neutral-600 dark:text-neutral-400">
                       {item.time ? item.time.slice(0, 5) : "—"}
                     </span>
                   </div>
@@ -1470,17 +1470,17 @@ export default function DailyReport({
                       item.done
                         ? "border-emerald-500 bg-emerald-500"
                         : item.upcoming || (item.kind === "training" && !trainingRequired)
-                          ? "border-neutral-600 bg-background"
+                          ? "border-neutral-300 dark:border-neutral-600 bg-background"
                           : "border-red-500 bg-background"
                     }`}
                   />
                   <div
                     className={`min-w-0 flex-1 overflow-hidden rounded-xl border ${
                       item.done
-                        ? "border-neutral-800 bg-neutral-900/60"
+                        ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60"
                         : item.upcoming
-                          ? "border-dashed border-neutral-800 bg-transparent"
-                          : "border-neutral-700 bg-neutral-900"
+                          ? "border-dashed border-neutral-200 dark:border-neutral-800 bg-transparent"
+                          : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
                     }`}
                   >
                     <button
@@ -1490,7 +1490,7 @@ export default function DailyReport({
                     >
                       <span className="text-lg leading-none">{t.icon}</span>
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="text-sm font-semibold text-neutral-100">{t.title}</span>
+                        <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{t.title}</span>
                         <span className="truncate text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                           {t.sub}
                         </span>
@@ -1503,7 +1503,7 @@ export default function DailyReport({
                       <span className="shrink-0 text-neutral-500">{open ? "▴" : "▾"}</span>
                     </button>
                     {open && (
-                      <div className="border-t border-neutral-800 px-3 pb-3 pt-2.5">
+                      <div className="border-t border-neutral-200 dark:border-neutral-800 px-3 pb-3 pt-2.5">
                         {renderItemBody(item)}
                       </div>
                     )}
@@ -1515,9 +1515,9 @@ export default function DailyReport({
 
           {/* 一言メモ（自分だけ） */}
           {!isPopup && (
-            <section className="flex flex-col gap-1 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
+            <section className="flex flex-col gap-1 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 p-3">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-neutral-400">
+                <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                   📝 一言メモ（体調など・自分だけが見られます）
                 </label>
                 <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
@@ -1537,16 +1537,16 @@ export default function DailyReport({
 
           {/* 提出（画面の下に固定） */}
           {dayComplete && !hasOptionalToSubmit ? (
-            <p className="rounded-lg bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-400">
+            <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               ✓ この日の日報はすべて提出済みです
             </p>
           ) : (
             <div
-              className={`${isPopup ? "" : "sticky z-20"} flex flex-col gap-2 rounded-xl border border-neutral-700 bg-background/95 p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.35)] backdrop-blur`}
+              className={`${isPopup ? "" : "sticky z-20"} flex flex-col gap-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-background/95 p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.35)] backdrop-blur`}
               style={isPopup ? undefined : { bottom: "calc(144px + env(safe-area-inset-bottom))" }}
             >
               {missing.length > 0 && (
-                <ul className="flex max-h-28 flex-col gap-1 overflow-y-auto rounded-lg border border-red-900/60 bg-red-950/30 p-2 text-[length:calc(11px+var(--fs-add))] text-red-300">
+                <ul className="flex max-h-28 flex-col gap-1 overflow-y-auto rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-2 text-[length:calc(11px+var(--fs-add))] text-red-700 dark:text-red-300">
                   {missing.map((p) => (
                     <li key={p}>・{p}</li>
                   ))}

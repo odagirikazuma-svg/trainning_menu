@@ -550,7 +550,7 @@ export default function TrainingInsights({
   );
 
   const tile = (label: string, value: string, sub?: string | null) => (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
       <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">{label}</span>
       <span className="text-xl font-bold text-foreground">{value}</span>
       {sub && (
@@ -562,7 +562,7 @@ export default function TrainingInsights({
   return (
     <div className="flex flex-col gap-5">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">{errorMsg}</p>
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
 
       {/* 直近4週間のまとめ */}
@@ -619,7 +619,7 @@ export default function TrainingInsights({
               />
             )}
             {insights(summary).length > 0 && (
-              <ul className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-[length:calc(12px+var(--fs-add))] text-neutral-300">
+              <ul className="flex flex-col gap-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-[length:calc(12px+var(--fs-add))] text-neutral-700 dark:text-neutral-300">
                 {insights(summary).map((t) => (
                   <li key={t}>・{t}</li>
                 ))}
@@ -639,7 +639,7 @@ export default function TrainingInsights({
       {summary && (
         <section className="flex flex-col gap-2">
           {sectionTitle("週ごとの練習量（12週）")}
-          <div className="flex flex-wrap gap-3 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+          <div className="flex flex-wrap gap-3 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
             {bucketOrder.map((b) => (
               <span key={b} className="flex items-center gap-1">
                 <span className={`inline-block h-2.5 w-2.5 rounded-sm ${bucketColor[b]}`} />
@@ -647,7 +647,7 @@ export default function TrainingInsights({
               </span>
             ))}
           </div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+          <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
             <div className="flex h-32 items-end gap-1">
               {summary.weeks.map((w, i) => {
                 const total = bucketOrder.reduce((a, b) => a + w.counts[b], 0);
@@ -683,7 +683,7 @@ export default function TrainingInsights({
                 );
               })}
             </div>
-            <div className="mt-1 flex gap-1 border-t border-neutral-800 pt-1">
+            <div className="mt-1 flex gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-1">
               {summary.weeks.map((w, i) => (
                 <span
                   key={i}
@@ -704,17 +704,17 @@ export default function TrainingInsights({
       {summary && summary.topTitles.length > 0 && (
         <section className="flex flex-col gap-2">
           {sectionTitle("よくやるメニュー（12週）")}
-          <div className="flex flex-col gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+          <div className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
             {summary.topTitles.map((t) => (
               <div key={`${t.type}:${t.title}`} className="flex items-center gap-2 text-xs">
-                <span className="w-24 shrink-0 truncate text-neutral-200">{t.title}</span>
-                <div className="h-2 flex-1 rounded bg-neutral-800">
+                <span className="w-24 shrink-0 truncate text-neutral-800 dark:text-neutral-200">{t.title}</span>
+                <div className="h-2 flex-1 rounded bg-neutral-100 dark:bg-neutral-800">
                   <div
                     className={`h-2 rounded ${bucketColor[t.type]}`}
                     style={{ width: `${(t.count / summary.topTitles[0].count) * 100}%` }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right text-neutral-400">{t.count}回</span>
+                <span className="w-10 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{t.count}回</span>
               </div>
             ))}
           </div>
@@ -725,7 +725,7 @@ export default function TrainingInsights({
       <section className="flex flex-col gap-2">
         {sectionTitle("ウェイトMAXの推移")}
         {maxRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+          <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
             まだ記録がありません（イベントの「ウェイトMAX」で提出すると、ここに並びます）。
           </p>
         ) : (
@@ -744,7 +744,7 @@ export default function TrainingInsights({
       <section className="flex flex-col gap-2">
         {sectionTitle("体組成の推移")}
         {bodyRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-xs text-neutral-500">
+          <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
             まだ記録がありません（イベントの「体組成」で提出すると、ここに並びます）。
           </p>
         ) : (
@@ -772,10 +772,10 @@ function RecordTable<T extends { date: string }>({
 }) {
   const desc = rows.slice().reverse();
   return (
-    <div className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
+    <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-neutral-800 text-neutral-500">
+          <tr className="border-b border-neutral-200 dark:border-neutral-800 text-neutral-500">
             <th className="px-3 py-2 text-left font-medium">日付</th>
             {columns.map((c) => (
               <th key={c.key} className="px-3 py-2 text-right font-medium">
@@ -788,14 +788,14 @@ function RecordTable<T extends { date: string }>({
           {desc.map((r, i) => {
             const prev = desc[i + 1];
             return (
-              <tr key={`${r.date}-${i}`} className="border-b border-neutral-800 last:border-0">
-                <td className="px-3 py-2 text-neutral-400">{formatMonthDay(r.date)}</td>
+              <tr key={`${r.date}-${i}`} className="border-b border-neutral-200 dark:border-neutral-800 last:border-0">
+                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">{formatMonthDay(r.date)}</td>
                 {columns.map((c) => {
                   const v = r[c.key] as unknown as number | null;
                   const pv = prev ? (prev[c.key] as unknown as number | null) : null;
                   const d = diffText(v, pv, c.unit);
                   return (
-                    <td key={c.key} className="px-3 py-2 text-right text-neutral-100">
+                    <td key={c.key} className="px-3 py-2 text-right text-neutral-900 dark:text-neutral-100">
                       {v == null ? "—" : `${v}${c.unit}`}
                       {d && (
                         <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
@@ -828,15 +828,15 @@ function DailyLoadChart({
   const max = Math.max(1, ...days.map((d) => d.load));
   const act = days.find((d) => d.date === active) ?? null;
   const statusStyle: Record<BalanceStatus, string> = {
-    low: "border-sky-800 bg-sky-950/30 text-sky-300",
-    good: "border-emerald-800 bg-emerald-950/30 text-emerald-300",
-    high: "border-amber-800 bg-amber-950/30 text-amber-300",
-    danger: "border-red-800 bg-red-950/30 text-red-300",
+    low: "border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300",
+    good: "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300",
+    high: "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300",
+    danger: "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300",
   };
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-neutral-200">毎日の練習負荷（28日）</span>
+        <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">毎日の練習負荷（28日）</span>
         {balance.status && balance.ratio != null && (
           <span
             className={`rounded-full border px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${statusStyle[balance.status]}`}
@@ -862,7 +862,7 @@ function DailyLoadChart({
                     ? "bg-red-600"
                     : d.load > 0
                       ? "bg-red-600/60"
-                      : "bg-neutral-800"
+                      : "bg-neutral-100 dark:bg-neutral-800"
               }`}
               style={{ height: d.load > 0 ? `${Math.max(4, (d.load / max) * 100)}%` : "2px" }}
             />
@@ -874,13 +874,13 @@ function DailyLoadChart({
         <span>今日</span>
       </div>
       {act ? (
-        <p className="rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
+        <p className="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs text-neutral-800 dark:text-neutral-200">
           {formatMonthDay(act.date)}：負荷 {Math.round(act.load * 10) / 10}
           {act.intensity != null ? `・平均強度 ${Math.round(act.intensity * 100)}%` : "・ウェイトの記録なし"}
         </p>
       ) : (
         balance.status && (
-          <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+          <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
             {balanceLabel[balance.status].note}
           </p>
         )
