@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useHeaderExtra } from "./shell/AppShell";
 
-export type TaskKind = "mat" | "self" | "injury" | "event";
+export type TaskKind = "daily" | "mat" | "self" | "injury" | "event";
 
 export type QueueTask = {
   key: string;
@@ -21,6 +21,11 @@ export type QueueTask = {
 
 // 種類ごとの見た目（左の色帯・ラベルの色）。ひと目でマット日報かトレ報か分かるようにする
 const kindStyle: Record<TaskKind, { label: string; bar: string; chip: string }> = {
+  daily: {
+    label: "日報",
+    bar: "bg-violet-500",
+    chip: "bg-violet-600 text-white",
+  },
   mat: {
     label: "マット日報",
     bar: "bg-violet-500",

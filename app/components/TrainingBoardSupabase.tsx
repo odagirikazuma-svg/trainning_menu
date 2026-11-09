@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
   canCreateMenu,
@@ -25,6 +26,7 @@ import { isExemptOn, loadExemptions, type ExemptionRow } from "../lib/exemptions
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
+import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 
 const locationSubTabItems = locations.map((loc) => ({
@@ -106,6 +108,7 @@ export default function TrainingBoardSupabase({
   profile: Profile;
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [{ initialLocation, initialDate, initialStartTime }] = useState<{
     initialLocation: Location;
     initialDate: string | null;
@@ -149,6 +152,8 @@ export default function TrainingBoardSupabase({
     null
   );
   const [comments, setComments] = useState<CommentRow[]>([]);
+  // 日報（実施報告・未実施報告）に付いたリアクション
+  const [reactions, setReactions] = useState<ReactionRow[]>([]);
   const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
@@ -174,8 +179,6 @@ export default function TrainingBoardSupabase({
   const [commentText, setCommentText] = useState("");
   const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
-  const [showReportForm, setShowReportForm] = useState(false);
-  const [showAbsentForm, setShowAbsentForm] = useState(false);
   // 実施報告・未実施報告を送信中かどうか（二重送信防止）
   const [submittingReport, setSubmittingReport] = useState(false);
   const reportSubmitLock = useRef(false);
@@ -188,12 +191,6 @@ export default function TrainingBoardSupabase({
   const [expandedAbsentIds, setExpandedAbsentIds] = useState<Set<string>>(
     new Set()
   );
-  const [reportText, setReportText] = useState("");
-  const [absentReason, setAbsentReason] = useState("");
-  const [absentAltType, setAbsentAltType] = useState<
-    "running" | "weight" | "other"
-  >("running");
-  const [absentAlternative, setAbsentAlternative] = useState("");
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
   );
@@ -394,13 +391,6 @@ export default function TrainingBoardSupabase({
   useEffect(() => {
     if (selectedId) loadComments(selectedId);
     setShowCommentForm(false);
-    setShowReportForm(false);
-    setShowAbsentForm(false);
-    // 別のメニューに切り替えたら、書きかけの報告内容は必ずリセットする
-    setReportText("");
-    setAbsentReason("");
-    setAbsentAltType("running");
-    setAbsentAlternative("");
     setShowMissingPopup(false);
     setExpandedReportIds(new Set());
     setExpandedAbsentIds(new Set());
@@ -618,8 +608,27 @@ export default function TrainingBoardSupabase({
     if (error) {
       setErrorMsg(error.message);
     } else {
-      setComments((data ?? []) as unknown as CommentRow[]);
+      const rows = (data ?? []) as unknown as CommentRow[];
+      setComments(rows);
+      await reloadReactions(rows);
     }
+  }
+
+  async function reloadReactions(rows: CommentRow[] = comments) {
+    const ids = rows
+      .filter((c) => !c.parent_id && (c.kind === "report" || c.kind === "absent"))
+      .map((c) => c.id);
+    setReactions(await loadReactions(supabase, ids));
+  }
+
+  // 日報はマイページの「日報」から提出する。その日の日報を開いた状態でマイページへ移動する
+  function goToDailyReport(date: string) {
+    try {
+      sessionStorage.setItem("dailyReportDate", date);
+    } catch {
+      // 保存できなくても、マイページを開くだけにする
+    }
+    router.push("/mypage");
   }
 
   async function handleCreateMenu(e: React.FormEvent) {
@@ -880,29 +889,6 @@ export default function TrainingBoardSupabase({
     setCommentText("");
   }
 
-  async function handleAddReport(e: React.FormEvent) {
-    e.preventDefault();
-    const ok = await submitComment("report", reportText);
-    if (ok) setReportText("");
-  }
-
-  async function handleAddAbsent(e: React.FormEvent) {
-    e.preventDefault();
-    if (!absentReason.trim() || !absentAlternative.trim()) return;
-    const altTypeLabel =
-      absentAltType === "running"
-        ? "ランニング"
-        : absentAltType === "weight"
-        ? "ウェイト"
-        : "その他";
-    const combined = `理由: ${absentReason.trim()}\n代替メニュー: ${altTypeLabel}\n詳細: ${absentAlternative.trim()}`;
-    const ok = await submitComment("absent", combined, null, absentAltType);
-    if (!ok) return;
-    setAbsentReason("");
-    setAbsentAltType("running");
-    setAbsentAlternative("");
-  }
-
   const selected =
     menus.find((m) => m.id === selectedId) ??
     (crossLocationMenu && crossLocationMenu.id === selectedId
@@ -914,8 +900,13 @@ export default function TrainingBoardSupabase({
   const absentReports = comments.filter(
     (c) => c.kind === "absent" && !c.parent_id
   );
-  const visibleReports = reports;
-  const visibleAbsentReports = absentReports;
+  // 自分の日報をいちばん上に出す
+  const ownFirst = (a: CommentRow, b: CommentRow) =>
+    Number(b.author_id === profile.id) - Number(a.author_id === profile.id);
+  const visibleReports = reports.slice().sort(ownFirst);
+  const visibleAbsentReports = absentReports.slice().sort(ownFirst);
+  const reactionCountOf = (id: string) =>
+    reactions.filter((r) => r.comment_id === id).length;
   const repliesOf = (id: string) =>
     comments.filter((c) => c.parent_id === id);
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
@@ -1422,9 +1413,35 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
-            {/* 実施報告・未実施報告（管理者・マネージャーは閲覧のみ＝isViewOnly） */}
+            {/* 実施報告・未実施報告（日報）。提出はマイページの「日報」から行い、ここは見る・コメント・リアクションの場 */}
             {(
               <>
+            {!isViewOnly && selected && (
+              <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+                {myReport || myAbsent ? (
+                  <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
+                    ✓ この練習の日報は提出済みです。修正はマイページの「日報」からできます。
+                  </p>
+                ) : !reportOpen ? (
+                  <p className="rounded-lg bg-amber-950/40 p-3 text-xs text-amber-700">
+                    まだ時間前です。練習開始予定時刻を過ぎると、マイページの「日報」から提出できます。
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2 rounded-lg border border-violet-800/70 bg-violet-950/20 p-3">
+                    <p className="text-xs text-neutral-300">
+                      この練習の日報がまだです。日報はマイページから、トレーニングとまとめて提出します。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => goToDailyReport(selected.date)}
+                      className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700"
+                    >
+                      日報を書く（マイページへ）
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
             {/* 実施報告 */}
             <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
               <div className="flex items-center justify-between">
@@ -1478,11 +1495,29 @@ export default function TrainingBoardSupabase({
                         }
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
-                        <span className="font-medium text-neutral-100">
-                          {r.author?.display_name ?? "不明"}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-1.5 font-medium text-neutral-100">
+                            {r.author?.display_name ?? "不明"}
+                            {r.author_id === profile.id && (
+                              <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">
+                                自分
+                              </span>
+                            )}
+                          </span>
+                          {!isOpen && (
+                            <span className="truncate text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+                              {r.text.replace(/\s+/g, " ")}
+                            </span>
+                          )}
                         </span>
-                        <span className="text-neutral-500">
-                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
+                        <span className="flex shrink-0 items-center gap-2 text-neutral-500">
+                          {reactionCountOf(r.id) > 0 && (
+                            <span>👍{reactionCountOf(r.id)}</span>
+                          )}
+                          {repliesOf(r.id).length > 0 && (
+                            <span>💬{repliesOf(r.id).length}</span>
+                          )}
+                          <span>{isOpen ? "▴" : "▾"}</span>
                         </span>
                       </button>
                       {isOpen && (
@@ -1495,6 +1530,16 @@ export default function TrainingBoardSupabase({
                           currentUserId={profile.id}
                           onUpdate={(text) => handleUpdateComment(r.id, text)}
                           onDelete={() => handleDeleteComment(r.id)}
+                          reactionSlot={
+                            <ReactionBar
+                              commentId={r.id}
+                              reactions={reactions}
+                              profileId={profile.id}
+                              teamId={profile.team_id}
+                              supabase={supabase}
+                              onChanged={() => reloadReactions()}
+                            />
+                          }
                         />
                       )}
                     </div>
@@ -1503,47 +1548,6 @@ export default function TrainingBoardSupabase({
               </div>
 
 
-              {isViewOnly ? null : myReport ? (
-                <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
-                  実施報告は提出済みです。
-                </p>
-              ) : myAbsent ? (
-                <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
-                  未実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
-                </p>
-              ) : !reportOpen ? (
-                <p className="rounded-lg bg-amber-950/40 p-3 text-xs text-amber-700">
-                  まだ時間前です。練習開始予定時刻を過ぎると報告できるようになります。
-                </p>
-              ) : !showReportForm ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowReportForm(true);
-                    setShowAbsentForm(false);
-                  }}
-                  className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700"
-                >
-                  実施報告を書く
-                </button>
-              ) : (
-                <form onSubmit={handleAddReport} className="flex flex-col gap-2">
-                  <textarea
-                    value={reportText}
-                    onChange={(e) => setReportText(e.target.value)}
-                    placeholder="今日の練習を振り返って、感想や気づきを書いてください"
-                    rows={3}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                  />
-                  <button
-                    type="submit"
-                    disabled={submittingReport || !reportText.trim()}
-                    className="self-start rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {submittingReport ? "提出中…" : "実施報告を提出する"}
-                  </button>
-                </form>
-              )}
             </section>
 
             {/* 未実施報告 */}
@@ -1590,11 +1594,29 @@ export default function TrainingBoardSupabase({
                         }
                         className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
                       >
-                        <span className="font-medium text-neutral-100">
-                          {c.author?.display_name ?? "不明"}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-1.5 font-medium text-neutral-100">
+                            {c.author?.display_name ?? "不明"}
+                            {c.author_id === profile.id && (
+                              <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">
+                                自分
+                              </span>
+                            )}
+                          </span>
+                          {!isOpen && (
+                            <span className="truncate text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+                              {c.text.replace(/\s+/g, " ")}
+                            </span>
+                          )}
                         </span>
-                        <span className="text-neutral-500">
-                          {isOpen ? "閉じる ▴" : "詳細を見る ▾"}
+                        <span className="flex shrink-0 items-center gap-2 text-neutral-500">
+                          {reactionCountOf(c.id) > 0 && (
+                            <span>👍{reactionCountOf(c.id)}</span>
+                          )}
+                          {repliesOf(c.id).length > 0 && (
+                            <span>💬{repliesOf(c.id).length}</span>
+                          )}
+                          <span>{isOpen ? "▴" : "▾"}</span>
                         </span>
                       </button>
                       {isOpen && (
@@ -1611,80 +1633,22 @@ export default function TrainingBoardSupabase({
                             handleUpdateComment(c.id, text, altType ?? null)
                           }
                           onDelete={() => handleDeleteComment(c.id)}
+                          reactionSlot={
+                            <ReactionBar
+                              commentId={c.id}
+                              reactions={reactions}
+                              profileId={profile.id}
+                              teamId={profile.team_id}
+                              supabase={supabase}
+                              onChanged={() => reloadReactions()}
+                            />
+                          }
                         />
                       )}
                     </div>
                   );
                 })}
               </div>
-              {isViewOnly ? null : myAbsent ? (
-                <p className="rounded-lg bg-neutral-800 p-3 text-xs text-neutral-300">
-                  未実施報告は提出済みです。
-                </p>
-              ) : myReport ? (
-                <p className="rounded-lg bg-emerald-950/40 p-3 text-xs text-emerald-400">
-                  実施報告をすでに提出済みです。実施報告と未実施報告はどちらか一方のみ提出できます。
-                </p>
-              ) : !showAbsentForm ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAbsentForm(true);
-                    setShowReportForm(false);
-                  }}
-                  className="self-start rounded-lg bg-neutral-700 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-600"
-                >
-                  未実施報告を書く
-                </button>
-              ) : (
-              <form onSubmit={handleAddAbsent} className="flex flex-col gap-2">
-                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
-                  未実施の理由
-                  <input
-                    type="text"
-                    value={absentReason}
-                    onChange={(e) => setAbsentReason(e.target.value)}
-                    placeholder="例：授業・病院・出稽古など"
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                  />
-                </label>
-                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
-                  代替メニュー
-                  <select
-                    value={absentAltType}
-                    onChange={(e) =>
-                      setAbsentAltType(
-                        e.target.value as "running" | "weight" | "other"
-                      )
-                    }
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                  >
-                    <option value="running">ランニング</option>
-                    <option value="weight">ウェイト</option>
-                    <option value="other">その他</option>
-                  </select>
-                </label>
-                <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
-                  詳細
-                  <textarea
-                    value={absentAlternative}
-                    onChange={(e) => setAbsentAlternative(e.target.value)}
-                    placeholder={
-                      "例：\n〇スナッチ\n　50㎏×7、6、5\n　60kg×4、3\n　70kg×1、1\n〇BP\n　100kg ×10、8、6\n　80kg×7、5\n〇荷重懸垂\n　20kg×10、7、5\n　10kg×8、5\n　0㎏×13\n〇DL\n　120kg×13、10、9\n　140kg×6、5、3"
-                    }
-                    rows={8}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={submittingReport}
-                  className="self-start rounded-lg bg-neutral-600 px-4 py-2.5 text-sm font-medium text-white active:bg-neutral-700 disabled:opacity-50"
-                >
-                  {submittingReport ? "提出中…" : "未実施報告を提出する"}
-                </button>
-              </form>
-              )}
             </section>
 
             {isCoachView &&
@@ -1932,6 +1896,7 @@ function ReportThread({
   editableAltType = false,
   onUpdate,
   onDelete,
+  reactionSlot,
 }: {
   report: CommentRow;
   replies: CommentRow[];
@@ -1941,6 +1906,8 @@ function ReportThread({
   editableAltType?: boolean;
   onUpdate?: (text: string, altType?: string | null) => Promise<void>;
   onDelete?: () => Promise<void>;
+  // 本文の下に出すリアクション欄
+  reactionSlot?: React.ReactNode;
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -2074,6 +2041,8 @@ function ReportThread({
           {report.text}
         </p>
       )}
+
+      {reactionSlot && <div className="mt-2">{reactionSlot}</div>}
 
       {replies.length > 0 && (
         <ul className={`mt-3 flex flex-col gap-2 border-l-2 ${colors.replyBorder} pl-3`}>

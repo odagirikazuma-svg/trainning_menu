@@ -25,7 +25,8 @@ import {
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
-import { MatReportInlineForm, SelfTrainingInlineForm } from "./TaskInlineForms";
+import DailyReport from "./DailyReport";
+import TrainingInsights from "./TrainingInsights";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
@@ -96,15 +97,6 @@ type WeightLogRow = {
   start_time: string | null;
 };
 
-type RecentRecord = {
-  id: string;
-  date: string;
-  content: string;
-  type: TrainingType;
-  title: string | null;
-  isAlternative: boolean;
-};
-
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -130,10 +122,7 @@ function formatMonthDayWeek(dateStr: string) {
   return `${m}月${d}日(${w})`;
 }
 
-const homeSubTabItems: { value: "training" | "injury"; label: string }[] = [
-  { value: "training", label: "トレーニング" },
-  { value: "injury", label: "怪我の記録" },
-];
+type HomeSubTab = "daily" | "training" | "injury";
 
 export default function MemberHome({
   profile,
@@ -145,7 +134,6 @@ export default function MemberHome({
   isManager?: boolean;
 }) {
   const supabase = createClient();
-  const logSectionRef = useRef<HTMLDivElement>(null);
   const isFirstRefresh = useRef(true);
   const isOb = profile.role === "ob";
   const [showTaskListPref, setShowTaskListPref] = useState(
@@ -282,12 +270,6 @@ export default function MemberHome({
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
 
-  const [todayLog, setTodayLog] = useState<WeightLogRow | null>(null);
-  const [logDate, setLogDate] = useState<string>(todayStr);
-  const [todayLogText, setTodayLogText] = useState("");
-  const [todayLogType, setTodayLogType] = useState<TrainingType | null>(null);
-  const [todayLogTitle, setTodayLogTitle] = useState("");
-  const [todayLogStartTime, setTodayLogStartTime] = useState("");
   // 種目（ラン/ウェイト/その他）ごとに、保存されているタイトルの候補一覧（最大10個ずつ）
   const [titleOptionsByType, setTitleOptionsByType] = useState<
     Record<TrainingType, string[]>
@@ -296,18 +278,8 @@ export default function MemberHome({
   const [titleColorByType, setTitleColorByType] = useState<
     Record<TrainingType, Map<string, TitleColor>>
   >({ running: new Map(), weight: new Map(), other: new Map() });
-  const [loadingLog, setLoadingLog] = useState(true);
-  const [savingLog, setSavingLog] = useState(false);
-  const [todayAbsentRecords, setTodayAbsentRecords] = useState<RecentRecord[]>(
-    []
-  );
 
   // マイページカレンダーの「一言メモ」（本人のみ閲覧、日付ごと1件・20文字まで）
-  const [todayMemoId, setTodayMemoId] = useState<string | null>(null);
-  const [todayMemoText, setTodayMemoText] = useState("");
-  const [loadingMemo, setLoadingMemo] = useState(true);
-  const [savingMemo, setSavingMemo] = useState(false);
-  const [showMemoEditor, setShowMemoEditor] = useState(false);
   // 日付 → メモ内容（カレンダーのマス目にプレビュー表示するため、有無だけでなく内容も持つ）
   const [calendarMemoPreviews, setCalendarMemoPreviews] = useState<
     Map<string, string>
@@ -387,9 +359,6 @@ export default function MemberHome({
     loadSelfTrainingTodo();
     loadActiveExemption();
     loadNextMatch();
-    loadLogForDate(todayStr);
-    loadMemoForDate(todayStr);
-    loadTodayAbsent();
     loadTitleOptions();
     loadWeightMaxTodo();
     loadTeamEventTodos();
@@ -1267,162 +1236,6 @@ export default function MemberHome({
     setTitleColorByType(nextColors);
   }
 
-  async function loadLogForDate(date: string) {
-    setLoadingLog(true);
-    setLogDate(date);
-    const { data, error } = await supabase
-      .from("weight_logs")
-      .select("id, date, content, type, title, start_time")
-      .eq("author_id", profile.id)
-      .eq("date", date)
-      .maybeSingle();
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else if (data) {
-      const row = data as WeightLogRow;
-      setTodayLog(row);
-      setTodayLogText(row.content);
-      setTodayLogType(row.type);
-      setTodayLogTitle(row.title ?? "");
-      setTodayLogStartTime(row.start_time ? row.start_time.slice(0, 5) : "");
-    } else {
-      setTodayLog(null);
-      setTodayLogText("");
-      setTodayLogType(null);
-      setTodayLogTitle("");
-      setTodayLogStartTime("");
-    }
-    setLoadingLog(false);
-  }
-
-  async function loadMemoForDate(date: string) {
-    setLoadingMemo(true);
-    const { data, error } = await supabase
-      .from("personal_memos")
-      .select("id, content")
-      .eq("author_id", profile.id)
-      .eq("date", date)
-      .maybeSingle();
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else if (data) {
-      const row = data as { id: string; content: string };
-      setTodayMemoId(row.id);
-      setTodayMemoText(row.content);
-    } else {
-      setTodayMemoId(null);
-      setTodayMemoText("");
-    }
-    setLoadingMemo(false);
-  }
-
-  async function handleSaveMemo() {
-    setSavingMemo(true);
-    const trimmed = todayMemoText.slice(0, 20);
-    const { data, error } = await supabase
-      .from("personal_memos")
-      .upsert(
-        {
-          id: todayMemoId ?? undefined,
-          team_id: profile.team_id,
-          author_id: profile.id,
-          date: logDate,
-          content: trimmed,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "author_id,date" }
-      )
-      .select("id, content")
-      .single();
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      const row = data as { id: string; content: string };
-      setTodayMemoId(row.id);
-      setTodayMemoText(row.content);
-      await loadCalendarData();
-    }
-    setSavingMemo(false);
-  }
-
-  async function loadTodayAbsent() {
-    const { data, error } = await supabase
-      .from("comments")
-      .select("id, text, alt_type, menu:menus!comments_menu_id_fkey(date)")
-      .eq("author_id", profile.id)
-      .eq("kind", "absent")
-      .not("alt_type", "is", null);
-
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      text: string;
-      alt_type: TrainingType;
-      menu: { date: string } | null;
-    }[];
-    const todayRecords: RecentRecord[] = rows
-      .filter((r) => r.menu && r.menu.date === todayStr)
-      .map((r) => ({
-        id: r.id,
-        date: r.menu!.date,
-        content: r.text,
-        type: r.alt_type,
-        title: null,
-        isAlternative: true,
-      }));
-    setTodayAbsentRecords(todayRecords);
-  }
-
-  async function handleSaveLog() {
-    if (!todayLogType) return;
-    if (logDate > todayStr) {
-      setErrorMsg("まだ来ていない日のトレーニングは記録できません。");
-      return;
-    }
-    if (todayLogStartTime && todayLogStartTime < "06:00") {
-      setErrorMsg("開始時間はその日の6時以降で入力してください。");
-      return;
-    }
-    setSavingLog(true);
-    const trimmedTitle = todayLogTitle.trim();
-    const { data, error } = await supabase
-      .from("weight_logs")
-      .upsert(
-        {
-          id: todayLog?.id,
-          team_id: profile.team_id,
-          author_id: profile.id,
-          date: logDate,
-          content: todayLogText,
-          type: todayLogType,
-          title: trimmedTitle ? trimmedTitle : null,
-          start_time: todayLogStartTime || null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "author_id,date" }
-      )
-      .select("id, date, content, type, title, start_time")
-      .single();
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setTodayLog(data as WeightLogRow);
-      await loadSelfTrainingTodo();
-      await loadTitleOptions();
-      await loadCalendarData();
-      notifyTasksChanged();
-    }
-    setSavingLog(false);
-  }
-
   async function loadCalendarData() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
@@ -1637,39 +1450,71 @@ export default function MemberHome({
   }
 
 
+  // 日報タブで表示している日付と、提出後に日報・集計を読み直すためのカウンタ
+  // 練習予定表の「日報を書く」から来た場合は、その日の日報を開く
+  const [reportDate, setReportDate] = useState<string>(() => {
+    if (typeof window === "undefined") return todayStr;
+    try {
+      const jump = sessionStorage.getItem("dailyReportDate");
+      if (jump) {
+        sessionStorage.removeItem("dailyReportDate");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(jump) && jump <= todayStr) return jump;
+      }
+    } catch {
+      // 読めなくても今日の日報を開く
+    }
+    return todayStr;
+  });
+  const [reportRefreshKey, setReportRefreshKey] = useState(0);
+
+  // トレーニングのカレンダーで日付を押したら、その日の日報を開く
   function handleSelectCalendarDate(dateStr: string) {
     setSelectedCalendarDate(dateStr);
-    loadLogForDate(dateStr);
-    loadMemoForDate(dateStr);
+    setReportDate(dateStr > todayStr ? todayStr : dateStr);
+    setHomeSubTab("daily");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const [homeSubTab, setHomeSubTab] = useState<"training" | "injury">(
-    "training"
-  );
+  // 日報（マット報告・トレ報）を出したあとの読み直し
+  async function handleDailySubmitted() {
+    await Promise.all([
+      effectiveHomeLocation ? loadTodo() : Promise.resolve(),
+      loadSelfTrainingTodo(),
+      loadTitleOptions(),
+      loadCalendarData(),
+    ]);
+    setReportRefreshKey((n) => n + 1);
+  }
+
+  // 未提出の日（マット報告・トレ報のどちらかが残っている日）。古い日が先
+  const pendingDailyDates = Array.from(
+    new Set([...todoMenus.map((m) => m.date), ...selfTrainingPending])
+  ).sort();
+
+  const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>("daily");
 
   // フッター上のサブナビ（トレーニング／怪我の記録の切り替え）を登録
   // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
   //   useSubNav内のuseEffectが依存配列[node]の変化を検知して毎回発火し、
   //   AppShell側の再レンダーとの間で無限ループになりうる。
+  const pendingDailyCount = pendingDailyDates.length;
   const homeSubNav = useMemo(
     () =>
       !isManager ? (
-        <SubTabBar
-          items={homeSubTabItems}
+        <SubTabBar<HomeSubTab>
+          items={[
+            { value: "daily", label: "日報", badge: pendingDailyCount },
+            { value: "training", label: "トレーニング" },
+            { value: "injury", label: "怪我の記録" },
+          ]}
           active={homeSubTab}
           onChange={setHomeSubTab}
         />
       ) : null,
-    [isManager, homeSubTab]
+    [isManager, homeSubTab, pendingDailyCount]
   );
   useSubNav(homeSubNav);
 
-  // タイトル入力欄の下の詳細ボックスは、入力途中の文字列そのままでは色を変えない
-  // （キー入力のたびに色がコロコロ変わって分かりにくいため）。
-  // 既に保存されている（保存枠に入っている）タイトルと完全一致した時だけ、その色を使う。
-  const activeTitleColor = todayLogType
-    ? titleColorByType[todayLogType].get(todayLogTitle.trim())
-    : undefined;
 
   return (
     <>
@@ -1710,6 +1555,8 @@ export default function MemberHome({
       )}
       {(() => {
         if (isOb && !showTaskListPref) return null;
+        // タスクのポップアップは「日報」タブを開いているときだけ出す
+        if (homeSubTab !== "daily") return null;
         const queueTasks: QueueTask[] = [];
         // 並び順用のキー（古い日付が上。怪我の経過報告は日付がないので一番上）
         const sortKeyOf = new Map<string, string>();
@@ -1830,66 +1677,38 @@ export default function MemberHome({
           });
         }
 
-        for (const m of todoMenus) {
-          const isOverdue = m.date < todayStr;
-          sortKeyOf.set(`mat-${m.id}`, `${m.date} ${m.start_time ?? "00:00"} 0`);
-          queueTasks.push({
-            key: `mat-${m.id}`,
-            kind: "mat",
-            overdue: isOverdue,
-            badgeLabel: `練習タスク：実施報告 未提出${isOverdue ? "（期限切れ）" : ""}`,
-            title: `${formatMonthDayWeek(m.date)}${
-              m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""
-            }のマット練習${m.title ? `（${m.title}）` : ""}`,
-            urgent: isOverdue,
-            content: (
-              <MatReportInlineForm
-                key={`mat-${m.id}`}
-                menu={m}
-                onSubmitted={async () => {
-                  await loadTodo();
-                  notifyTasksChanged();
-                }}
-                onError={setErrorMsg}
-                profileId={profile.id}
-                supabase={supabase}
-              />
-            ),
-          });
-        }
-
-        for (const date of selfTrainingPending) {
+        // マット報告・トレ報は「その日の日報」1件にまとめて出す
+        for (const date of pendingDailyDates) {
           const isOverdue = date < todayStr;
-          sortKeyOf.set(`self-${date}`, `${date} 99:99 1`);
+          const matLeft = todoMenus.filter((m) => m.date === date).length;
+          const selfLeft = selfTrainingPending.includes(date);
+          const parts = [
+            matLeft > 0 ? `マット${matLeft > 1 ? `${matLeft}件` : ""}` : null,
+            selfLeft ? "トレーニング" : null,
+          ].filter(Boolean);
+          sortKeyOf.set(`daily-${date}`, `${date} 0`);
           queueTasks.push({
-            key: `self-${date}`,
-            kind: "self",
+            key: `daily-${date}`,
+            kind: "daily",
             overdue: isOverdue,
-            badgeLabel: `練習タスク：トレ報 未提出${isOverdue ? "（期限切れ）" : ""}`,
-            title: `${formatMonthDayWeek(date)}のトレーニング`,
+            badgeLabel: `日報 未提出${isOverdue ? "（期限切れ）" : ""}`,
+            title: `${formatMonthDayWeek(date)}の日報（${parts.join("・")}）`,
             urgent: isOverdue,
             content: (
-              <SelfTrainingInlineForm
-                key={`self-${date}`}
-                date={date}
+              <DailyReport
+                key={`daily-${date}`}
                 profile={profile}
-                supabase={supabase}
+                date={date}
+                variant="popup"
                 titleOptions={titleOptionsByType}
                 titleColors={titleColorByType}
-                onSubmitted={async () => {
-                  await loadSelfTrainingTodo();
-                  await loadTitleOptions();
-                  await loadCalendarData();
-                  if (logDate === date) await loadLogForDate(date);
-                  notifyTasksChanged();
-                }}
-                onError={setErrorMsg}
+                onSubmitted={handleDailySubmitted}
               />
             ),
           });
         }
 
-        // 日付の時系列順（古い日のタスクが上）。同じ日はマット→トレ報の順
+        // 日付の時系列順（古い日のタスクが上）
         queueTasks.sort((a, b) =>
           (sortKeyOf.get(a.key) ?? "").localeCompare(sortKeyOf.get(b.key) ?? "")
         );
@@ -1899,8 +1718,13 @@ export default function MemberHome({
         </>
       )}
 
-      {/* カレンダー（トレーニングの記録） */}
-      {homeSubTab === "training" && (
+      {/* トレーニング：目標・集計・分析 */}
+      {!isManager && homeSubTab === "training" && (
+        <TrainingInsights profile={profile} refreshKey={reportRefreshKey} />
+      )}
+
+      {/* カレンダー（トレーニングの記録）。日付を押すとその日の日報が開く */}
+      {(isManager || homeSubTab === "training") && (
       <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
@@ -1928,236 +1752,19 @@ export default function MemberHome({
 
       {!isManager && (
         <>
-      {homeSubTab === "training" && (
-      <section
-        ref={logSectionRef}
-        className="flex flex-col gap-2 border-t border-neutral-800 pt-4"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            {logDate === todayStr
-              ? "本日のトレーニングメニュー"
-              : `${formatMonthDay(logDate)}のトレーニングメニュー`}
-          </h2>
-          {logDate !== todayStr && (
-            <button
-              onClick={() => {
-                loadLogForDate(todayStr);
-                loadMemoForDate(todayStr);
-              }}
-              className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
-            >
-              今日に戻る
-            </button>
-          )}
-        </div>
-
-        {logDate === todayStr &&
-          todayAbsentRecords.map((r) => (
-          <div
-            key={r.id}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-          >
-            <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${trainingTypeDotColor[r.type]}`}
-              />
-              {trainingTypeLabel[r.type]}
-              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-300">
-                未実施報告の代替メニュー
-              </span>
-            </div>
-            <p className="whitespace-pre-wrap text-sm text-neutral-100">
-              {r.content}
-            </p>
-          </div>
-        ))}
-
-        {loadingLog ? (
-          <p className="text-xs text-neutral-500">読み込み中…</p>
-        ) : logDate > todayStr ? (
-          <p className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-500">
-            まだ来ていない日のトレーニングは記録できません。当日以降にこの画面から記録してください。
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
-              {(Object.keys(trainingTypeLabel) as TrainingType[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTodayLogType(t)}
-                  className={`flex-1 rounded-md py-2 font-medium ${
-                    todayLogType === t
-                      ? "bg-red-600 text-white shadow"
-                      : "text-neutral-400"
-                  }`}
-                >
-                  {trainingTypeLabel[t]}
-                </button>
-              ))}
-            </div>
-            {todayLogType && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
-                開始時間
-                <input
-                  type="time"
-                  min="06:00"
-                  max="23:59"
-                  value={todayLogStartTime}
-                  onChange={(e) => setTodayLogStartTime(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                />
-              </label>
-            )}
-            {todayLogType && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
-                タイトル
-                <input
-                  type="text"
-                  list={`${todayLogType}-title-options`}
-                  value={todayLogTitle}
-                  onChange={(e) => setTodayLogTitle(e.target.value)}
-                  placeholder="例：BIG3、上半身の日、インターバル走 など"
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                />
-                <datalist id={`${todayLogType}-title-options`}>
-                  {titleOptionsByType[todayLogType].map((t) => (
-                    <option key={t} value={t} />
-                  ))}
-                </datalist>
-                {titleOptionsByType[todayLogType].length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {titleOptionsByType[todayLogType].map((t) => {
-                      const c = titleColorByType[todayLogType].get(t);
-                      const selected = todayLogTitle.trim() === t;
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setTodayLogTitle(t)}
-                          className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
-                            selected
-                              ? `${c?.border ?? "border-neutral-600"} ${c?.fill ?? "bg-neutral-800"} ${c?.text ?? "text-neutral-200"}`
-                              : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
-                          }`}
-                        >
-                          {c && (
-                            <span
-                              className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${c.dot}`}
-                            />
-                          )}
-                          {t}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </label>
-            )}
-            <textarea
-              value={todayLogText}
-              onChange={(e) => setTodayLogText(e.target.value)}
-              placeholder={
-                "例：\nBP\n60・80・90・100\n110kg×7、3\n\nトレーニングしながら、その場でメモしていってOKです"
-              }
-              rows={10}
-              className={`rounded-lg border px-3 py-2.5 text-sm text-neutral-100 ${
-                !todayLog
-                  ? "border-neutral-700 bg-neutral-900"
-                  : activeTitleColor
-                    ? `${activeTitleColor.border} ${activeTitleColor.fill}`
-                    : "border-emerald-800 bg-emerald-950/40"
-              }`}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSaveLog}
-                disabled={savingLog || !todayLogType}
-                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white active:bg-emerald-700 disabled:opacity-50"
-              >
-                {savingLog ? "提出中…" : todayLog ? "再提出する" : "提出する"}
-              </button>
-              {!loadingMemo && (
-                <button
-                  type="button"
-                  onClick={() => setShowMemoEditor((v) => !v)}
-                  title="一言メモ"
-                  aria-label="一言メモを書く"
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-sm active:bg-neutral-800 ${
-                    showMemoEditor || todayMemoText
-                      ? "border-amber-700 bg-amber-950/40 text-amber-400"
-                      : "border-neutral-700 bg-neutral-900 text-neutral-400"
-                  }`}
-                >
-                  ✎
-                </button>
-              )}
-            </div>
-            {todayLog && (
-              <>
-                <p className="text-[length:calc(11px+var(--fs-add))] text-emerald-400">
-                  提出済みです。内容を変えてから「再提出する」を押すと上書きされます。
-                </p>
-                <TrainingCommentThread
-                  weightLogId={todayLog.id}
-                  profile={profile}
-                />
-              </>
-            )}
-            {showMemoEditor && !loadingMemo && (
-              <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs font-semibold text-neutral-400">
-                    一言メモ（自分だけが見られます・20文字まで）
-                  </label>
-                  <span className="shrink-0 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-                    {todayMemoText.length}/20
-                  </span>
-                </div>
-                <textarea
-                  value={todayMemoText}
-                  onChange={(e) =>
-                    setTodayMemoText(e.target.value.slice(0, 20))
-                  }
-                  maxLength={20}
-                  rows={1}
-                  placeholder="例：体調良好、右膝に違和感 など"
-                  className="resize-none rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
-                />
-                <button
-                  onClick={handleSaveMemo}
-                  disabled={savingMemo}
-                  className="self-end rounded-lg bg-neutral-700 px-3 py-1.5 text-xs font-medium text-white active:bg-neutral-600 disabled:opacity-50"
-                >
-                  {savingMemo ? "保存中…" : "メモを保存する"}
-                </button>
-              </div>
-            )}
-
-            {todayLogType === "running" && !todayLogTitle.trim() && (
-              <RecentTypeLogs
-                supabase={supabase}
-                authorId={profile.id}
-                excludeDate={logDate}
-                type="running"
-                label="直近のランメニュー"
-              />
-            )}
-            {todayLogType && todayLogTitle.trim() && (
-              <RecentTypeLogs
-                supabase={supabase}
-                authorId={profile.id}
-                excludeDate={logDate}
-                type={todayLogType}
-                title={todayLogTitle.trim()}
-                label={`直近の${todayLogTitle.trim()}のトレーニングメニュー`}
-              />
-            )}
-          </div>
-        )}
-      </section>
+      {homeSubTab === "daily" && (
+        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+          <DailyReport
+            profile={profile}
+            date={reportDate}
+            onDateChange={setReportDate}
+            refreshKey={reportRefreshKey}
+            pendingDates={pendingDailyDates}
+            titleOptions={titleOptionsByType}
+            titleColors={titleColorByType}
+            onSubmitted={handleDailySubmitted}
+          />
+        </section>
       )}
 
       {homeSubTab === "injury" && (
@@ -2388,74 +1995,6 @@ export default function MemberHome({
         </>
       )}
     </>
-  );
-}
-
-function RecentTypeLogs({
-  supabase,
-  authorId,
-  excludeDate,
-  type,
-  title,
-  label,
-}: {
-  supabase: ReturnType<typeof createClient>;
-  authorId: string;
-  excludeDate: string;
-  type: TrainingType;
-  title?: string;
-  label: string;
-}) {
-  const [logs, setLogs] = useState<WeightLogRow[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLogs(null);
-    const timeout = setTimeout(async () => {
-      let query = supabase
-        .from("weight_logs")
-        .select("id, date, content, type, title")
-        .eq("author_id", authorId)
-        .eq("type", type)
-        .neq("date", excludeDate)
-        .order("date", { ascending: false })
-        .limit(3);
-      if (type === "weight" && title) {
-        query = query.eq("title", title);
-      }
-      const { data } = await query;
-      if (!cancelled) setLogs((data ?? []) as WeightLogRow[]);
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorId, excludeDate, type, title]);
-
-  return (
-    <div className="flex flex-col gap-2 border-t border-neutral-800 pt-3">
-      <h3 className="text-xs font-semibold text-neutral-400">{label}</h3>
-      {logs === null ? (
-        <p className="text-xs text-neutral-500">読み込み中…</p>
-      ) : logs.length === 0 ? (
-        <p className="text-xs text-neutral-500">まだ記録がありません。</p>
-      ) : (
-        logs.map((r) => (
-          <div
-            key={r.id}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-          >
-            <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-500">
-              {formatMonthDay(r.date)}
-            </p>
-            <p className="whitespace-pre-wrap text-sm text-neutral-100">
-              {r.content}
-            </p>
-          </div>
-        ))
-      )}
-    </div>
   );
 }
 
@@ -2872,125 +2411,6 @@ function UnifiedCalendar({
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-type TrainingCommentRow = {
-  id: string;
-  author_id: string;
-  text: string;
-  created_at: string;
-  author: { display_name: string } | null;
-};
-
-// トレーニング（マット以外）記録に対するコメントスレッド。
-// コーチ・本人どちらからもコメントでき、お互いのフィードバックに使える。
-function TrainingCommentThread({
-  weightLogId,
-  profile,
-}: {
-  weightLogId: string;
-  profile: Profile;
-}) {
-  const supabase = createClient();
-  const [comments, setComments] = useState<TrainingCommentRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [text, setText] = useState("");
-  const [posting, setPosting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("weight_log_comments")
-      .select(
-        "id, author_id, text, created_at, author:profiles!weight_log_comments_author_id_fkey(display_name)"
-      )
-      .eq("weight_log_id", weightLogId)
-      .order("created_at", { ascending: true });
-    if (error) setErrorMsg(error.message);
-    setComments((data ?? []) as unknown as TrainingCommentRow[]);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weightLogId]);
-
-  async function handlePost() {
-    if (!text.trim()) return;
-    setPosting(true);
-    const { error } = await supabase.from("weight_log_comments").insert({
-      weight_log_id: weightLogId,
-      team_id: profile.team_id,
-      author_id: profile.id,
-      text: text.trim(),
-    });
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setText("");
-      await load();
-    }
-    setPosting(false);
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <p className="text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-400">コメント</p>
-      {loading ? (
-        <p className="text-xs text-neutral-500">読み込み中…</p>
-      ) : comments.length === 0 ? (
-        <p className="text-xs text-neutral-500">まだコメントはありません。</p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {comments.map((c) => {
-            const name =
-              c.author_id === profile.id
-                ? "自分"
-                : (c.author?.display_name ?? "コーチ");
-            return (
-              <div
-                key={c.id}
-                className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-xs"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-neutral-100">{name}</span>
-                  <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-                    {c.created_at.slice(5, 10).replace("-", "/")}
-                  </span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-neutral-200">
-                  {c.text}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">
-          {errorMsg}
-        </p>
-      )}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="コメントを入力"
-          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-100"
-        />
-        <button
-          onClick={handlePost}
-          disabled={posting || !text.trim()}
-          className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
-        >
-          送信
-        </button>
       </div>
     </div>
   );

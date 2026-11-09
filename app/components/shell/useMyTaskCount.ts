@@ -37,7 +37,7 @@ function injuryNeedsProgressUpdate(inj: InjuryRow, todayStr: string): boolean {
 }
 
 /**
- * フッターのマイページアイコンに表示する「練習タスク＋怪我タスク」の合計件数。
+ * フッターのマイページアイコンに表示する「未提出の日報（日数）＋怪我タスク」の合計件数。
  * マイページ本体（MemberHome）が持つロジックの軽量版で、ヘッダー/フッター表示専用。
  */
 export function useMyTaskCount(profile: Profile | null): number {
@@ -66,8 +66,8 @@ export function useMyTaskCount(profile: Profile | null): number {
 
     async function load() {
       const effectiveHomeLocation: Location | null = profile!.home_location;
-      let matPendingCount = 0;
-      let selfPendingCount = 0;
+      // マット報告・トレ報は「その日の日報」としてまとめて数える（未提出の日数）
+      const pendingDates = new Set<string>();
 
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
@@ -141,9 +141,9 @@ export function useMyTaskCount(profile: Profile | null): number {
               (c) => c.menu_id
             )
           );
-          matPendingCount = openMenus.filter(
-            (m) => !respondedIds.has(m.id)
-          ).length;
+          for (const m of openMenus) {
+            if (!respondedIds.has(m.id)) pendingDates.add(m.date);
+          }
         }
 
         const { data: scheduleData } = await supabase
@@ -174,9 +174,9 @@ export function useMyTaskCount(profile: Profile | null): number {
           const loggedDates = new Set(
             ((logData ?? []) as { date: string }[]).map((r) => r.date)
           );
-          selfPendingCount = nonMatDates.filter(
-            (d) => !loggedDates.has(d)
-          ).length;
+          for (const d of nonMatDates) {
+            if (!loggedDates.has(d)) pendingDates.add(d);
+          }
         }
       }
 
@@ -191,7 +191,7 @@ export function useMyTaskCount(profile: Profile | null): number {
       ).length;
 
       if (!cancelled) {
-        setCount(matPendingCount + selfPendingCount + injuryPendingCount);
+        setCount(pendingDates.size + injuryPendingCount);
       }
     }
 
