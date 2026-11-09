@@ -19,3 +19,23 @@ export function notifyGoalsChanged() {
     window.dispatchEvent(new Event(GOALS_CHANGED_EVENT));
   }
 }
+
+// 月間目標は毎月立て直すもの。今月に入ってから保存していなければ「未設定」とみなす
+export function isMonthlyGoalCurrent(updatedAt: string | null | undefined) {
+  if (!updatedAt) return false;
+  const u = new Date(updatedAt);
+  const now = new Date();
+  return u.getFullYear() === now.getFullYear() && u.getMonth() === now.getMonth();
+}
+
+export type GoalRow = { term: GoalTerm; content: string; updated_at: string };
+
+// 未設定の目標（年間：空、月間：空 または 今月まだ保存していない）
+export function missingGoalTerms(rows: GoalRow[]): GoalTerm[] {
+  const long = rows.find((r) => r.term === "long");
+  const short = rows.find((r) => r.term === "short");
+  const missing: GoalTerm[] = [];
+  if (!long?.content.trim()) missing.push("long");
+  if (!short?.content.trim() || !isMonthlyGoalCurrent(short.updated_at)) missing.push("short");
+  return missing;
+}

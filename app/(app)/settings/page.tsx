@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../components/shell/AppShell";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
+import { useGoalTasks } from "../../components/shell/useGoalTasks";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
 import {
   useCalendarViewPref,
@@ -874,6 +875,12 @@ export default function SettingsPage() {
   const { profile, signOut } = useProfile();
   // 管理者・マネージャーは管理者用の設定画面。ただし「管理設定」「セクション登録」は管理者のみ
   const isStaff = isStaffRole(profile.role);
+  const goalMissing = useGoalTasks(profile).length;
+  // 目標が未設定なら「目標」欄を開いた状態にする（保存して0件になっても閉じない）
+  const [goalsAutoOpen, setGoalsAutoOpen] = useState(false);
+  useEffect(() => {
+    if (goalMissing > 0) setGoalsAutoOpen(true);
+  }, [goalMissing]);
   const canEdit = isAdminEditor(profile.role);
   const pushSupported = isPushSupported();
   const myPageIcon = profile.icon_url || "/icons/nav-default-avatar.png";
@@ -948,7 +955,12 @@ export default function SettingsPage() {
           </SettingsGroup>
 
           <SettingsGroup icon={myPageIcon} iconAlt="マイページ" title="マイページ">
-            <CollapsibleSection title="目標（年間・月間）">
+            <CollapsibleSection
+              key={goalsAutoOpen ? "goals-open" : "goals"}
+              title="目標（年間・月間）"
+              badge={goalMissing}
+              defaultOpen={goalsAutoOpen}
+            >
               <GoalsSettingsSection />
             </CollapsibleSection>
             <CollapsibleSection title="プロフィールアイコンの設定">

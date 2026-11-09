@@ -11,10 +11,13 @@ import { useState } from "react";
 export default function CollapsibleSection({
   title,
   defaultOpen = false,
+  badge = 0,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
+  // タイトル横の赤丸の数字（未設定の項目数など）
+  badge?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -29,6 +32,11 @@ export default function CollapsibleSection({
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
           {title}
+          {badge > 0 && (
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+              {badge}
+            </span>
+          )}
         </h2>
         <span
           className={`shrink-0 text-neutral-400 transition-transform dark:text-neutral-500 ${

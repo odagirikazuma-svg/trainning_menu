@@ -5,6 +5,7 @@ import { createClient } from "../lib/supabase/client";
 import {
   GOAL_MAX_LENGTH,
   goalTerms,
+  isMonthlyGoalCurrent,
   notifyGoalsChanged,
   type GoalTerm,
 } from "../lib/goals";
@@ -19,6 +20,8 @@ export default function GoalsSettingsSection() {
   const [drafts, setDrafts] = useState<Record<GoalTerm, string>>({ long: "", short: "" });
   const [saved, setSaved] = useState<Record<GoalTerm, string>>({ long: "", short: "" });
   const [loading, setLoading] = useState(true);
+  // 月間目標が今月まだ保存されていない（先月のまま）
+  const [shortStale, setShortStale] = useState(false);
   const [available, setAvailable] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -27,7 +30,7 @@ export default function GoalsSettingsSection() {
     (async () => {
       const { data, error } = await supabase
         .from("member_goals")
-        .select("term, content")
+        .select("term, content, updated_at")
         .eq("author_id", profile.id)
         .in("term", ["long", "short"]);
       if (error) {
@@ -36,9 +39,12 @@ export default function GoalsSettingsSection() {
         return;
       }
       const next: Record<GoalTerm, string> = { long: "", short: "" };
-      for (const g of (data ?? []) as { term: GoalTerm; content: string }[]) {
+      let stale = true;
+      for (const g of (data ?? []) as { term: GoalTerm; content: string; updated_at: string }[]) {
         next[g.term] = g.content;
+        if (g.term === "short") stale = !isMonthlyGoalCurrent(g.updated_at);
       }
+      setShortStale(stale);
       setDrafts(next);
       setSaved(next);
       setLoading(false);
@@ -47,6 +53,7 @@ export default function GoalsSettingsSection() {
   }, [profile.id]);
 
   const changed = goalTerms.some(({ term }) => drafts[term].trim() !== saved[term]);
+  const thisMonth = new Date().getMonth() + 1;
 
   async function handleSave() {
     setSaving(true);
@@ -69,6 +76,7 @@ export default function GoalsSettingsSection() {
     const next = { long: rows[0].content, short: rows[1].content };
     setSaved(next);
     setDrafts(next);
+    if (next.short) setShortStale(false);
     setMessage({ ok: true, text: "保存しました。ヘッダーに表示されます。" });
     notifyGoalsChanged();
   }
@@ -81,12 +89,20 @@ export default function GoalsSettingsSection() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-        登録した目標は、画面上のヘッダーに5秒ごとに切り替わって表示されます。
+        登録した目標は、画面上のヘッダーに5秒ごとに切り替わって表示されます。月間目標は毎月立て直しましょう（月が変わると「今月まだ」になります）。
       </p>
       {goalTerms.map(({ term, label, hint }) => (
         <label key={term} className="flex flex-col gap-1">
           <span className="flex items-center justify-between text-xs font-semibold text-neutral-300">
-            {label}
+            <span className="flex items-center gap-1.5">
+              {term === "short" ? `${label}（${thisMonth}月）` : label}
+              {((term === "long" && !saved.long) ||
+                (term === "short" && (!saved.short || shortStale))) && (
+                <span className="rounded bg-red-600 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-white">
+                  {term === "short" && saved.short ? "今月まだ" : "未設定"}
+                </span>
+              )}
+            </span>
             <span className="text-[length:calc(10px+var(--fs-add))] font-normal text-neutral-500">
               {drafts[term].length}/{GOAL_MAX_LENGTH}
             </span>
@@ -107,10 +123,14 @@ export default function GoalsSettingsSection() {
       <button
         type="button"
         onClick={handleSave}
-        disabled={saving || !changed}
+        disabled={saving || (!changed && !(shortStale && drafts.short.trim()))}
         className="self-start rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
       >
-        {saving ? "保存中…" : "保存する"}
+        {saving
+          ? "保存中…"
+          : !changed && shortStale && drafts.short.trim()
+            ? `${thisMonth}月もこの月間目標で続ける`
+            : "保存する"}
       </button>
       {message && (
         <p className={`text-xs ${message.ok ? "text-emerald-400" : "text-red-400"}`}>

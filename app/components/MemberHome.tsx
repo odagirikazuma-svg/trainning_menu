@@ -27,6 +27,8 @@ import type { Profile } from "./AuthGate";
 import TaskQueuePopup, { type QueueTask } from "./TaskQueuePopup";
 import DailyReport from "./DailyReport";
 import TrainingInsights from "./TrainingInsights";
+import GoalsSettingsSection from "./GoalsSettingsSection";
+import { useGoalTasks } from "./shell/useGoalTasks";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
@@ -1492,6 +1494,8 @@ export default function MemberHome({
   ).sort();
 
   const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>("daily");
+  // 年間目標・月間目標が未設定なら、タスクとして出す
+  const missingGoals = useGoalTasks(profile);
 
   // フッター上のサブナビ（トレーニング／怪我の記録の切り替え）を登録
   // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
@@ -1674,6 +1678,24 @@ export default function MemberHome({
                 )}
               </div>
             ),
+          });
+        }
+
+        if (missingGoals.length > 0) {
+          sortKeyOf.set("goal", "0000");
+          queueTasks.push({
+            key: "goal",
+            kind: "goal",
+            overdue: false,
+            badgeLabel: "目標 未設定",
+            title:
+              missingGoals.length === 2
+                ? "年間目標・月間目標を設定しよう"
+                : missingGoals[0] === "long"
+                  ? "年間目標を設定しよう"
+                  : `${new Date().getMonth() + 1}月の月間目標を設定しよう`,
+            urgent: false,
+            content: <GoalsSettingsSection />,
           });
         }
 
