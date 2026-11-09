@@ -500,6 +500,11 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
           <span>列を押すとその日の中身／黄色の点が自己ベスト</span>
           <span>{formatMonthDay(last.date)}</span>
         </div>
+        {stats.kind === "e1rm" && (
+          <p className="mt-0.5 text-right text-[length:calc(9px+var(--fs-add))] text-neutral-500">
+            ※推定MAXはブリジッキー（Brzycki）式：重量×36÷(37−回数)
+          </p>
+        )}
         {active && (
           <div className="mt-1 flex flex-col gap-0.5 rounded bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200">
             <span className="font-semibold">
