@@ -8,7 +8,7 @@ import { formatSeconds, type Measure } from "./SetLogger";
 /**
  * 振り返りタブ「種目ごとの記録」。
  * 日報で数値を入れた種目ごとに、伸び（推移グラフ）と自己ベストを出す。
- * - 重量×回数の種目：推定MAX（1RM、Epley式）で比べる
+ * - 重量×回数の種目：推定MAX（1RM、Brzycki式）で比べる
  * - 重量なしの回数の種目：1セットの最高回数
  * - 時間の種目：1セットの最長時間
  */
@@ -51,10 +51,12 @@ function formatMonthDay(s: string) {
   return `${Number(m)}/${Number(d)}`;
 }
 
-// 推定MAX（Epley式）。1回ならその重量、12回を超える回数は推定が不正確なので使わない
+// 推定MAX（Brzycki式：重量 × 36 ÷ (37 − 回数)）。
+// 1回ならその重量そのものになり、低回数でも高く出すぎない。
+// 12回を超える回数は推定が不正確なので使わない
 function e1rm(w: number, r: number) {
   if (r <= 0 || r > 12) return null;
-  return r === 1 ? w : w * (1 + r / 30);
+  return (w * 36) / (37 - r);
 }
 
 function round1(n: number) {
@@ -263,7 +265,7 @@ export default function ExerciseProgress({
           ))}
         </div>
         <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-          🏅は2週間以内に自己ベストを更新した種目。推定MAXは「重量×(1＋回数÷30)」で計算しています（13回以上のセットは使いません）。
+          🏅は2週間以内に自己ベストを更新した種目。推定MAXは「重量×36÷(37−回数)」（Brzycki式）で、その日いちばん高く出たセットから計算しています（13回以上のセットは使いません）。
         </p>
       </section>
     </>
