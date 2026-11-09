@@ -14,7 +14,7 @@ type SupabaseBrowserClient = ReturnType<typeof createClient>;
  */
 
 export type Measure = "reps" | "time";
-export type Exercise = { id: string; name: string; measure: Measure };
+export type Exercise = { id: string; name: string; measure: Measure; created_by?: string | null };
 // warmup = ウォーミングアップのセット（分析の「メインセット」から外す）
 export type SetDraft = {
   weight: string;
@@ -303,6 +303,8 @@ export default function SetLogger({
   const [newMeasure, setNewMeasure] = useState<Measure>("reps");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // 編集中の種目（自分が追加した種目だけ、名前・記録方法の修正と削除ができる）
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,7 +312,7 @@ export default function SetLogger({
       const [ex, used] = await Promise.all([
         supabase
           .from("exercises")
-          .select("id, name, measure")
+          .select("id, name, measure, created_by")
           .eq("team_id", profile.team_id)
           .order("name"),
         supabase
@@ -352,6 +354,22 @@ export default function SetLogger({
   }, [exercises, usage, query, blocks]);
 
   const exactMatch = exercises.find((e) => e.name === query.trim());
+  const myExercises = exercises
+    .filter((e) => e.created_by === profile.id)
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+  const isMine = (id: string) => exercises.some((e) => e.id === id && e.created_by === profile.id);
+
+  // 種目を直した・消したあと、一覧と入力中の記録に反映する
+  function handleExerciseUpdated(ex: Exercise) {
+    setExercises((prev) => prev.map((e) => (e.id === ex.id ? { ...e, ...ex } : e)));
+    onChange(blocks.map((b) => (b.exercise.id === ex.id ? { ...b, exercise: { ...b.exercise, ...ex } } : b)));
+    setEditingExerciseId(null);
+  }
+  function handleExerciseDeleted(id: string) {
+    setExercises((prev) => prev.filter((e) => e.id !== id));
+    onChange(blocks.filter((b) => b.exercise.id !== id));
+    setEditingExerciseId(null);
+  }
 
   function update(next: ExerciseBlock[]) {
     setMessage(null);
@@ -376,7 +394,7 @@ export default function SetLogger({
         measure: newMeasure,
         created_by: profile.id,
       })
-      .select("id, name, measure")
+      .select("id, name, measure, created_by")
       .single();
     setBusy(false);
     if (error || !data) {
@@ -471,6 +489,17 @@ export default function SetLogger({
                 {measureLabel[b.exercise.measure]}で記録
               </span>
             </span>
+            {isMine(b.exercise.id) && (
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingExerciseId(editingExerciseId === b.exercise.id ? null : b.exercise.id)
+                }
+                className="shrink-0 text-[length:calc(10px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+              >
+                種目を直す
+              </button>
+            )}
             <button
               type="button"
               onClick={() => copyPrevious(bi)}
@@ -497,6 +526,16 @@ export default function SetLogger({
               ✕
             </button>
           </div>
+          {editingExerciseId === b.exercise.id && (
+            <ExerciseEditor
+              supabase={supabase}
+              profileId={profile.id}
+              exercise={exercises.find((e) => e.id === b.exercise.id) ?? b.exercise}
+              onSaved={handleExerciseUpdated}
+              onDeleted={handleExerciseDeleted}
+              onClose={() => setEditingExerciseId(null)}
+            />
+          )}
           <div className="grid grid-cols-[2rem_1fr_1fr_1.5rem] items-center gap-x-2 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
             <span />
             <span className="text-center">重量kg（任意）</span>
@@ -638,6 +677,41 @@ export default function SetLogger({
               </div>
             </div>
           )}
+          {myExercises.length > 0 && (
+            <details className="border-t border-neutral-800 pt-2">
+              <summary className="cursor-pointer text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                自分が追加した種目を直す・消す（{myExercises.length}）
+              </summary>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {myExercises.map((e) =>
+                  editingExerciseId === e.id ? (
+                    <ExerciseEditor
+                      key={e.id}
+                      supabase={supabase}
+                      profileId={profile.id}
+                      exercise={e}
+                      onSaved={handleExerciseUpdated}
+                      onDeleted={handleExerciseDeleted}
+                      onClose={() => setEditingExerciseId(null)}
+                    />
+                  ) : (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setEditingExerciseId(e.id)}
+                      className="flex items-center justify-between rounded border border-neutral-800 px-2.5 py-1.5 text-left text-xs text-neutral-200 active:bg-neutral-800"
+                    >
+                      <span>
+                        {e.name}
+                        <span className="ml-1.5 text-neutral-500">{measureLabel[e.measure]}で記録</span>
+                      </span>
+                      <span className="text-neutral-500">✎</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </details>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -661,6 +735,197 @@ export default function SetLogger({
       {message && (
         <p className="text-[length:calc(11px+var(--fs-add))] text-amber-400">{message}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * 自分が追加した種目の修正・削除。
+ * - 名前はいつでも直せる
+ * - 「回数／時間」は、まだ誰の記録にも使われていない間だけ変えられる
+ * - 削除は、他の部員が記録に使っていなければできる（自分の記録は一緒に消える）
+ */
+function ExerciseEditor({
+  supabase,
+  profileId,
+  exercise,
+  onSaved,
+  onDeleted,
+  onClose,
+}: {
+  supabase: SupabaseBrowserClient;
+  profileId: string;
+  exercise: Exercise;
+  onSaved: (ex: Exercise) => void;
+  onDeleted: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(exercise.name);
+  const [measure, setMeasure] = useState<Measure>(exercise.measure);
+  const [counts, setCounts] = useState<{ mine: number; others: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [mine, others] = await Promise.all([
+        supabase
+          .from("training_sets")
+          .select("id", { count: "exact", head: true })
+          .eq("exercise_id", exercise.id)
+          .eq("author_id", profileId),
+        supabase
+          .from("training_sets")
+          .select("id", { count: "exact", head: true })
+          .eq("exercise_id", exercise.id)
+          .neq("author_id", profileId),
+      ]);
+      if (!cancelled) setCounts({ mine: mine.count ?? 0, others: others.count ?? 0 });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercise.id, profileId]);
+
+  const used = counts ? counts.mine + counts.others > 0 : true;
+
+  async function handleSave() {
+    const trimmed = name.trim().slice(0, 30);
+    if (!trimmed) {
+      setError("種目名を入れてください。");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error: err } = await supabase
+      .from("exercises")
+      .update({ name: trimmed, measure: used ? exercise.measure : measure })
+      .eq("id", exercise.id);
+    setBusy(false);
+    if (err) {
+      setError(
+        err.code === "23505" ? "同じ名前の種目がすでにあります。" : `保存できませんでした（${err.message}）`
+      );
+      return;
+    }
+    onSaved({ ...exercise, name: trimmed, measure: used ? exercise.measure : measure });
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    setError(null);
+    const { data, error: err } = await supabase
+      .from("exercises")
+      .delete()
+      .eq("id", exercise.id)
+      .select("id");
+    setBusy(false);
+    if (err || !data || data.length === 0) {
+      setError(
+        err
+          ? `削除できませんでした（${err.message}）`
+          : "削除できませんでした。他の部員が記録に使っているか、削除の設定（SQL）がまだの可能性があります。"
+      );
+      return;
+    }
+    onDeleted(exercise.id);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-amber-800/60 bg-amber-950/20 p-2.5">
+      <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+        種目名
+        <input
+          type="text"
+          value={name}
+          maxLength={30}
+          onChange={(e) => setName(e.target.value)}
+          className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100"
+        />
+      </label>
+      <div className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+        記録のしかた
+        <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+          {(["reps", "time"] as Measure[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              disabled={used}
+              onClick={() => setMeasure(m)}
+              className={`flex-1 rounded-md py-1.5 font-medium ${
+                (used ? exercise.measure : measure) === m ? "bg-red-600 text-white" : "text-neutral-400"
+              } disabled:opacity-60`}
+            >
+              {measureLabel[m]}で記録
+            </button>
+          ))}
+        </div>
+        {counts && used && (
+          <span className="text-neutral-500">
+            すでに記録があるため、回数／時間は変えられません。間違えた場合は、この種目を削除して作り直してください。
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy}
+          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          保存する
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+        >
+          やめる
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          disabled={busy || !counts || counts.others > 0}
+          className="ml-auto rounded-lg border border-red-800 px-3 py-1.5 text-xs text-red-400 active:bg-red-950 disabled:opacity-40"
+        >
+          この種目を削除
+        </button>
+      </div>
+      {counts && counts.others > 0 && (
+        <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+          他の部員がこの種目を記録に使っているため、削除できません（名前の修正はできます）。
+        </p>
+      )}
+      {confirmDelete && counts && (
+        <div className="flex flex-col gap-2 rounded border border-red-900 bg-red-950/40 p-2 text-xs text-red-200">
+          <span>
+            「{exercise.name}」を削除します。
+            {counts.mine > 0 ? `あなたのこの種目の記録（${counts.mine}セット）も一緒に消えます。` : ""}
+            元には戻せません。
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="rounded bg-red-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+            >
+              削除する
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="rounded border border-neutral-700 px-3 py-1.5 text-neutral-300"
+            >
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
 }

@@ -1725,6 +1725,7 @@ export default function MemberHome({
                 titleOptions={titleOptionsByType}
                 titleColors={titleColorByType}
                 onSubmitted={handleDailySubmitted}
+                onTitlesChanged={loadTitleOptions}
               />
             ),
           });
@@ -1785,6 +1786,7 @@ export default function MemberHome({
             titleOptions={titleOptionsByType}
             titleColors={titleColorByType}
             onSubmitted={handleDailySubmitted}
+            onTitlesChanged={loadTitleOptions}
           />
         </section>
       )}

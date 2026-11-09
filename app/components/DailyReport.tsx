@@ -180,6 +180,7 @@ export default function DailyReport({
   titleOptions,
   titleColors,
   onSubmitted,
+  onTitlesChanged,
 }: {
   profile: Profile;
   date: string;
@@ -192,6 +193,8 @@ export default function DailyReport({
   titleOptions: Record<TrainingType, string[]>;
   titleColors: Record<TrainingType, Map<string, TitleColor>>;
   onSubmitted?: () => void | Promise<void>;
+  // タイトル候補を整理したあとに、候補を読み直す（入力中の内容は消さない）
+  onTitlesChanged?: () => void | Promise<void>;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -225,6 +228,9 @@ export default function DailyReport({
   const [missing, setMissing] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [copying, setCopying] = useState(false);
+  // タイトル候補の整理（間違えて付けたタイトルを候補から消す）
+  const [titleEditMode, setTitleEditMode] = useState(false);
+  const [removingTitle, setRemovingTitle] = useState<string | null>(null);
   const submitLock = useRef(false);
   // 日付を素早く切り替えたときに、古い日の読み込み結果で上書きしないための番号
   const loadSeq = useRef(0);
@@ -639,6 +645,25 @@ export default function DailyReport({
     await onSubmitted?.();
   }
 
+  // タイトル候補から消す：自分の記録に付いているそのタイトルを外す（記録そのものは残る）
+  async function handleRemoveTitle(type: TrainingType, title: string) {
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("weight_logs")
+      .update({ title: null })
+      .eq("author_id", profile.id)
+      .eq("type", type)
+      .eq("title", title);
+    setSubmitting(false);
+    setRemovingTitle(null);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    if (training.title.trim() === title) updateTraining({ title: "" });
+    await onTitlesChanged?.();
+  }
+
   // 前回の同じ種類（タイトルを選んでいれば同じタイトル）の記録を本文にコピーする
   async function handleCopyPrevious() {
     if (!training.type) return;
@@ -924,10 +949,45 @@ export default function DailyReport({
               </label>
             </div>
             {titleOptions[type].length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {titleOptions[type].map((t) => {
                   const c = titleColors[type].get(t);
                   const selected = training.title.trim() === t;
+                  if (titleEditMode) {
+                    return removingTitle === t ? (
+                      <span
+                        key={t}
+                        className="flex items-center gap-1.5 rounded-full border border-red-800 bg-red-950/40 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-red-200"
+                      >
+                        「{t}」を候補から消す？
+                        <button
+                          type="button"
+                          disabled={submitting}
+                          onClick={() => handleRemoveTitle(type, t)}
+                          className="font-bold text-red-400"
+                        >
+                          消す
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRemovingTitle(null)}
+                          className="text-neutral-400"
+                        >
+                          やめる
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setRemovingTitle(t)}
+                        className="flex items-center gap-1 rounded-full border border-dashed border-neutral-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300"
+                      >
+                        {t}
+                        <span className="text-red-400">✕</span>
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={t}
@@ -948,7 +1008,22 @@ export default function DailyReport({
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitleEditMode((v) => !v);
+                    setRemovingTitle(null);
+                  }}
+                  className="text-[length:calc(10px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+                >
+                  {titleEditMode ? "整理を終える" : "候補を整理"}
+                </button>
               </div>
+            )}
+            {titleEditMode && (
+              <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+                ✕を押すと、そのタイトルを候補から消します（過去の記録の中身は消えず、タイトルだけ外れます）。
+              </p>
             )}
           </>
         )}
