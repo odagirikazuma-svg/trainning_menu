@@ -13,6 +13,7 @@ import {
   computeDailyLoad,
   e1rm,
   loadBalance,
+  MAT_PRACTICE_LOAD,
   type BalanceStatus,
   type LoadSetRow,
 } from "../lib/trainingLoad";
@@ -20,6 +21,7 @@ import {
 /**
  * マイページ「振り返り」タブの上半分。（目標は設定タブで編集し、ヘッダーに表示する）
  * - 直近4週間のまとめ（日報の提出率・連続提出・練習負荷・平均強度・自己ベスト更新・負荷バランス）
+ *   練習負荷＝重量×回数×セット数＋マット練習（参加1回につき一定値）
  * - 試合の振り返り（イベントで提出したもの）
  * - 週ごとの練習量（12週）・よくやるメニュー・ひとことコメント
  * - ウェイトMAX・体組成の推移（イベントで提出した記録）
@@ -368,6 +370,17 @@ export default function TrainingInsights({
     // ---- 強度・負荷 ----
     const setRows = allSetRows;
     const dayLoads = computeDailyLoad(setRows);
+    // マット練習に参加（実施報告）した日は、一定の負荷を足す
+    let matLoadDays = 0;
+    for (const [menuId, r] of reportsByMenu) {
+      if (r.kind !== "report") continue;
+      const d = menuDate.get(menuId);
+      if (!d) continue;
+      const cur = dayLoads.get(d) ?? { date: d, load: 0, intensities: [], pbExerciseIds: [] };
+      cur.load += MAT_PRACTICE_LOAD;
+      dayLoads.set(d, cur);
+      matLoadDays += 1;
+    }
     const dailyLoads: Summary["dailyLoads"] = [];
     for (let i = 27; i >= 0; i--) {
       const d = addDays(todayStr, -i);
@@ -421,7 +434,7 @@ export default function TrainingInsights({
       .slice(0, 3);
 
     setSummary({
-      hasLoad: setRows.some((r) => r.weight_kg != null && (r.reps ?? 0) > 0),
+      hasLoad: matLoadDays > 0 || setRows.some((r) => r.weight_kg != null && (r.reps ?? 0) > 0),
       load4w,
       loadPrev4w,
       intensity4w: avgPct(int4w),
@@ -622,8 +635,8 @@ export default function TrainingInsights({
               {tile(
                 "⚡",
                 "練習負荷",
-                summary.hasLoad ? `${Math.round(summary.load4w)}` : "—",
-                summary.hasLoad ? "回数×強度の4週合計" : "ウェイトの数値記録から計算",
+                summary.hasLoad ? Math.round(summary.load4w).toLocaleString() : "—",
+                "重量×回数×セット数＋マット練習の4週合計",
                 summary.hasLoad ? trendOf(summary.load4w, summary.loadPrev4w) : null
               )}
               {tile(
@@ -915,7 +928,7 @@ function DailyLoadChart({
       </div>
       {act ? (
         <p className="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs text-neutral-800 dark:text-neutral-200">
-          {formatMonthDay(act.date)}：負荷 {Math.round(act.load * 10) / 10}
+          {formatMonthDay(act.date)}：負荷 {Math.round(act.load).toLocaleString()}
           {act.intensity != null ? `・平均強度 ${Math.round(act.intensity * 100)}%` : "・ウェイトの記録なし"}
         </p>
       ) : (
@@ -926,8 +939,9 @@ function DailyLoadChart({
         )
       )}
       <p className="text-[length:calc(9px+var(--fs-add))] leading-relaxed text-neutral-500">
-        ※練習負荷＝メインセットの「回数×強度」の合計（強度＝重量÷その時点の推定MAX）。例：MAX100kgで80kg×8回なら 8×0.8＝6.4。
-        負荷バランス＝直近7日の負荷÷4週間の1週あたり平均（0.8〜1.3がちょうどいい範囲）。マット練習は数値が無いため含みません。
+        ※練習負荷＝メインセット（アップを除く）の「重量×回数」をセットごとに足したもの（＝重量×回数×セット数）。例：80kg×8回×3セットなら 1,920。
+        マット練習に参加した日は {MAT_PRACTICE_LOAD.toLocaleString()} を足しています。重量なし・時間の種目とランは含みません。
+        負荷バランス＝直近7日の負荷÷4週間の1週あたり平均（0.8〜1.3がちょうどいい範囲）。
       </p>
     </div>
   );

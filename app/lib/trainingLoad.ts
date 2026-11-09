@@ -2,11 +2,15 @@
 //
 // ■ 推定MAX（1RM）：Brzycki式 重量 × 36 ÷ (37 − 回数)。13回以上のセットは使わない
 // ■ 相対強度：そのセットの重量 ÷ その時点の推定MAX（自己ベスト）
-// ■ 練習負荷：メインセット（アップを除く）の「回数 × 相対強度」の合計
-//    例）推定MAX 100kg の人が 80kg×8回 → 8 × 0.8 = 6.4
-//    重さが同じでも、MAXに近い重量で多く挙げた日ほど負荷が大きくなる
+// ■ 練習負荷：メインセット（アップを除く）の「重量 × 回数」をセットごとに足したもの
+//    （＝重量×回数×セット数）。例）80kg×8回×3セット → 1,920
+//    MAX重量を1回×3セットのように合計回数が少ない日は、負荷も小さく出る
+//    マット練習は、参加（実施報告）した日に一定の値（MAT_PRACTICE_LOAD）を足す
 // ■ 負荷バランス（急性:慢性 負荷比）：直近7日の負荷 ÷ 直近28日の1週間あたり平均
 //    0.8〜1.3 がちょうどよい範囲。1.5を超える急な増加はケガのリスクが上がるとされる
+
+// マット練習1回分の練習負荷（ウェイトの「重量×回数」に換算した値）
+export const MAT_PRACTICE_LOAD = 3000;
 
 export function e1rm(w: number, r: number): number | null {
   if (r <= 0 || r > 12) return null;
@@ -74,7 +78,7 @@ export function computeDailyLoad(rows: LoadSetRow[]): Map<string, DayLoad> {
       );
       for (const s of main) {
         const rel = Math.min(1, Number(s.weight_kg) / ref);
-        day.load += s.reps! * rel;
+        day.load += Number(s.weight_kg) * s.reps!;
         day.intensities.push(rel);
       }
       if (todayBest > prev) bestSoFar.set(exId, todayBest);
