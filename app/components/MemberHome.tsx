@@ -1739,7 +1739,7 @@ export default function MemberHome({
           (sortKeyOf.get(a.key) ?? "").localeCompare(sortKeyOf.get(b.key) ?? "")
         );
 
-        return <TaskQueuePopup tasks={queueTasks} startWithList />;
+        return <TaskQueuePopup tasks={queueTasks} startWithList rememberKey={profile.id} />;
       })()}
         </>
       )}

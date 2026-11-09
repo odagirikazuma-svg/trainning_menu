@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHeaderExtra } from "./shell/AppShell";
 
 export type TaskKind = "daily" | "goal" | "mat" | "self" | "injury" | "event";
@@ -97,13 +97,28 @@ function TaskLabel({ task }: { task: QueueTask }) {
 export default function TaskQueuePopup({
   tasks,
   startWithList = false,
+  rememberKey,
 }: {
   tasks: QueueTask[];
+  // 指定すると、一度閉じたポップアップは（タスクの中身が変わらない限り）
+  // タブを切り替えて戻ってきても自動では開かない（このブラウザのタブを閉じるまで）
+  rememberKey?: string;
   // true のとき、自動でポップアップが開いたときも1件ずつではなく「未提出のタスク」一覧から始める
   startWithList?: boolean;
 }) {
   const initialView = startWithList ? "list" : "queue";
-  const [open, setOpen] = useState(true);
+  const signature = tasks
+    .map((t) => t.key)
+    .sort()
+    .join("|");
+  const [open, setOpen] = useState(() => {
+    if (!rememberKey || typeof window === "undefined") return true;
+    try {
+      return sessionStorage.getItem(`taskPopupClosed:${rememberKey}`) !== signature;
+    } catch {
+      return true;
+    }
+  });
   const [view, setView] = useState<"queue" | "list" | "detail">(initialView);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
@@ -119,9 +134,12 @@ export default function TaskQueuePopup({
 
   const pending = tasks.filter((t) => !skipped.has(t.key));
 
+  const prevTaskCount = useRef(tasks.length);
   useEffect(() => {
     // 新しいタスクが増えたら、閉じていても自動で再度ポップアップを開く（順番表示モード）
-    if (pending.length > 0 && !open) {
+    const increased = tasks.length > prevTaskCount.current;
+    prevTaskCount.current = tasks.length;
+    if (increased && pending.length > 0 && !open) {
       setView(initialView);
       setOpen(true);
     }
@@ -162,6 +180,13 @@ export default function TaskQueuePopup({
     // キャンセルしたら残りタスクの有無に関わらず必ず閉じる。
     // 1回閉じたらヘッダー右上のバッジからいつでも一覧を開いて再開できる。
     setOpen(false);
+    if (rememberKey) {
+      try {
+        sessionStorage.setItem(`taskPopupClosed:${rememberKey}`, signature);
+      } catch {
+        // 保存できなくても閉じるだけ
+      }
+    }
     setSelectedKey(null);
   }
 
