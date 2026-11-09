@@ -29,6 +29,7 @@ import DailyReport from "./DailyReport";
 import TrainingInsights from "./TrainingInsights";
 import GoalsSettingsSection from "./GoalsSettingsSection";
 import DayRecordPanel from "./DayRecordPanel";
+import InsightCard from "./InsightCard";
 import { useGoalTasks } from "./shell/useGoalTasks";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
@@ -353,7 +354,6 @@ export default function MemberHome({
 
   useEffect(() => {
     if (isManager) {
-      checkPushSubscription();
       setLoadingTodo(false);
       return;
     }
@@ -363,11 +363,7 @@ export default function MemberHome({
     loadActiveExemption();
     loadNextMatch();
     loadTitleOptions();
-    loadWeightMaxTodo();
-    loadTeamEventTodos();
-    loadMatchReflections();
     loadInjuries();
-    checkPushSubscription();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1748,18 +1744,9 @@ export default function MemberHome({
         </>
       )}
 
-      {/* 振り返り：集計・分析・推移 */}
-      {!isManager && homeSubTab === "training" && (
-        <TrainingInsights profile={profile} refreshKey={reportRefreshKey} />
-      )}
-
       {/* カレンダー（トレーニングの記録）。日付を押すと、その下にその日の記録が出る */}
       {(isManager || homeSubTab === "training") && (
-      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-          トレーニングの記録
-        </h2>
+      <InsightCard icon="📅" title="トレーニングの記録" subtitle="日付を押すと、その日の記録が下に出ます">
         <UnifiedCalendar
           cursor={calendarCursor}
           onCursorChange={setCalendarCursor}
@@ -1786,7 +1773,12 @@ export default function MemberHome({
             onClose={() => setSelectedCalendarDate(null)}
           />
         )}
-      </section>
+      </InsightCard>
+      )}
+
+      {/* 振り返り：まとめ・種目ごとの記録・自己ベスト・試合・イベントの推移 */}
+      {!isManager && homeSubTab === "training" && (
+        <TrainingInsights profile={profile} refreshKey={reportRefreshKey} />
       )}
 
       {!isManager && (

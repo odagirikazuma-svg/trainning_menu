@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "../lib/supabase/client";
-import type { Profile } from "./AuthGate";
+import { useMemo, useState } from "react";
 import { formatSeconds, type Measure } from "./SetLogger";
+import InsightCard from "./InsightCard";
 
 /**
  * 振り返りタブ「種目ごとの記録」。
@@ -18,7 +17,7 @@ import { formatSeconds, type Measure } from "./SetLogger";
  * その日の最高重量の70%未満のセットをアップとみなす。
  */
 
-type Row = {
+export type Row = {
   date: string;
   exercise_id: string;
   set_no: number;
@@ -106,48 +105,14 @@ function formatVolume(kind: MetricKind, v: number) {
 }
 
 export default function ExerciseProgress({
-  profile,
-  refreshKey = 0,
+  rows,
 }: {
-  profile: Profile;
-  refreshKey?: number;
+  // 1人分のセット記録（1年分）。親（振り返り）がまとめて読み込んで渡す。null は読み込み中
+  rows: Row[] | null;
 }) {
-  const supabase = createClient();
   const todayStr = toDateKey(new Date());
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [available, setAvailable] = useState(true);
+  const available = true;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const since = new Date();
-      since.setFullYear(since.getFullYear() - 1);
-      const query = (cols: string) =>
-        supabase
-          .from("training_sets")
-          .select(cols)
-          .eq("author_id", profile.id)
-          .gte("date", toDateKey(since))
-          .order("date", { ascending: true })
-          .limit(5000);
-      const base = "date, exercise_id, set_no, weight_kg, reps, seconds";
-      const ex = "exercise:exercises(id, name, measure)";
-      let { data, error } = await query(`${base}, is_warmup, ${ex}`);
-      if (error) ({ data, error } = await query(`${base}, ${ex}`));
-      if (cancelled) return;
-      if (error) {
-        setAvailable(false);
-        setRows([]);
-        return;
-      }
-      setRows((data ?? []) as unknown as Row[]);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.id, refreshKey]);
 
   const stats = useMemo<ExerciseStats[]>(() => {
     if (!rows) return [];
@@ -221,30 +186,22 @@ export default function ExerciseProgress({
 
   const selected = stats.find((s) => s.id === selectedId) ?? stats[0] ?? null;
 
-  const sectionTitle = (text: string) => (
-    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-      <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-      {text}
-    </h2>
-  );
 
   if (!available) return null;
   if (rows === null) {
     return (
-      <section className="flex flex-col gap-2">
-        {sectionTitle("種目ごとの記録")}
+      <InsightCard id="ins-exercise" icon="🏋️" title="種目ごとの記録" subtitle="練習の質・最高・練習量の推移">
         <p className="text-xs text-neutral-500">集計中…</p>
-      </section>
+      </InsightCard>
     );
   }
   if (stats.length === 0) {
     return (
-      <section className="flex flex-col gap-2">
-        {sectionTitle("種目ごとの記録")}
+      <InsightCard id="ins-exercise" icon="🏋️" title="種目ごとの記録" subtitle="練習の質・最高・練習量の推移">
         <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
           日報のトレーニング欄で「種目を追加」して重量・回数・時間を入れると、ここに伸びのグラフと自己ベストが出ます。
         </p>
-      </section>
+      </InsightCard>
     );
   }
 
@@ -256,8 +213,7 @@ export default function ExerciseProgress({
 
   return (
     <>
-      <section className="flex flex-col gap-2">
-        {sectionTitle("種目ごとの記録")}
+      <InsightCard id="ins-exercise" icon="🏋️" title="種目ごとの記録" subtitle="練習の質・最高・練習量の推移">
         <div className="flex flex-wrap gap-1.5">
           {stats.map((s) => (
             <button
@@ -276,11 +232,10 @@ export default function ExerciseProgress({
           ))}
         </div>
         {selected && <ExerciseDetail stats={selected} todayStr={todayStr} />}
-      </section>
+      </InsightCard>
 
-      <section className="flex flex-col gap-2">
-        {sectionTitle("自己ベスト")}
-        <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900">
+      <InsightCard id="ins-best" icon="🏅" title="自己ベスト" subtitle="種目ごとのいちばん良い記録">
+        <div className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800 rounded-xl bg-neutral-50 dark:bg-neutral-800/50">
           {stats.map((s) => (
             <button
               key={s.id}
@@ -305,7 +260,7 @@ export default function ExerciseProgress({
         <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
           🏅は2週間以内に自己ベストを更新した種目。推定MAXは「重量×36÷(37−回数)」（Brzycki式）で、その日いちばん高く出たセットから計算しています（13回以上のセットは使いません）。
         </p>
-      </section>
+      </InsightCard>
     </>
   );
 }
@@ -377,7 +332,7 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
   );
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
+    <div className="flex flex-col gap-2 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50">
       <div className="grid grid-cols-3 gap-2">
         {tile(
           `自己ベスト（${kindLabel[stats.kind]}）`,

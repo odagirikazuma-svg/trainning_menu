@@ -7,6 +7,7 @@ import { Location, SessionType, TrainingType, trainingTypeLabel } from "../lib/t
 import type { Profile } from "./AuthGate";
 import ExerciseProgress from "./ExerciseProgress";
 import MatchReflectionList from "./MatchReflectionList";
+import InsightCard, { InsightJumpBar } from "./InsightCard";
 import {
   balanceLabel,
   computeDailyLoad,
@@ -62,6 +63,12 @@ type Summary = {
   balance: { ratio: number | null; status: BalanceStatus | null };
   dailyLoads: { date: string; load: number; intensity: number | null }[]; // 直近28日
   improving: { name: string; from: number; to: number }[];
+};
+
+// 種目ごとの記録（ExerciseProgress）と共有する、セット記録1行
+export type SetRowWithExercise = LoadSetRow & {
+  seconds: number | null;
+  exercise: { id: string; name: string; measure: "reps" | "time" } | null;
 };
 
 type MaxRow = {
@@ -133,6 +140,8 @@ export default function TrainingInsights({
     profile.role === "manager" ? "tama" : profile.home_location;
 
   const [summary, setSummary] = useState<Summary | null>(null);
+  // セット記録（1年分）。種目ごとの記録にもそのまま渡して、二重に読み込まない
+  const [setRows, setSetRows] = useState<SetRowWithExercise[] | null>(null);
   const [maxRows, setMaxRows] = useState<MaxRow[]>([]);
   const [bodyRows, setBodyRows] = useState<BodyRow[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -148,41 +157,70 @@ export default function TrainingInsights({
     const windowStart = addDays(todayStr, -83); // 12週間
     const rangeStart = windowStart > joined ? windowStart : joined;
 
-    // マットメニュー（所属拠点＋全体練習）
+    // ---- 必要なデータをまとめて（並行して）読み込む ----
     type M = { id: string; date: string; start_time: string | null };
-    let menuRows: M[] = [];
-    if (homeLocation) {
-      const [own, joint] = await Promise.all([
-        supabase
-          .from("menus")
-          .select("id, date, start_time")
-          .eq("team_id", profile.team_id)
-          .eq("location", homeLocation)
-          .eq("is_off", false)
-          .gte("date", rangeStart)
-          .lte("date", todayStr),
-        supabase
-          .from("menus")
-          .select("id, date, start_time")
-          .eq("team_id", profile.team_id)
-          .eq("is_joint", true)
-          .eq("is_off", false)
-          .gte("date", rangeStart)
-          .lte("date", todayStr),
-      ]);
-      const map = new Map<string, M>();
-      for (const m of [...(own.data ?? []), ...(joint.data ?? [])] as M[]) map.set(m.id, m);
-      menuRows = Array.from(map.values()).filter(
-        (m) => !m.start_time || new Date() >= new Date(`${m.date}T${m.start_time}`)
-      );
-    }
+    const empty = Promise.resolve({ data: [] as unknown[], error: null });
+    const setsSince = addDays(todayStr, -365);
+    const setQuery = (cols: string) =>
+      supabase
+        .from("training_sets")
+        .select(cols)
+        .eq("author_id", profile.id)
+        .gte("date", setsSince)
+        .lte("date", todayStr)
+        .order("date", { ascending: true })
+        .limit(5000);
+    const setBase =
+      "date, exercise_id, set_no, weight_kg, reps, seconds, exercise:exercises(id, name, measure)";
+    const [own, joint, exemptions, schedRes, logRes, setResFirst] = await Promise.all([
+      homeLocation
+        ? supabase
+            .from("menus")
+            .select("id, date, start_time")
+            .eq("team_id", profile.team_id)
+            .eq("location", homeLocation)
+            .eq("is_off", false)
+            .gte("date", rangeStart)
+            .lte("date", todayStr)
+        : empty,
+      homeLocation
+        ? supabase
+            .from("menus")
+            .select("id, date, start_time")
+            .eq("team_id", profile.team_id)
+            .eq("is_joint", true)
+            .eq("is_off", false)
+            .gte("date", rangeStart)
+            .lte("date", todayStr)
+        : empty,
+      loadExemptions(supabase, profile.team_id, rangeStart, todayStr, profile.id),
+      homeLocation
+        ? supabase
+            .from("schedule_days")
+            .select("date, sessions:schedule_sessions(session_type)")
+            .eq("team_id", profile.team_id)
+            .eq("location", homeLocation)
+            .eq("is_off", false)
+            .gte("date", rangeStart)
+            .lte("date", todayStr)
+        : empty,
+      supabase
+        .from("weight_logs")
+        .select("date, type, title")
+        .eq("author_id", profile.id)
+        .gte("date", windowStart)
+        .lte("date", todayStr),
+      setQuery(`${setBase}, is_warmup`),
+    ]);
+    // is_warmup 列がまだ無いDBでは、列なしで読み直す
+    const setRes = setResFirst.error ? await setQuery(setBase) : setResFirst;
+    const allSetRows = ((setRes.error ? [] : setRes.data) ?? []) as unknown as SetRowWithExercise[];
+    setSetRows(allSetRows);
 
-    const exemptions = await loadExemptions(
-      supabase,
-      profile.team_id,
-      rangeStart,
-      todayStr,
-      profile.id
+    const menuMap = new Map<string, M>();
+    for (const m of [...(own.data ?? []), ...(joint.data ?? [])] as M[]) menuMap.set(m.id, m);
+    const menuRows = Array.from(menuMap.values()).filter(
+      (m) => !m.start_time || new Date() >= new Date(`${m.date}T${m.start_time}`)
     );
 
     const reportsByMenu = new Map<string, { kind: string; alt_type: TrainingType | null }>();
@@ -207,33 +245,18 @@ export default function TrainingInsights({
     }
 
     const trainingDates = new Set<string>();
-    if (homeLocation) {
-      const { data } = await supabase
-        .from("schedule_days")
-        .select("date, sessions:schedule_sessions(session_type)")
-        .eq("team_id", profile.team_id)
-        .eq("location", homeLocation)
-        .eq("is_off", false)
-        .gte("date", rangeStart)
-        .lte("date", todayStr);
-      for (const row of (data ?? []) as unknown as {
-        date: string;
-        sessions: { session_type: SessionType }[];
-      }[]) {
-        if (row.sessions.some((s) => s.session_type !== "mat")) trainingDates.add(row.date);
-      }
+    for (const row of (schedRes.data ?? []) as unknown as {
+      date: string;
+      sessions: { session_type: SessionType }[];
+    }[]) {
+      if (row.sessions.some((s) => s.session_type !== "mat")) trainingDates.add(row.date);
     }
 
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("date, type, title")
-      .eq("author_id", profile.id)
-      .gte("date", windowStart)
-      .lte("date", todayStr);
-    if (logError) {
-      setErrorMsg(logError.message);
+    if (logRes.error) {
+      setErrorMsg(logRes.error.message);
       return;
     }
+    const logData = logRes.data;
     const logs = (logData ?? []) as { date: string; type: TrainingType; title: string | null }[];
     const logDates = new Set(logs.map((l) => l.date));
 
@@ -343,22 +366,7 @@ export default function TrainingInsights({
       .slice(0, 5);
 
     // ---- 強度・負荷 ----
-    const setsSince = addDays(todayStr, -365);
-    const setQuery = (cols: string) =>
-      supabase
-        .from("training_sets")
-        .select(cols)
-        .eq("author_id", profile.id)
-        .gte("date", setsSince)
-        .lte("date", todayStr)
-        .order("date", { ascending: true })
-        .limit(5000);
-    const base = "date, exercise_id, set_no, weight_kg, reps, exercise:exercises(name)";
-    let setRes = await setQuery(`${base}, is_warmup`);
-    if (setRes.error) setRes = await setQuery(base);
-    const setRows = ((setRes.error ? [] : setRes.data) ?? []) as unknown as (LoadSetRow & {
-      exercise: { name: string } | null;
-    })[];
+    const setRows = allSetRows;
     const dayLoads = computeDailyLoad(setRows);
     const dailyLoads: Summary["dailyLoads"] = [];
     for (let i = 27; i >= 0; i--) {
@@ -439,10 +447,17 @@ export default function TrainingInsights({
 
   async function loadRecords() {
     // ウェイトMAX（イベントで提出した記録）
-    const { data: maxData } = await supabase
+    const maxPromise = supabase
       .from("weight_maxes")
       .select("bench, squat, deadlift, updated_at, event:weight_max_events(created_at)")
       .eq("author_id", profile.id);
+    const bodyPromise = supabase
+      .from("team_event_submissions")
+      .select(
+        "measurement_date, weight_kg, body_fat_pct, muscle_mass_kg, updated_at, event:team_events!team_event_submissions_event_id_fkey(type, deadline)"
+      )
+      .eq("author_id", profile.id);
+    const [{ data: maxData }, { data: bodyData }] = await Promise.all([maxPromise, bodyPromise]);
     const maxes = ((maxData ?? []) as unknown as {
       bench: number | null;
       squat: number | null;
@@ -460,12 +475,6 @@ export default function TrainingInsights({
     setMaxRows(maxes);
 
     // 体組成（イベントで提出した記録）
-    const { data: bodyData } = await supabase
-      .from("team_event_submissions")
-      .select(
-        "measurement_date, weight_kg, body_fat_pct, muscle_mass_kg, updated_at, event:team_events!team_event_submissions_event_id_fkey(type, deadline)"
-      )
-      .eq("author_id", profile.id);
     const body = ((bodyData ?? []) as unknown as {
       measurement_date: string | null;
       weight_kg: number | null;
@@ -539,72 +548,99 @@ export default function TrainingInsights({
       )
     : 1;
 
-  const sectionTitle = (text: string, right?: React.ReactNode) => (
-    <div className="flex items-center justify-between gap-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-        {text}
-      </h2>
-      {right}
-    </div>
-  );
+  type Trend = { up: boolean | null; text: string } | null;
+  // 前の4週との比較（▲▼と文字で表す。色だけに頼らない）
+  const trendOf = (cur: number | null, prev: number | null, unit = "", isPct = false): Trend => {
+    if (cur == null || prev == null || prev === 0) return null;
+    const diff = isPct ? cur - prev : Math.round((cur / prev - 1) * 100);
+    if (diff === 0) return { up: null, text: "前の4週と同じ" };
+    return {
+      up: diff > 0,
+      text: `${diff > 0 ? "▲" : "▼"} ${Math.abs(diff)}${isPct ? "pt" : "%"}${unit}`,
+    };
+  };
 
-  const tile = (label: string, value: string, sub?: string | null) => (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
-      <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">{label}</span>
-      <span className="text-xl font-bold text-foreground">{value}</span>
+  const tile = (icon: string, label: string, value: string, sub?: string | null, trend?: Trend) => (
+    <div className="flex flex-col gap-1 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50">
+      <span className="flex items-center gap-1 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-500">
+        <span>{icon}</span>
+        {label}
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-extrabold leading-none text-foreground">{value}</span>
+        {trend && (
+          <span
+            className={`text-[length:calc(10px+var(--fs-add))] font-bold ${
+              trend.up == null
+                ? "text-neutral-500"
+                : trend.up
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+            }`}
+          >
+            {trend.text}
+          </span>
+        )}
+      </span>
       {sub && (
-        <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">{sub}</span>
+        <span className="text-[length:calc(10px+var(--fs-add))] leading-snug text-neutral-500">{sub}</span>
       )}
     </div>
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {errorMsg && (
         <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
 
+      <InsightJumpBar
+        items={[
+          { id: "ins-summary", label: "📊 まとめ" },
+          { id: "ins-exercise", label: "🏋️ 種目ごと" },
+          { id: "ins-best", label: "🏅 自己ベスト" },
+          { id: "ins-match", label: "🤼 試合" },
+          { id: "ins-events", label: "📈 イベント" },
+        ]}
+      />
+
       {/* 直近4週間のまとめ */}
-      <section className="flex flex-col gap-2">
-        {sectionTitle("直近4週間のまとめ")}
+      <InsightCard id="ins-summary" icon="📊" title="直近4週間のまとめ" subtitle="▲▼は前の4週間との比較">
         {!summary ? (
           <p className="text-xs text-neutral-500">集計中…</p>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
               {tile(
+                "📝",
                 "日報の提出率",
                 summary.rate == null ? "—" : `${summary.rate}%`,
-                summary.required > 0
-                  ? `${summary.done}/${summary.required}件${
-                      summary.prevRate != null ? `・前の4週 ${summary.prevRate}%` : ""
-                    }`
-                  : "対象の練習がありません"
+                summary.required > 0 ? `${summary.done}/${summary.required}件` : "対象の練習がありません",
+                trendOf(summary.rate, summary.prevRate, "", true)
               )}
-              {tile("連続提出", `${summary.streak}日`, "練習があった日で数えています")}
+              {tile("🔥", "連続提出", `${summary.streak}日`, "練習があった日で数えています")}
               {tile(
-                "練習負荷（4週合計）",
+                "⚡",
+                "練習負荷",
                 summary.hasLoad ? `${Math.round(summary.load4w)}` : "—",
-                summary.hasLoad && summary.loadPrev4w > 0
-                  ? `前の4週 ${Math.round(summary.loadPrev4w)}（${
-                      summary.load4w >= summary.loadPrev4w ? "+" : "−"
-                    }${Math.abs(Math.round((summary.load4w / summary.loadPrev4w - 1) * 100))}%）`
-                  : "ウェイトの数値記録から計算"
+                summary.hasLoad ? "回数×強度の4週合計" : "ウェイトの数値記録から計算",
+                summary.hasLoad ? trendOf(summary.load4w, summary.loadPrev4w) : null
               )}
               {tile(
+                "💪",
                 "平均強度",
                 summary.intensity4w != null ? `${summary.intensity4w}%` : "—",
-                summary.intensityPrev4w != null
-                  ? `前の4週 ${summary.intensityPrev4w}%・MAXに対する重さ`
-                  : "メインセットの重さ÷推定MAX"
+                "メインセットの重さ÷推定MAX",
+                trendOf(summary.intensity4w, summary.intensityPrev4w, "", true)
               )}
               {tile(
+                "🏅",
                 "自己ベスト更新",
                 `${summary.pbCount4w}回`,
                 summary.improving[0] ? `いちばん伸びた：${summary.improving[0].name}` : "推定MAXの更新回数"
               )}
               {tile(
+                "🤼",
                 "マット練習",
                 `${summary.matDone}回`,
                 summary.matAbsent > 0 ? `未実施 ${summary.matAbsent}回` : "実施報告の回数"
@@ -619,145 +655,149 @@ export default function TrainingInsights({
               />
             )}
             {insights(summary).length > 0 && (
-              <ul className="flex flex-col gap-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-[length:calc(12px+var(--fs-add))] text-neutral-700 dark:text-neutral-300">
-                {insights(summary).map((t) => (
-                  <li key={t}>・{t}</li>
-                ))}
-              </ul>
+              <div className="flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <span className="text-[length:calc(11px+var(--fs-add))] font-bold text-amber-800 dark:text-amber-300">
+                  💡 ひとことコメント
+                </span>
+                <ul className="flex flex-col gap-1 text-[length:calc(12px+var(--fs-add))] text-neutral-800 dark:text-neutral-200">
+                  {insights(summary).map((t) => (
+                    <li key={t}>・{t}</li>
+                  ))}
+                </ul>
+              </div>
             )}
+
+            <details className="rounded-xl bg-neutral-50 px-3 py-2 dark:bg-neutral-800/50">
+              <summary className="cursor-pointer text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-600 dark:text-neutral-400">
+                練習回数の内訳とよくやるメニュー（12週）
+              </summary>
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-3 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
+                  {bucketOrder.map((b) => (
+                    <span key={b} className="flex items-center gap-1">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${bucketColor[b]}`} />
+                      {bucketLabel[b]}
+                    </span>
+                  ))}
+                </div>
+                <div>
+                  <div className="flex h-28 items-end gap-1">
+                    {summary.weeks.map((w, i) => {
+                      const total = bucketOrder.reduce((a, b) => a + w.counts[b], 0);
+                      const tip = `${w.label}の週：${bucketOrder
+                        .map((b) => `${bucketLabel[b]}${w.counts[b]}`)
+                        .join("・")}（計${total}回）`;
+                      return (
+                        <div
+                          key={i}
+                          title={tip}
+                          className="flex h-full flex-1 flex-col items-center justify-end gap-0.5"
+                        >
+                          {total > 0 && (
+                            <span className="text-[length:calc(9px+var(--fs-add))] text-neutral-500">
+                              {total}
+                            </span>
+                          )}
+                          <div
+                            className="flex w-full flex-col-reverse gap-[2px] overflow-hidden rounded-t"
+                            style={{ height: `${(total / maxWeekTotal) * 100}%` }}
+                          >
+                            {bucketOrder.map((b) =>
+                              w.counts[b] > 0 ? (
+                                <div
+                                  key={b}
+                                  className={bucketColor[b]}
+                                  style={{ flexGrow: w.counts[b], minHeight: 3 }}
+                                />
+                              ) : null
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 flex gap-1 border-t border-neutral-200 pt-1 dark:border-neutral-700">
+                    {summary.weeks.map((w, i) => (
+                      <span
+                        key={i}
+                        className="flex-1 text-center text-[length:calc(8px+var(--fs-add))] text-neutral-500"
+                      >
+                        {i % 2 === 0 ? w.label : ""}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+                    週の始まり（月曜）の日付。未実施報告の代替メニューも数えています。
+                  </p>
+                </div>
+                {summary.topTitles.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-600 dark:text-neutral-400">
+                      よくやるメニュー
+                    </span>
+                    {summary.topTitles.map((t) => (
+                      <div key={`${t.type}:${t.title}`} className="flex items-center gap-2 text-xs">
+                        <span className="w-24 shrink-0 truncate text-neutral-800 dark:text-neutral-200">{t.title}</span>
+                        <div className="h-2 flex-1 rounded bg-neutral-200 dark:bg-neutral-700">
+                          <div
+                            className={`h-2 rounded ${bucketColor[t.type]}`}
+                            style={{ width: `${(t.count / summary.topTitles[0].count) * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-10 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{t.count}回</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
           </>
         )}
-      </section>
+      </InsightCard>
 
       {/* 種目ごとの記録・自己ベスト（日報で入れた数値から） */}
-      <ExerciseProgress profile={profile} refreshKey={refreshKey} />
+      <ExerciseProgress rows={setRows} />
 
       {/* 試合の振り返り（イベントで提出したもの） */}
       <MatchReflectionList profile={profile} />
 
-      {/* 週ごとの練習量 */}
-      {summary && (
-        <section className="flex flex-col gap-2">
-          {sectionTitle("週ごとの練習量（12週）")}
-          <div className="flex flex-wrap gap-3 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
-            {bucketOrder.map((b) => (
-              <span key={b} className="flex items-center gap-1">
-                <span className={`inline-block h-2.5 w-2.5 rounded-sm ${bucketColor[b]}`} />
-                {bucketLabel[b]}
-              </span>
-            ))}
-          </div>
-          <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
-            <div className="flex h-32 items-end gap-1">
-              {summary.weeks.map((w, i) => {
-                const total = bucketOrder.reduce((a, b) => a + w.counts[b], 0);
-                const tip = `${w.label}の週：${bucketOrder
-                  .map((b) => `${bucketLabel[b]}${w.counts[b]}`)
-                  .join("・")}（計${total}回）`;
-                return (
-                  <div
-                    key={i}
-                    title={tip}
-                    className="flex h-full flex-1 flex-col items-center justify-end gap-0.5"
-                  >
-                    {total > 0 && (
-                      <span className="text-[length:calc(9px+var(--fs-add))] text-neutral-500">
-                        {total}
-                      </span>
-                    )}
-                    <div
-                      className="flex w-full flex-col-reverse gap-[2px] overflow-hidden rounded-t"
-                      style={{ height: `${(total / maxWeekTotal) * 100}%` }}
-                    >
-                      {bucketOrder.map((b) =>
-                        w.counts[b] > 0 ? (
-                          <div
-                            key={b}
-                            className={bucketColor[b]}
-                            style={{ flexGrow: w.counts[b], minHeight: 3 }}
-                          />
-                        ) : null
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-1 flex gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-1">
-              {summary.weeks.map((w, i) => (
-                <span
-                  key={i}
-                  className="flex-1 text-center text-[length:calc(8px+var(--fs-add))] text-neutral-500"
-                >
-                  {i % 2 === 0 ? w.label : ""}
-                </span>
-              ))}
-            </div>
-          </div>
-          <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            週の始まり（月曜）の日付です。未実施報告の代替メニューもトレーニングとして数えています。
-          </p>
-        </section>
-      )}
-
-      {/* よくやるメニュー */}
-      {summary && summary.topTitles.length > 0 && (
-        <section className="flex flex-col gap-2">
-          {sectionTitle("よくやるメニュー（12週）")}
-          <div className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
-            {summary.topTitles.map((t) => (
-              <div key={`${t.type}:${t.title}`} className="flex items-center gap-2 text-xs">
-                <span className="w-24 shrink-0 truncate text-neutral-800 dark:text-neutral-200">{t.title}</span>
-                <div className="h-2 flex-1 rounded bg-neutral-100 dark:bg-neutral-800">
-                  <div
-                    className={`h-2 rounded ${bucketColor[t.type]}`}
-                    style={{ width: `${(t.count / summary.topTitles[0].count) * 100}%` }}
-                  />
-                </div>
-                <span className="w-10 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{t.count}回</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ウェイトMAX */}
-      <section className="flex flex-col gap-2">
-        {sectionTitle("ウェイトMAXの推移")}
-        {maxRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
-            まだ記録がありません（イベントの「ウェイトMAX」で提出すると、ここに並びます）。
-          </p>
-        ) : (
-          <RecordTable
-            columns={[
-              { key: "bench", label: "ベンチ", unit: "kg" },
-              { key: "squat", label: "スクワット", unit: "kg" },
-              { key: "deadlift", label: "デッド", unit: "kg" },
-            ]}
-            rows={maxRows}
-          />
-        )}
-      </section>
-
-      {/* 体組成 */}
-      <section className="flex flex-col gap-2">
-        {sectionTitle("体組成の推移")}
-        {bodyRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
-            まだ記録がありません（イベントの「体組成」で提出すると、ここに並びます）。
-          </p>
-        ) : (
-          <RecordTable
-            columns={[
-              { key: "weight_kg", label: "体重", unit: "kg" },
-              { key: "body_fat_pct", label: "体脂肪率", unit: "%" },
-              { key: "muscle_mass_kg", label: "筋肉量", unit: "kg" },
-            ]}
-            rows={bodyRows}
-          />
-        )}
-      </section>
+      {/* イベントの推移（ウェイトMAX・体組成） */}
+      <InsightCard id="ins-events" icon="📈" title="イベントの推移" subtitle="イベントで提出したウェイトMAX・体組成">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">ウェイトMAX</span>
+          {maxRows.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
+              まだ記録がありません（イベントの「ウェイトMAX」で提出すると、ここに並びます）。
+            </p>
+          ) : (
+            <RecordTable
+              columns={[
+                { key: "bench", label: "ベンチ", unit: "kg" },
+                { key: "squat", label: "スクワット", unit: "kg" },
+                { key: "deadlift", label: "デッド", unit: "kg" },
+              ]}
+              rows={maxRows}
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">体組成</span>
+          {bodyRows.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
+              まだ記録がありません（イベントの「体組成」で提出すると、ここに並びます）。
+            </p>
+          ) : (
+            <RecordTable
+              columns={[
+                { key: "weight_kg", label: "体重", unit: "kg" },
+                { key: "body_fat_pct", label: "体脂肪率", unit: "%" },
+                { key: "muscle_mass_kg", label: "筋肉量", unit: "kg" },
+              ]}
+              rows={bodyRows}
+            />
+          )}
+        </div>
+      </InsightCard>
     </div>
   );
 }
@@ -772,7 +812,7 @@ function RecordTable<T extends { date: string }>({
 }) {
   const desc = rows.slice().reverse();
   return (
-    <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900">
+    <div className="overflow-x-auto rounded-xl bg-neutral-50 dark:bg-neutral-800/50">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-neutral-200 dark:border-neutral-800 text-neutral-500">
@@ -834,7 +874,7 @@ function DailyLoadChart({
     danger: "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300",
   };
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
+    <div className="flex flex-col gap-2 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">毎日の練習負荷（28日）</span>
         {balance.status && balance.ratio != null && (

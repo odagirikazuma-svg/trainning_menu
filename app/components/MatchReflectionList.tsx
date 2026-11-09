@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import type { Profile } from "./AuthGate";
+import InsightCard from "./InsightCard";
 
 /**
  * 振り返りタブ「試合の振り返り」。
@@ -59,19 +60,12 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
 
-  const sectionTitle = (
-    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-      <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-      試合の振り返り
-    </h2>
-  );
 
   if (rows === null) {
     return (
-      <section className="flex flex-col gap-2">
-        {sectionTitle}
+      <InsightCard id="ins-match" icon="🤼" title="試合の振り返り" subtitle="イベントで提出した振り返り">
         <p className="text-xs text-neutral-500">読み込み中…</p>
-      </section>
+      </InsightCard>
     );
   }
 
@@ -95,8 +89,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
     ) : null;
 
   return (
-    <section className="flex flex-col gap-2">
-      {sectionTitle}
+    <InsightCard id="ins-match" icon="🤼" title="試合の振り返り" subtitle="イベントで提出した振り返り">
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-500">
           まだ提出した試合の振り返りはありません（イベントの「試合の振り返り」で提出すると、ここに並びます）。
@@ -115,7 +108,7 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
               return (
                 <div
                   key={r.event_id}
-                  className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900"
+                  className="overflow-hidden rounded-xl bg-neutral-50 dark:bg-neutral-800/50"
                 >
                   <button
                     type="button"
@@ -154,6 +147,6 @@ export default function MatchReflectionList({ profile }: { profile: Profile }) {
           </div>
         </>
       )}
-    </section>
+    </InsightCard>
   );
 }

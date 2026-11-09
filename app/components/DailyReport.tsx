@@ -298,96 +298,45 @@ export default function DailyReport({
       setExpanded({});
     }
 
-    // 1) その日のマットメニュー（所属拠点のもの＋全体練習）
-    let dayMenus: DayMenu[] = [];
-    if (homeLocation) {
-      const cols = "id, date, title, content, location, start_time, is_joint";
-      const [own, joint] = await Promise.all([
-        supabase
-          .from("menus")
-          .select(cols)
-          .eq("team_id", profile.team_id)
-          .eq("location", homeLocation)
-          .eq("is_off", false)
-          .eq("date", date),
-        supabase
-          .from("menus")
-          .select(cols)
-          .eq("team_id", profile.team_id)
-          .eq("is_joint", true)
-          .eq("is_off", false)
-          .eq("date", date),
-      ]);
-      if (own.error || joint.error) {
-        setErrorMsg((own.error ?? joint.error)!.message);
-      }
-      const map = new Map<string, DayMenu>();
-      for (const m of [...(own.data ?? []), ...(joint.data ?? [])] as DayMenu[]) {
-        map.set(m.id, m);
-      }
-      dayMenus = Array.from(map.values()).sort((a, b) =>
-        (a.start_time ?? "00:00").localeCompare(b.start_time ?? "00:00")
-      );
-    }
-
-    // 2) 自分の報告と、それに付いたコメント・リアクション
-    let reports: MyReport[] = [];
-    let replyRows: ReplyRow[] = [];
-    let reactionRows: ReactionRow[] = [];
-    if (dayMenus.length > 0) {
-      const { data, error } = await supabase
+    // 1) その日のデータをまとめて（並行して）読み込む
+    const cols = "id, date, title, content, location, start_time, is_joint";
+    const none = Promise.resolve({ data: null, error: null });
+    const [own, joint, myRes, schedRes, exemptions, logRes, memoRes] = await Promise.all([
+      homeLocation
+        ? supabase
+            .from("menus")
+            .select(cols)
+            .eq("team_id", profile.team_id)
+            .eq("location", homeLocation)
+            .eq("is_off", false)
+            .eq("date", date)
+        : none,
+      homeLocation
+        ? supabase
+            .from("menus")
+            .select(cols)
+            .eq("team_id", profile.team_id)
+            .eq("is_joint", true)
+            .eq("is_off", false)
+            .eq("date", date)
+        : none,
+      // 自分の報告（メニューの日付で絞り込む）
+      supabase
         .from("comments")
-        .select("id, menu_id, kind, text, alt_type, created_at")
+        .select("id, menu_id, kind, text, alt_type, created_at, menu:menus!inner(date)")
         .eq("author_id", profile.id)
-        .in(
-          "menu_id",
-          dayMenus.map((m) => m.id)
-        )
         .in("kind", ["report", "absent"])
-        .is("parent_id", null);
-      if (error) setErrorMsg(error.message);
-      reports = (data ?? []) as MyReport[];
-      if (reports.length > 0) {
-        const ids = reports.map((r) => r.id);
-        const { data: replyData } = await supabase
-          .from("comments")
-          .select(
-            "id, parent_id, text, created_at, author:profiles!comments_author_id_fkey(display_name, role)"
-          )
-          .in("parent_id", ids)
-          .order("created_at", { ascending: true });
-        replyRows = (replyData ?? []) as unknown as ReplyRow[];
-        reactionRows = await loadReactions(supabase, ids);
-      }
-    }
-
-    // 3) その日の時間割（ラン・ウェイトがあればトレ報が必須）
-    let daySessions: DaySession[] = [];
-    let offDay = false;
-    if (homeLocation) {
-      const { data } = await supabase
-        .from("schedule_days")
-        .select("is_off, sessions:schedule_sessions(session_type, start_time)")
-        .eq("team_id", profile.team_id)
-        .eq("location", homeLocation)
-        .eq("date", date)
-        .maybeSingle();
-      const row = data as unknown as {
-        is_off: boolean;
-        sessions: DaySession[];
-      } | null;
-      offDay = !!row?.is_off;
-      daySessions = offDay
-        ? []
-        : (row?.sessions ?? [])
-            .slice()
-            .sort((a, b) =>
-              (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99")
-            );
-    }
-
-    // 4) 免除期間・トレ報・一言メモ
-    const [exemptions, logRes, memoRes] = await Promise.all([
+        .is("parent_id", null)
+        .eq("menu.date", date),
+      homeLocation
+        ? supabase
+            .from("schedule_days")
+            .select("is_off, sessions:schedule_sessions(session_type, start_time)")
+            .eq("team_id", profile.team_id)
+            .eq("location", homeLocation)
+            .eq("date", date)
+            .maybeSingle()
+        : none,
       loadExemptions(supabase, profile.team_id, date, date, profile.id),
       supabase
         .from("weight_logs")
@@ -402,6 +351,48 @@ export default function DailyReport({
         .eq("date", date)
         .maybeSingle(),
     ]);
+    if (own.error || joint.error) setErrorMsg((own.error ?? joint.error)!.message);
+    if (myRes.error) setErrorMsg(myRes.error.message);
+
+    const menuMap = new Map<string, DayMenu>();
+    for (const m of [...((own.data as DayMenu[] | null) ?? []), ...((joint.data as DayMenu[] | null) ?? [])]) {
+      menuMap.set(m.id, m);
+    }
+    const dayMenus = Array.from(menuMap.values()).sort((a, b) =>
+      (a.start_time ?? "00:00").localeCompare(b.start_time ?? "00:00")
+    );
+    const reports = ((myRes.data ?? []) as unknown as MyReport[]).filter((r) =>
+      menuMap.has(r.menu_id)
+    );
+
+    const schedRow = schedRes.data as unknown as {
+      is_off: boolean;
+      sessions: DaySession[];
+    } | null;
+    const offDay = !!schedRow?.is_off;
+    const daySessions: DaySession[] = offDay
+      ? []
+      : (schedRow?.sessions ?? [])
+          .slice()
+          .sort((a, b) => (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99"));
+
+    // 2) 報告に付いたコメント・リアクションと、トレ報のセット記録
+    const ids = reports.map((r) => r.id);
+    const logRow = (logRes.data as TrainingLog | null) ?? null;
+    const [replyRes, reactionRows, logBlocks] = await Promise.all([
+      ids.length > 0
+        ? supabase
+            .from("comments")
+            .select(
+              "id, parent_id, text, created_at, author:profiles!comments_author_id_fkey(display_name, role)"
+            )
+            .in("parent_id", ids)
+            .order("created_at", { ascending: true })
+        : none,
+      loadReactions(supabase, ids),
+      logRow ? loadSetsForLog(supabase, logRow.id) : Promise.resolve([] as ExerciseBlock[]),
+    ]);
+    const replyRows = ((replyRes.data ?? []) as unknown as ReplyRow[]);
 
     if (seq !== loadSeq.current) return;
 
@@ -412,9 +403,6 @@ export default function DailyReport({
     setSessions(daySessions);
     setIsOffDay(offDay);
     setExempt(isExemptOn(exemptions, profile.id, date));
-    const logRow = (logRes.data as TrainingLog | null) ?? null;
-    const logBlocks = logRow ? await loadSetsForLog(supabase, logRow.id) : [];
-    if (seq !== loadSeq.current) return;
     setLog(logRow);
     setSavedBlocks(logBlocks);
     if (resetDrafts) setBlocks(logBlocks);
