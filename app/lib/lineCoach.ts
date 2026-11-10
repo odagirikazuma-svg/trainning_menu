@@ -106,13 +106,41 @@ async function pendingRequests(admin: SupabaseClient, teamId: string) {
 export async function replyPending(admin: SupabaseClient, teamId: string, staff: Staff): Promise<LineMessage[]> {
   const rows = await pendingRequests(admin, teamId);
   if (rows.length === 0) {
-    return [{ type: "text", text: "✅ 承認待ちの休み申請はありません。" }, appButton("/admin#absence")];
+    // 承認待ちが無いときは、これから1週間の休み（承認済み）を拠点別に見せる
+    const { data } = await admin
+      .from("absence_requests")
+      .select("date, author:profiles!absence_requests_author_id_fkey(display_name, home_location)")
+      .eq("team_id", teamId)
+      .eq("status", "approved")
+      .gte("date", jstDateKey(0))
+      .lte("date", jstDateKey(7))
+      .order("date", { ascending: true });
+    const approved = (data ?? []) as unknown as {
+      date: string;
+      author: { display_name: string; home_location: string | null } | null;
+    }[];
+    const lines = ["✅ 承認待ちの休み申請はありません。"];
+    if (approved.length > 0) {
+      lines.push("", "▪️これから1週間の休み（承認済み）");
+      const dates = Array.from(new Set(approved.map((r) => r.date)));
+      for (const d of dates) {
+        const list = approved.filter((r) => r.date === d);
+        const byLoc = ["tama", "otsuka"]
+          .map((l) => {
+            const names = list.filter((r) => r.author?.home_location === l).map((r) => r.author?.display_name ?? "?");
+            return names.length ? `${LOC_LABEL[l]}：${names.join("、")}` : null;
+          })
+          .filter(Boolean);
+        lines.push(`${md(d)} ${list.length}人`, ...byLoc.map((x) => `　${x}`));
+      }
+    }
+    return [{ type: "text", text: lines.join("\n") }, appButton("/admin#absence")];
   }
   const canApprove = staff.role === "coach";
   const header: LineMessage = {
     type: "text",
     text:
-      `⏳ 承認待ちの休み申請：${rows.length}件` +
+      `🙋 休みの報告　承認待ち：${rows.length}件` +
       (canApprove ? "\n下のカードの「承認」で、その場で承認できます。差し戻しはアプリからできます。" : ""),
     ...(canApprove && rows.length > 1
       ? {

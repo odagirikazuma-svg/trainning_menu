@@ -66,6 +66,7 @@ const KEYWORDS: Record<string, string> = {
   明日のメニュー: "menu_tomorrow",
   今日のまとめ: "summary",
   承認待ち: "pending",
+  休みの報告: "pending",
   提出状況: "status",
   怪我の状況: "injuries",
 };
