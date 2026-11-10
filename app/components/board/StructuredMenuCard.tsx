@@ -39,12 +39,18 @@ const diffLabel: Record<DiffKind, string> = {
   left_early: "途中退出・中抜け",
 };
 
-function ItemList({ items }: { items: MenuItemDraft[] }) {
+function ItemList({
+  items,
+  onConfirm,
+}: {
+  items: MenuItemDraft[];
+  onConfirm?: (key: string, basis: "total" | "per_person") => void;
+}) {
   if (items.length === 0) return <p className="text-xs text-neutral-500">まだ入力されていません。</p>;
   return (
     <ol className="flex flex-col gap-1">
       {items.map((it, i) => (
-        <li key={it.key} className="flex items-baseline gap-2 text-sm">
+        <li key={it.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
           <span className="w-4 shrink-0 text-right text-xs text-neutral-400">{i + 1}</span>
           <span className="font-medium text-neutral-900 dark:text-neutral-100">{it.name || "（名前未入力）"}</span>
           <span className="text-xs text-neutral-500">
@@ -53,7 +59,17 @@ function ItemList({ items }: { items: MenuItemDraft[] }) {
           </span>
           {!amountMissing(it) && needsCheck(it) && (
             <span className="rounded bg-sky-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
-              要確認
+              要確認・計算対象外
+            </span>
+          )}
+          {onConfirm && !amountMissing(it) && needsCheck(it) && (
+            <span className="flex gap-1">
+              <button type="button" onClick={() => onConfirm(it.key, "total")} className="rounded border border-sky-400 px-1.5 text-[length:calc(10px+var(--fs-add))] text-sky-800 dark:text-sky-300">
+                全体の本数
+              </button>
+              <button type="button" onClick={() => onConfirm(it.key, "per_person")} className="rounded border border-sky-400 px-1.5 text-[length:calc(10px+var(--fs-add))] text-sky-800 dark:text-sky-300">
+                1人あたり
+              </button>
             </span>
           )}
           {amountMissing(it) && (
@@ -75,6 +91,7 @@ export default function StructuredMenuCard({
   isJoint,
   started,
   canEdit,
+  canConfirm,
 }: {
   profile: Profile;
   menuId: string;
@@ -83,6 +100,8 @@ export default function StructuredMenuCard({
   isJoint: boolean;
   started: boolean;
   canEdit: boolean;
+  // 監督・管理者：「要確認」（本数が全体か個人か）を決められる
+  canConfirm: boolean;
 }) {
   const supabase = createClient();
   const [loaded, setLoaded] = useState(false);
@@ -164,7 +183,7 @@ export default function StructuredMenuCard({
     const rows = list
       .filter((it) => it.name.trim())
       .map((it, i) => ({
-        ...toRow(it),
+        ...toRow(it, true),
         team_id: profile.team_id,
         menu_id: menuId,
         phase,
@@ -192,7 +211,7 @@ export default function StructuredMenuCard({
   }
 
   function startPlan() {
-    setDraft(plan.map((p) => ({ ...p, key: newKey() })));
+    setDraft(plan.map((p) => ({ ...p })));
     setMode("plan");
     setMsg(null);
   }
@@ -200,7 +219,8 @@ export default function StructuredMenuCard({
   function startReport() {
     // 実績がまだなら、予定を引き継ぐ（変わったところだけ直せばよい）
     const base = actual.length > 0 ? actual : plan;
-    setDraft(base.map((p) => ({ ...p, key: newKey() })));
+    // 目印（item_key）は引き継ぐ。予定と実績、本人の報告の対応がずれないように
+    setDraft(base.map((p) => ({ ...p })));
     setMatches(report ? report.attendance_matches : null);
     setDraftDiffs(new Map(diffs.map((d) => [d.member_id, d])));
     setReportNote(report?.note ?? "");
@@ -264,7 +284,7 @@ export default function StructuredMenuCard({
 
   function applyTemplate(t: Template) {
     if (draft.length > 0 && !window.confirm(`今の項目を「${t.name}」の内容に置き換えますか？`)) return;
-    setDraft((t.items ?? []).map((r) => toDraft(r)));
+    setDraft((t.items ?? []).map((r) => ({ ...toDraft(r), key: newKey() })));
   }
 
   async function saveTemplate() {
@@ -273,7 +293,7 @@ export default function StructuredMenuCard({
     const name = window.prompt("テンプレートの名前（例：通常練習、試合前調整、強化練習）");
     if (!name?.trim()) return;
     const existing = templates.find((t) => t.name === name.trim());
-    const payload = { team_id: profile.team_id, name: name.trim(), items: items.map(toRow), created_by: profile.id, updated_at: new Date().toISOString() };
+    const payload = { team_id: profile.team_id, name: name.trim(), items: items.map((d) => toRow(d)), created_by: profile.id, updated_at: new Date().toISOString() };
     const res = existing
       ? window.confirm(`「${existing.name}」を上書きしますか？`)
         ? await supabase.from("menu_templates").update(payload).eq("id", existing.id)
@@ -304,7 +324,7 @@ export default function StructuredMenuCard({
     const first = ids.find((id) => list.some((r) => r.menu_id === id));
     if (!first) return setMsg({ ok: false, text: "前回までのメニューに、計算用の項目がありませんでした。" });
     if (draft.length > 0 && !window.confirm("今の項目を、前回のメニューに置き換えますか？")) return;
-    setDraft(list.filter((r) => r.menu_id === first).map(toDraft));
+    setDraft(list.filter((r) => r.menu_id === first).map((r) => ({ ...toDraft(r), key: newKey() })));
   }
 
   function toggleDiff(memberId: string, kind: DiffKind) {
@@ -352,7 +372,7 @@ export default function StructuredMenuCard({
       <section className={box}>
         <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">📋 計算用メニュー（予定）を編集</span>
         {templateChips}
-        <MenuItemsEditor items={draft} onChange={setDraft} />
+        <MenuItemsEditor items={draft} onChange={setDraft} canConfirm={canConfirm} />
         {msg && <p className={`text-xs ${msg.ok ? "text-emerald-600" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>}
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setMode("view")} className={btnSub}>
@@ -388,7 +408,7 @@ export default function StructuredMenuCard({
             {templateChips}
           </>
         )}
-        <MenuItemsEditor items={draft} onChange={setDraft} />
+        <MenuItemsEditor items={draft} onChange={setDraft} canConfirm={canConfirm} />
 
         <div className="flex flex-col gap-2 rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-950">
           <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
@@ -505,6 +525,18 @@ export default function StructuredMenuCard({
     );
   }
 
+  // 監督・管理者が「要確認」を確定する（予定・実績の同じ項目をまとめて直す）
+  async function confirmBasis(key: string, basis: "total" | "per_person") {
+    const { error } = await supabase
+      .from("menu_items")
+      .update({ sets_basis: basis, updated_at: new Date().toISOString() })
+      .eq("menu_id", menuId)
+      .eq("item_key", key);
+    if (error) return setMsg({ ok: false, text: `確定できませんでした：${error.message}` });
+    await load();
+    setMsg({ ok: true, text: "本数の数え方を確定しました。計算に含めます。" });
+  }
+
   // ---------- 表示 ----------
   const shown = report && actual.length > 0 ? actual : plan;
   return (
@@ -523,7 +555,7 @@ export default function StructuredMenuCard({
           </span>
         ) : null}
       </div>
-      <ItemList items={shown} />
+      <ItemList items={shown} onConfirm={canConfirm ? confirmBasis : undefined} />
       {report && (
         <div className="flex flex-col gap-1 rounded-lg bg-neutral-50 p-2 text-xs dark:bg-neutral-950">
           <span className="text-neutral-600 dark:text-neutral-400">

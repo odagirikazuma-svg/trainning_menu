@@ -1327,6 +1327,7 @@ export default function TrainingBoardSupabase({
                 isJoint={selected.is_joint}
                 started={isReportOpen(selected)}
                 canEdit={canCreateMenu(profile.role)}
+                canConfirm={profile.role === "coach"}
               />
             )}
 

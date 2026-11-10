@@ -87,6 +87,7 @@ export const defaultFormat: Record<MenuCategory, MenuFormat> = {
 let seq = 0;
 export function newKey() {
   seq += 1;
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `mi-${Date.now()}-${seq}`;
 }
 
@@ -148,6 +149,8 @@ const ITEM_COLUMNS = [
 export function toDraft(row: Record<string, unknown>): MenuItemDraft {
   const base = emptyItem((row.category as MenuCategory) ?? "other");
   const out: MenuItemDraft = { ...base };
+  // 保存済みの項目は、変わらない目印（item_key）をそのまま使う
+  if (typeof row.item_key === "string" && row.item_key) out.key = row.item_key;
   for (const c of ITEM_COLUMNS) {
     if (row[c] !== undefined && row[c] !== null) (out as Record<string, unknown>)[c] = row[c];
   }
@@ -156,8 +159,9 @@ export function toDraft(row: Record<string, unknown>): MenuItemDraft {
 }
 
 // 画面の項目 → 保存する値（テンプレートのJSONにも使う）
-export function toRow(d: MenuItemDraft) {
+export function toRow(d: MenuItemDraft, withKey = false) {
   const r: Record<string, unknown> = {};
+  if (withKey) r.item_key = d.key;
   for (const c of ITEM_COLUMNS) r[c] = (d as Record<string, unknown>)[c];
   r.name = d.name.trim();
   r.note = d.note.trim() || null;
@@ -231,4 +235,55 @@ export function amountMissing(d: MenuItemDraft) {
   if (d.amount_type === "total") return !d.total_seconds;
   if (d.amount_type === "distance") return !d.distance_m;
   return !d.sets && !d.reps;
+}
+
+// ---------- 学生の参加範囲 ----------
+export type ParticipationScope = "full" | "until" | "from" | "partial";
+export const scopeLabel: Record<ParticipationScope, string> = {
+  full: "全メニュー参加",
+  until: "途中まで参加",
+  from: "遅れて参加",
+  partial: "一部だけ参加・中抜け",
+};
+
+// 自由参加の項目の概算参加量（実測の本数ではない）
+export const freeAmountOptions: { value: number; label: string }[] = [
+  { value: 100, label: "ほぼ全部" },
+  { value: 75, label: "4分の3くらい" },
+  { value: 50, label: "半分くらい" },
+  { value: 25, label: "4分の1くらい" },
+  { value: 0, label: "入っていない" },
+];
+
+export type Participation = {
+  scope: ParticipationScope;
+  boundary_key: string | null;
+  item_keys: string[];
+  free_amounts: Record<string, number>;
+};
+
+// 参加した項目の item_key
+export function participatedKeys(items: MenuItemDraft[], p: Participation): Set<string> {
+  const keys = items.map((i) => i.key);
+  if (p.scope === "full") return new Set(keys);
+  if (p.scope === "partial") return new Set(p.item_keys.filter((k) => keys.includes(k)));
+  const idx = p.boundary_key ? keys.indexOf(p.boundary_key) : -1;
+  if (idx < 0) return new Set();
+  return new Set(p.scope === "until" ? keys.slice(0, idx + 1) : keys.slice(idx));
+}
+
+// 答えが足りないところ（空なら完了）
+export function participationProblems(items: MenuItemDraft[], p: Participation | null): string[] {
+  if (items.length === 0) return [];
+  if (!p) return ["参加範囲を選んでください"];
+  const out: string[] = [];
+  if ((p.scope === "until" || p.scope === "from") && !p.boundary_key) {
+    out.push(p.scope === "until" ? "最後に参加したメニューを選んでください" : "最初に参加したメニューを選んでください");
+  }
+  if (p.scope === "partial" && p.item_keys.length === 0) out.push("参加したメニューを選んでください");
+  const joined = participatedKeys(items, p);
+  const free = items.filter((i) => i.format === "free" && joined.has(i.key));
+  const unanswered = free.filter((i) => typeof p.free_amounts[i.key] !== "number");
+  if (unanswered.length > 0) out.push(`${unanswered.map((i) => i.name).join("・")}に、どのくらい入ったかを選んでください`);
+  return out;
 }

@@ -105,9 +105,12 @@ function NumField({
 export default function MenuItemsEditor({
   items,
   onChange,
+  canConfirm = false,
 }: {
   items: MenuItemDraft[];
   onChange: (items: MenuItemDraft[]) => void;
+  // 本数の数え方（全体／1人あたり）を決められるのは監督・管理者だけ
+  canConfirm?: boolean;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -262,6 +265,11 @@ export default function MenuItemsEditor({
                       <NumField label="本数・セット数" unit="本" value={it.sets} onChange={(v) => update(it.key, { sets: v })} />
                       <div className="flex flex-col gap-0.5">
                         <span className={smallLabel}>本数の数え方</span>
+                        {!canConfirm && it.category !== "spar" ? (
+                          <span className="rounded-lg bg-neutral-100 px-2 py-1.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                            {it.sets_basis === "total" ? "全体で" : it.sets_basis === "per_person" ? "1人あたり" : "未確認（監督・管理者が確認します）"}
+                          </span>
+                        ) : (
                         <div className="flex gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
                           {(["total", "per_person", "unknown"] as const).map((b) => (
                             <button
@@ -276,6 +284,7 @@ export default function MenuItemsEditor({
                             </button>
                           ))}
                         </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -297,7 +306,7 @@ export default function MenuItemsEditor({
                 </div>
                 {it.amount_type === "timed" && (
                   <span className={smallLabel}>
-                    例：「3分スパー10本」は 1本3分×10本（全体30分）。「3分×2×10」とは数えません。「25秒×5セット」などで全体か個人か分からないときは「未確認」のままにしてください。
+                    例：「3分スパー10本」は 1本3分×10本（全体30分）。「3分×2×10」とは数えません。「25秒×5セット」などで全体か個人か分からないときは「未確認」のままにしてください（監督・管理者が確認するまで、計算には入りません）。
                   </span>
                 )}
 

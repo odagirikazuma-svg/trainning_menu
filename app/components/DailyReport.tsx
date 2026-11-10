@@ -2,6 +2,7 @@
 
 import FatigueSelector from "./FatigueSelector";
 import AbsenceRequestPanel from "./AbsenceRequestPanel";
+import ParticipationForm from "./ParticipationForm";
 import {
   absenceReasonText,
   planToBlocks,
@@ -284,6 +285,8 @@ export default function DailyReport({
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   // この日の休み申請（AbsenceRequestPanel が読み込んで知らせてくる）
   const [absenceReq, setAbsenceReq] = useState<AbsenceRequest | null>(null);
+  // 練習ごとの「参加したメニュー・スパーの参加量」の答えが足りないところ
+  const [participationIssues, setParticipationIssues] = useState<Record<string, string[]>>({});
   // ひとことメモ欄を開いているか（セット記録があるときは閉じておく）
   const [memoOpen, setMemoOpen] = useState(false);
   // ---- 下書き（書きかけの内容を端末に自動保存し、別のタブに移っても消えないようにする） ----
@@ -651,6 +654,9 @@ export default function DailyReport({
       }
       if (d.mode === "report" && !d.text.trim()) {
         problems.push(`${label}：実施した内容・振り返りを書いてください`);
+      }
+      if (d.mode === "report" && participationIssues[m.id]?.length) {
+        problems.push(`${label}：${participationIssues[m.id][0]}`);
       }
       if (
         d.mode === "absent" &&
@@ -1507,6 +1513,20 @@ export default function DailyReport({
             <p className="text-xs text-neutral-500">まだ提出されていません。</p>
           ) : (
             renderMatForm(m.id)
+          )}
+          {/* 参加したメニュー・自由参加スパーの参加量（計算用メニューがある練習だけ） */}
+          {((r && r.kind === "report") || (!r && !readOnly && draftOf(m.id).mode === "report")) && (
+            <ParticipationForm
+              menuId={m.id}
+              memberId={profile.id}
+              teamId={profile.team_id}
+              readOnly={readOnly}
+              onProblems={(id, ps) =>
+                setParticipationIssues((prev) =>
+                  (prev[id] ?? []).join() === ps.join() ? prev : { ...prev, [id]: ps }
+                )
+              }
+            />
           )}
         </div>
       );
