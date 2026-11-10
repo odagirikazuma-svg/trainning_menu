@@ -26,6 +26,8 @@ import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
 import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
 import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
+import TemplatePicker from "./board/TemplatePicker";
+import { toRow, type MenuItemDraft } from "../lib/menuItems";
 import { CommentItem, ReportThread, toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
 
 const locationSubTabItems = locations.map((loc) => ({
@@ -129,6 +131,9 @@ export default function TrainingBoardSupabase({
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
+  // テンプレートから入力したとき：保存時に計算用メニュー（予定）にも入れる
+  const [newTemplate, setNewTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
+  const [editTemplate, setEditTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
   const [commentText, setCommentText] = useState("");
   const [showCommentForm, setShowCommentForm] = useState(false);
   // 実施報告・未実施報告を送信中かどうか（二重送信防止）
@@ -580,12 +585,34 @@ export default function TrainingBoardSupabase({
     router.push("/mypage");
   }
 
+  // テンプレートの項目を、そのメニューの計算用メニュー（予定）として保存する
+  async function writePlanItems(menuIds: string[], items: MenuItemDraft[]) {
+    for (const id of menuIds) {
+      await supabase.from("menu_items").delete().eq("menu_id", id).eq("phase", "plan");
+      const rows = items
+        .filter((it) => it.name.trim())
+        .map((it, i) => ({
+          ...toRow(it),
+          team_id: profile.team_id,
+          menu_id: id,
+          phase: "plan",
+          sort_order: i,
+          created_by: profile.id,
+        }));
+      if (rows.length > 0) {
+        const { error } = await supabase.from("menu_items").insert(rows);
+        if (error) setErrorMsg(`計算用メニューを保存できませんでした：${error.message}`);
+      }
+    }
+  }
+
   async function handleCreateMenu(e: React.FormEvent) {
     e.preventDefault();
     if (!newDate) return;
     if (newMenuType !== "off" && !newContent) return;
 
     const otherLocation = locations.find((l) => l !== activeLocation)!;
+    const createdIds: string[] = [];
     const basePayload = {
       team_id: profile.team_id,
       date: newDate,
@@ -642,6 +669,7 @@ export default function TrainingBoardSupabase({
               last_edited_at: null,
             })
             .eq("id", (placeholder as { id: string }).id)
+            .select("id")
         : await supabase.from("menus").insert({
         ...basePayload,
         title: "",
@@ -650,8 +678,9 @@ export default function TrainingBoardSupabase({
         start_time: newStartTime || null,
         is_joint: newMenuType === "joint",
         is_off: false,
-      });
+      }).select("id");
       error = res.error;
+      for (const r of (res.data ?? []) as { id: string }[]) createdIds.push(r.id);
 
       if (!error && newMenuType === "normal" && newOffBothLocations) {
         const res2 = await supabase.from("menus").insert({
@@ -662,8 +691,9 @@ export default function TrainingBoardSupabase({
           start_time: newStartTime || null,
           is_joint: false,
           is_off: false,
-        });
+        }).select("id");
         error = res2.error;
+        for (const r of (res2.data ?? []) as { id: string }[]) createdIds.push(r.id);
       }
     }
 
@@ -671,6 +701,10 @@ export default function TrainingBoardSupabase({
       setErrorMsg(error.message);
       return;
     }
+    if (newTemplate && newMenuType !== "off" && createdIds.length > 0) {
+      await writePlanItems(createdIds, newTemplate.items);
+    }
+    setNewTemplate(null);
     setNewDate("");
     setNewStartTime("");
     setNewContent("");
@@ -703,6 +737,7 @@ export default function TrainingBoardSupabase({
     setEditDate(m.date);
     setEditStartTime(m.start_time ?? "");
     setEditContent(m.content);
+    setEditTemplate(null);
     setEditingMenu(true);
   }
 
@@ -737,6 +772,10 @@ export default function TrainingBoardSupabase({
     if (error) {
       setErrorMsg(error.message);
       return;
+    }
+    if (editTemplate) {
+      await writePlanItems([selectedId], editTemplate.items);
+      setEditTemplate(null);
     }
     const rows = await loadMenus();
     applySelectionForDate(editDate, rows, jointElsewhere);
@@ -1111,6 +1150,16 @@ export default function TrainingBoardSupabase({
                           </div>
                         </label>
                       )}
+                      <TemplatePicker
+                        teamId={profile.team_id}
+                        selected={newTemplate?.id ?? null}
+                        onPick={(t) => {
+                          setNewTemplate(t ? { id: t.id, items: t.items } : null);
+                          if (t && (!newContent.trim() || window.confirm("メニュー詳細を、テンプレートの内容に置き換えますか？"))) {
+                            setNewContent(t.text);
+                          }
+                        }}
+                      />
                       <textarea
                         placeholder="メニュー詳細（自由記述）"
                         value={newContent}
@@ -1240,6 +1289,16 @@ export default function TrainingBoardSupabase({
                       onChange={setEditStartTime}
                     />
                   </label>
+                  <TemplatePicker
+                    teamId={profile.team_id}
+                    selected={editTemplate?.id ?? null}
+                    onPick={(t) => {
+                      setEditTemplate(t ? { id: t.id, items: t.items } : null);
+                      if (t && (!editContent.trim() || window.confirm("メニュー詳細を、テンプレートの内容に置き換えますか？"))) {
+                        setEditContent(t.text);
+                      }
+                    }}
+                  />
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}

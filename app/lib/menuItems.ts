@@ -287,3 +287,15 @@ export function participationProblems(items: MenuItemDraft[], p: Participation |
   if (unanswered.length > 0) out.push(`${unanswered.map((i) => i.name).join("・")}に、どのくらい入ったかを選んでください`);
   return out;
 }
+
+// テンプレートの項目を、自由記述のメニュー本文にする（例：「・打ち込み 5分×2本」）
+export function itemsToText(items: MenuItemDraft[]) {
+  return items
+    .filter((i) => i.name.trim())
+    .map((i) => {
+      const amount = describeAmount(i).replace(/（全体か個人か未確認）/, "");
+      const fmt = i.format === "free" ? "（自由参加）" : i.format === "rotation" ? "（交代制）" : "";
+      return `・${i.name}${amount ? ` ${amount}` : ""}${fmt}${i.note ? `\n　${i.note}` : ""}`;
+    })
+    .join("\n");
+}
