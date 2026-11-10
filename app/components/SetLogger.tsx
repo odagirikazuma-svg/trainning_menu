@@ -32,7 +32,7 @@ export const betterLabel: Record<Better, string> = {
 // 名前から、時間の種目が「短いほど良い（走るタイム）」かを推測する
 export function guessBetter(name: string, measure: Measure): Better {
   if (measure !== "time") return "higher";
-  return /(走|ラン|ダッシュ|シャトル|スプリント|[0-9０-９]+\s*(m|km|ｍ|ｋｍ|メートル|キロ))/i.test(name)
+  return /(走|ランニング|ジョグ|ダッシュ|シャトル|スプリント|[0-9０-９]+\s*(m|km|ｍ|ｋｍ|メートル|キロ))/i.test(name)
     ? "lower"
     : "higher";
 }

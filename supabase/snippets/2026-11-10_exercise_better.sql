@@ -5,7 +5,7 @@
 alter table exercises add column if not exists better text not null default 'higher'
   check (better in ('higher', 'lower'));
 
--- 既存の時間の種目のうち、走る種目（名前に「走」「ラン」「ダッシュ」や距離が入っているもの）は「小さい値が良い」にする
+-- 既存の時間の種目のうち、走る種目（名前に「走」「ランニング」「ダッシュ」や距離が入っているもの）は「小さい値が良い」にする
 update exercises set better = 'lower'
 where measure = 'time'
-  and name ~ '(走|ラン|ダッシュ|シャトル|スプリント|[0-9０-９]+ *(m|km|ｍ|ｋｍ|メートル|キロ))';
+  and name ~ '(走|ランニング|ジョグ|ダッシュ|シャトル|スプリント|[0-9０-９]+ *(m|km|ｍ|ｋｍ|メートル|キロ))';
