@@ -6,6 +6,7 @@ import {
   amountMissing,
   describeAmount,
   formatLabel,
+  needsCheck,
   newKey,
   toDraft,
   toRow,
@@ -50,6 +51,11 @@ function ItemList({ items }: { items: MenuItemDraft[] }) {
             {describeAmount(it)}
             {it.format !== "all" && `・${formatLabel[it.format]}`}
           </span>
+          {!amountMissing(it) && needsCheck(it) && (
+            <span className="rounded bg-sky-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+              要確認
+            </span>
+          )}
           {amountMissing(it) && (
             <span className="rounded bg-amber-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
               量が未入力

@@ -9,6 +9,10 @@ import {
   emptyItem,
   formatLabel,
   defaultFormat,
+  defaultAmountType,
+  needsCheck,
+  targetGroupLabel,
+  type TargetGroup,
   type AmountType,
   type MenuCategory,
   type MenuFormat,
@@ -155,6 +159,11 @@ export default function MenuItemsEditor({
                   {describeAmount(it) ? `・${describeAmount(it)}` : ""}
                 </span>
               </span>
+              {!missing && needsCheck(it) && (
+                <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+                  要確認
+                </span>
+              )}
               {missing && (
                 <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[length:calc(9px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
                   量が未入力
@@ -186,8 +195,11 @@ export default function MenuItemsEditor({
                         onClick={() =>
                           update(it.key, {
                             category: c,
-                            // 形式をまだ触っていなければ、種別に合わせる
+                            // 形式・量の表し方をまだ触っていなければ、種別に合わせる
                             format: it.format === defaultFormat[it.category] ? defaultFormat[c] : it.format,
+                            amount_type: amountMissing(it) ? defaultAmountType[c] : it.amount_type,
+                            sets_basis:
+                              it.sets_basis === "unknown" && c === "spar" ? "total" : it.sets_basis,
                           })
                         }
                         className={`rounded-full px-2.5 py-1 text-xs ${
@@ -227,7 +239,7 @@ export default function MenuItemsEditor({
 
                 <div className="flex flex-col gap-1">
                   <span className={smallLabel}>量の表し方</span>
-                  <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
+                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
                     {(Object.keys(amountTypeLabel) as AmountType[]).map((a) => (
                       <button
                         key={a}
@@ -251,7 +263,7 @@ export default function MenuItemsEditor({
                       <div className="flex flex-col gap-0.5">
                         <span className={smallLabel}>本数の数え方</span>
                         <div className="flex gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
-                          {(["total", "per_person"] as const).map((b) => (
+                          {(["total", "per_person", "unknown"] as const).map((b) => (
                             <button
                               key={b}
                               type="button"
@@ -260,7 +272,7 @@ export default function MenuItemsEditor({
                                 it.sets_basis === b ? "bg-white text-neutral-900 shadow dark:bg-neutral-950 dark:text-neutral-100" : "text-neutral-500"
                               }`}
                             >
-                              {b === "total" ? "全体で" : "1人あたり"}
+                              {b === "total" ? "全体で" : b === "per_person" ? "1人あたり" : "未確認"}
                             </button>
                           ))}
                         </div>
@@ -269,6 +281,12 @@ export default function MenuItemsEditor({
                   )}
                   {it.amount_type === "total" && (
                     <MinSec label="全体の時間" value={it.total_seconds} onChange={(v) => update(it.key, { total_seconds: v })} />
+                  )}
+                  {it.amount_type === "distance" && (
+                    <>
+                      <NumField label="距離" unit="m" value={it.distance_m} onChange={(v) => update(it.key, { distance_m: v })} />
+                      <NumField label="本数" unit="本" value={it.sets} onChange={(v) => update(it.key, { sets: v })} />
+                    </>
                   )}
                   {it.amount_type === "reps" && (
                     <>
@@ -279,7 +297,7 @@ export default function MenuItemsEditor({
                 </div>
                 {it.amount_type === "timed" && (
                   <span className={smallLabel}>
-                    例：「3分スパー10本」は 1本3分×10本（全体30分）。「3分×2×10」とは数えません。
+                    例：「3分スパー10本」は 1本3分×10本（全体30分）。「3分×2×10」とは数えません。「25秒×5セット」などで全体か個人か分からないときは「未確認」のままにしてください。
                   </span>
                 )}
 
@@ -297,6 +315,31 @@ export default function MenuItemsEditor({
                     </span>
                   </div>
                 )}
+
+                <div className="flex flex-col gap-1">
+                  <span className={smallLabel}>対象</span>
+                  <div className="flex gap-1">
+                    {(Object.keys(targetGroupLabel) as TargetGroup[]).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => update(it.key, { target_group: g })}
+                        className={`rounded-full px-2.5 py-1 text-xs ${
+                          it.target_group === g
+                            ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900"
+                            : "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+                        }`}
+                      >
+                        {targetGroupLabel[g]}
+                      </button>
+                    ))}
+                  </div>
+                  {it.target_group !== "all" && (
+                    <span className={smallLabel}>
+                      例：ラン「通常5km」「重量級3km」は、2つの項目に分けて入れてください（誰が重量級にあたるかは、まだ自動では決めません）。
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap items-end gap-3">
                   <MinSec label="休息（任意）" value={it.rest_seconds} onChange={(v) => update(it.key, { rest_seconds: v })} />

@@ -9,11 +9,20 @@ export type MenuCategory =
   | "drill"
   | "situational"
   | "spar"
+  | "run"
+  | "sprint"
   | "cooldown"
   | "other";
 export type MenuFormat = "all" | "rotation" | "free";
-export type AmountType = "timed" | "total" | "reps";
-export type SetsBasis = "total" | "per_person";
+export type AmountType = "timed" | "total" | "reps" | "distance";
+export type SetsBasis = "total" | "per_person" | "unknown";
+export type TargetGroup = "all" | "regular" | "heavy";
+
+export const targetGroupLabel: Record<TargetGroup, string> = {
+  all: "全員",
+  regular: "通常",
+  heavy: "重量級",
+};
 
 // 画面で編集する1項目（DBの列と同じ名前。id は保存済みのときだけ）
 export type MenuItemDraft = {
@@ -27,6 +36,8 @@ export type MenuItemDraft = {
   sets_basis: SetsBasis;
   total_seconds: number | null;
   reps: number | null;
+  distance_m: number | null;
+  target_group: TargetGroup;
   group_size: number | null;
   active_per_group: number | null;
   rest_seconds: number | null;
@@ -40,6 +51,8 @@ export const categoryLabel: Record<MenuCategory, string> = {
   drill: "打ち込み",
   situational: "攻防（状況設定）",
   spar: "スパー",
+  run: "ラン",
+  sprint: "ダッシュ",
   cooldown: "ダウン",
   other: "その他",
 };
@@ -54,6 +67,7 @@ export const amountTypeLabel: Record<AmountType, string> = {
   timed: "1本の時間×本数",
   total: "全体の時間",
   reps: "回数×セット",
+  distance: "距離×本数",
 };
 
 // 種別ごとのふつうの実施形式（新しい項目の初期値）
@@ -64,6 +78,8 @@ export const defaultFormat: Record<MenuCategory, MenuFormat> = {
   drill: "all",
   situational: "rotation",
   spar: "free",
+  run: "all",
+  sprint: "all",
   cooldown: "all",
   other: "all",
 };
@@ -74,18 +90,35 @@ export function newKey() {
   return `mi-${Date.now()}-${seq}`;
 }
 
+// 種別ごとのふつうの量の表し方
+export const defaultAmountType: Record<MenuCategory, AmountType> = {
+  warmup: "total",
+  conditioning: "reps",
+  technique: "total",
+  drill: "timed",
+  situational: "timed",
+  spar: "timed",
+  run: "distance",
+  sprint: "distance",
+  cooldown: "total",
+  other: "timed",
+};
+
 export function emptyItem(category: MenuCategory = "other"): MenuItemDraft {
   return {
     key: newKey(),
     name: "",
     category,
     format: defaultFormat[category],
-    amount_type: "timed",
+    amount_type: defaultAmountType[category],
     unit_seconds: null,
     sets: null,
-    sets_basis: "total",
+    // スパーは「チーム全体で時計を回す本数」。それ以外は、分からなければ「未確認」
+    sets_basis: category === "spar" ? "total" : "unknown",
     total_seconds: null,
     reps: null,
+    distance_m: null,
+    target_group: "all",
     group_size: null,
     active_per_group: null,
     rest_seconds: null,
@@ -103,6 +136,8 @@ const ITEM_COLUMNS = [
   "sets_basis",
   "total_seconds",
   "reps",
+  "distance_m",
+  "target_group",
   "group_size",
   "active_per_group",
   "rest_seconds",
@@ -130,13 +165,20 @@ export function toRow(d: MenuItemDraft) {
   if (d.amount_type === "timed") {
     r.total_seconds = null;
     r.reps = null;
+    r.distance_m = null;
   } else if (d.amount_type === "total") {
     r.unit_seconds = null;
     r.sets = null;
     r.reps = null;
+    r.distance_m = null;
+  } else if (d.amount_type === "reps") {
+    r.unit_seconds = null;
+    r.total_seconds = null;
+    r.distance_m = null;
   } else {
     r.unit_seconds = null;
     r.total_seconds = null;
+    r.reps = null;
   }
   if (d.format !== "rotation") {
     r.group_size = null;
@@ -154,9 +196,12 @@ export function formatDuration(sec: number) {
 // 例：「3分×10セット（全体30分）」「4人組6分（2人ずつ交代）」「シコ50回×1」
 export function describeAmount(d: MenuItemDraft) {
   let main = "";
-  if (d.amount_type === "timed") {
+  if (d.amount_type === "distance") {
+    const dist = d.distance_m ? (d.distance_m >= 1000 && d.distance_m % 100 === 0 ? `${d.distance_m / 1000}km` : `${d.distance_m}m`) : "";
+    main = `${dist}${d.sets && d.sets > 1 ? `×${d.sets}本` : ""}`;
+  } else if (d.amount_type === "timed") {
     if (d.unit_seconds && d.sets) {
-      const basis = d.sets_basis === "per_person" ? "（1人あたり）" : "";
+      const basis = d.sets_basis === "per_person" ? "（1人あたり）" : d.sets_basis === "unknown" ? "（全体か個人か未確認）" : "";
       main = `${formatDuration(d.unit_seconds)}×${d.sets}本${basis}`;
       if (d.sets_basis === "total") main += `（全体${formatDuration(d.unit_seconds * d.sets)}）`;
     } else if (d.unit_seconds) {
@@ -171,12 +216,19 @@ export function describeAmount(d: MenuItemDraft) {
     d.format === "rotation" && d.group_size
       ? `${d.group_size}人組${d.active_per_group ? `・${d.active_per_group}人ずつ実施` : ""}`
       : "";
-  return [group, main].filter(Boolean).join(" ");
+  const target = d.target_group !== "all" ? `［${targetGroupLabel[d.target_group]}］` : "";
+  return [target, group, main].filter(Boolean).join(" ");
+}
+
+// 計算の前に確認が必要な点（本数の数え方が未確認など）
+export function needsCheck(d: MenuItemDraft) {
+  return d.amount_type === "timed" && !!d.sets && d.sets > 1 && d.sets_basis === "unknown";
 }
 
 // 「計算用の量」がまだ入っていない項目
 export function amountMissing(d: MenuItemDraft) {
   if (d.amount_type === "timed") return !d.unit_seconds || !d.sets;
   if (d.amount_type === "total") return !d.total_seconds;
+  if (d.amount_type === "distance") return !d.distance_m;
   return !d.sets && !d.reps;
 }
