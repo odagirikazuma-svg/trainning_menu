@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/check-tasks",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/line/daily-summary",
+      "schedule": "0 12 * * *"
     }
   ]
 }

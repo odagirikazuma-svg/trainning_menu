@@ -13,7 +13,12 @@ type LineEvent = {
 
 // 接続確認用：鍵が設定されているかだけを返す（値は返さない）
 export async function GET() {
-  return NextResponse.json({ ok: true, configured: lineConfigured() });
+  return NextResponse.json({
+    ok: true,
+    configured: lineConfigured(),
+    serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    summaryTo: !!process.env.LINE_SUMMARY_TO,
+  });
 }
 
 export async function POST(request: NextRequest) {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../components/shell/AppShell";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
 import WeightClassSection from "../../components/WeightClassSection";
+import LineSummarySection from "../../components/LineSummarySection";
 import { useGoalTasks } from "../../components/shell/useGoalTasks";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
 import {
@@ -919,6 +920,9 @@ export default function SettingsPage() {
             </CollapsibleSection>
             <CollapsibleSection title="免除設定">
               <MemberExemptionSection profile={profile} />
+            </CollapsibleSection>
+            <CollapsibleSection title="LINEのまとめ通知">
+              <LineSummarySection />
             </CollapsibleSection>
           </SettingsGroup>
 

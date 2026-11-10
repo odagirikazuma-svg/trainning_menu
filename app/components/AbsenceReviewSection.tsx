@@ -188,7 +188,7 @@ export default function AbsenceReviewSection({
                           maxLength={200}
                           onChange={(e) => setComment(e.target.value)}
                           placeholder="差し戻す理由・直してほしいこと"
-                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
                         />
                         <div className="flex gap-2">
                           <button
@@ -197,7 +197,7 @@ export default function AbsenceReviewSection({
                               setRejecting(null);
                               setComment("");
                             }}
-                            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs dark:border-neutral-700"
+                            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"
                           >
                             やめる
                           </button>
