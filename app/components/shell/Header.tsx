@@ -31,88 +31,116 @@ type MemberRow = { id: string; role: string; home_location: Location | null };
 // member_rosterテーブルのroleカラムに入り得る値（coach/manager/obは除外対象なので合わせて絞る）
 type RosterRoleForHeader = "captain" | "vice_captain" | "coach" | "member";
 
-async function countSubmission(
+type DayCount = { submitted: number; total: number } | null;
+
+/**
+ * 指定した日（昨日・今日）× 拠点（多摩・大塚）ごとの「日報を出し終えた人数／対象人数」を、
+ * まとめて数える。以前は日×拠点ごとに5回ずつ読み込んでいたが、全部で5回にまとめた。
+ * 判定：その日のマットメニュー（拠点＋全体練習）すべてに報告し、
+ *       ラン・ウェイト等がある日はトレ報も出していれば「提出済み」
+ */
+async function countSubmissions(
   supabase: ReturnType<typeof createClient>,
   teamId: string,
-  loc: Location,
-  dateStr: string,
+  dates: string[],
   members: MemberRow[]
-): Promise<{ submitted: number; total: number } | null> {
-  // 免除期間中の部員は、その日の分母・提出人数から外す
-  const exemptions = await loadExemptions(supabase, teamId, dateStr, dateStr);
-  const requiredMembers = members.filter(
-    (m) =>
-      m.role !== "coach" &&
-      m.role !== "manager" &&
-      m.role !== "ob" &&
-      (m.home_location === loc || (loc === "tama" && m.home_location == null)) &&
-      !isExemptOn(exemptions, m.id, dateStr)
-  );
-  const total = requiredMembers.length;
-  if (total === 0) return null;
-
-  const { data: scheduleRows } = await supabase
-    .from("schedule_days")
-    .select("is_off, sessions:schedule_sessions(session_type)")
-    .eq("team_id", teamId)
-    .eq("location", loc)
-    .eq("date", dateStr)
-    .maybeSingle();
-
-  if (!scheduleRows || scheduleRows.is_off) return null;
-  const sessions = (scheduleRows as unknown as {
-    sessions: { session_type: string }[];
-  }).sessions;
-  const hasMat = sessions.some((s) => s.session_type === "mat");
-  const hasNonMat = sessions.some((s) => s.session_type !== "mat");
-  if (!hasMat && !hasNonMat) return null;
-
-  const ids = requiredMembers.map((m) => m.id);
-
-  let submittedMatIds = new Set<string>();
-  if (hasMat) {
-    const { data: menuRows } = await supabase
+): Promise<Map<string, DayCount>> {
+  const from = dates.slice().sort()[0];
+  const to = dates.slice().sort()[dates.length - 1];
+  const [exemptions, schedRes, menuRes, logRes] = await Promise.all([
+    loadExemptions(supabase, teamId, from, to),
+    supabase
+      .from("schedule_days")
+      .select("date, location, is_off, sessions:schedule_sessions(session_type)")
+      .eq("team_id", teamId)
+      .in("date", dates),
+    supabase
       .from("menus")
-      .select("id")
+      .select("id, date, location, is_joint")
       .eq("team_id", teamId)
       .eq("is_off", false)
-      .eq("date", dateStr)
-      .or(`location.eq.${loc},is_joint.eq.true`);
-    const menuIds = ((menuRows ?? []) as { id: string }[]).map((m) => m.id);
-    if (menuIds.length > 0) {
-      const { data: commentRows } = await supabase
-        .from("comments")
-        .select("author_id")
-        .in("menu_id", menuIds)
-        .in("kind", ["report", "absent"])
-        .in("author_id", ids);
-      submittedMatIds = new Set(
-        ((commentRows ?? []) as { author_id: string }[]).map(
-          (r) => r.author_id
-        )
+      .in("date", dates),
+    supabase
+      .from("weight_logs")
+      .select("author_id, date")
+      .eq("team_id", teamId)
+      .in("date", dates),
+  ]);
+  const menus = (menuRes.data ?? []) as {
+    id: string;
+    date: string;
+    location: Location;
+    is_joint: boolean;
+  }[];
+  const reportRes =
+    menus.length > 0
+      ? await supabase
+          .from("comments")
+          .select("author_id, menu_id")
+          .in(
+            "menu_id",
+            menus.map((m) => m.id)
+          )
+          .in("kind", ["report", "absent"])
+          .is("parent_id", null)
+      : { data: [] };
+  const reported = new Set(
+    ((reportRes.data ?? []) as { author_id: string; menu_id: string }[]).map(
+      (r) => `${r.author_id}:${r.menu_id}`
+    )
+  );
+  const logged = new Set(
+    ((logRes.data ?? []) as { author_id: string; date: string }[]).map(
+      (r) => `${r.author_id}:${r.date}`
+    )
+  );
+  const schedule = (schedRes.data ?? []) as unknown as {
+    date: string;
+    location: Location;
+    is_off: boolean;
+    sessions: { session_type: string }[];
+  }[];
+
+  const out = new Map<string, DayCount>();
+  for (const date of dates) {
+    for (const loc of locations) {
+      const key = `${date}:${loc}`;
+      const day = schedule.find((d) => d.date === date && d.location === loc);
+      if (!day || day.is_off) {
+        out.set(key, null);
+        continue;
+      }
+      const hasMat = day.sessions.some((x) => x.session_type === "mat");
+      const hasNonMat = day.sessions.some((x) => x.session_type !== "mat");
+      if (!hasMat && !hasNonMat) {
+        out.set(key, null);
+        continue;
+      }
+      const required = members.filter(
+        (m) =>
+          m.role !== "coach" &&
+          m.role !== "manager" &&
+          m.role !== "ob" &&
+          (m.home_location === loc || (loc === "tama" && m.home_location == null)) &&
+          !isExemptOn(exemptions, m.id, date)
       );
+      if (required.length === 0) {
+        out.set(key, null);
+        continue;
+      }
+      const dayMenus = hasMat
+        ? menus.filter((mm) => mm.date === date && (mm.location === loc || mm.is_joint))
+        : [];
+      const submitted = required.filter((m) => {
+        const matOk =
+          !hasMat || (dayMenus.length > 0 && dayMenus.some((mm) => reported.has(`${m.id}:${mm.id}`)));
+        const selfOk = !hasNonMat || logged.has(`${m.id}:${date}`);
+        return matOk && selfOk;
+      }).length;
+      out.set(key, { submitted, total: required.length });
     }
   }
-
-  let submittedSelfIds = new Set<string>();
-  if (hasNonMat) {
-    const { data: logRows } = await supabase
-      .from("weight_logs")
-      .select("author_id")
-      .eq("date", dateStr)
-      .in("author_id", ids);
-    submittedSelfIds = new Set(
-      ((logRows ?? []) as { author_id: string }[]).map((r) => r.author_id)
-    );
-  }
-
-  const submitted = ids.filter((id) => {
-    const matOk = !hasMat || submittedMatIds.has(id);
-    const selfOk = !hasNonMat || submittedSelfIds.has(id);
-    return matOk && selfOk;
-  }).length;
-
-  return { submitted, total };
+  return out;
 }
 
 /**
@@ -261,19 +289,17 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
     let cancelled = false;
     const supabase = createClient();
     (async () => {
-      const { data: memberData } = await supabase
-        .from("profiles")
-        .select("id, role, home_location")
-        .eq("team_id", profile.team_id);
-      const realMembers = (memberData ?? []) as MemberRow[];
-
       // まだ本人がサインアップ（メアド登録）していない部員も、
       // 母数（total）にはカウントする
-      const { data: rosterData } = await supabase
-        .from("member_roster")
-        .select("id, role, home_location")
-        .eq("team_id", profile.team_id)
-        .is("claimed_by", null);
+      const [{ data: memberData }, { data: rosterData }] = await Promise.all([
+        supabase.from("profiles").select("id, role, home_location").eq("team_id", profile.team_id),
+        supabase
+          .from("member_roster")
+          .select("id, role, home_location")
+          .eq("team_id", profile.team_id)
+          .is("claimed_by", null),
+      ]);
+      const realMembers = (memberData ?? []) as MemberRow[];
       const pendingMembers: MemberRow[] = (
         (rosterData ?? []) as {
           id: string;
@@ -293,25 +319,19 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
       y.setDate(y.getDate() - 1);
       const yesterday = toDateKey(y);
 
-      const [todayTama, todayOtsuka, yesterdayTama, yesterdayOtsuka] =
-        await Promise.all([
-          countSubmission(supabase, profile.team_id, "tama", today, members),
-          countSubmission(supabase, profile.team_id, "otsuka", today, members),
-          countSubmission(
-            supabase,
-            profile.team_id,
-            "tama",
-            yesterday,
-            members
-          ),
-          countSubmission(
-            supabase,
-            profile.team_id,
-            "otsuka",
-            yesterday,
-            members
-          ),
-        ]);
+      const counts = await countSubmissions(
+        supabase,
+        profile.team_id,
+        [yesterday, today],
+        members
+      );
+      const get = (d: string, loc: Location) => counts.get(`${d}:${loc}`) ?? null;
+      const [todayTama, todayOtsuka, yesterdayTama, yesterdayOtsuka] = [
+        get(today, "tama"),
+        get(today, "otsuka"),
+        get(yesterday, "tama"),
+        get(yesterday, "otsuka"),
+      ];
 
       if (!cancelled) {
         setStats({
