@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { liffUrl } from "../../../lib/liffConfig";
 import { createClient } from "@supabase/supabase-js";
 import {
   coachLineUserIds,
@@ -30,9 +31,8 @@ export async function POST(request: NextRequest) {
   if (!me || me.role !== "coach") return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!lineConfigured()) return NextResponse.json({ error: "LINEの鍵が設定されていません" }, { status: 500 });
 
-  const app = process.env.APP_URL || request.nextUrl.origin;
-  const open = (path: string, hash = "") =>
-    `${app}${path}${path.includes("?") ? "&" : "?"}openExternalBrowser=1${hash}`;
+  // LINEの中でアプリを開き、LINEでログインしてから各ページへ移動する
+  const open = (path: string, hash = "") => liffUrl(path + hash);
 
   const memberActions: RichMenuAction[] = [
     { type: "uri", label: "日報を書く", uri: open("/mypage") },

@@ -5,6 +5,7 @@ import { useProfile } from "../../components/shell/AppShell";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
 import WeightClassSection from "../../components/WeightClassSection";
 import LineSummarySection from "../../components/LineSummarySection";
+import LineLinkSection from "../../components/LineLinkSection";
 import { useGoalTasks } from "../../components/shell/useGoalTasks";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
 import {
@@ -897,6 +898,9 @@ export default function SettingsPage() {
                 <NotificationSection />
               </CollapsibleSection>
             )}
+            <CollapsibleSection title="LINE連携">
+              <LineLinkSection />
+            </CollapsibleSection>
             <CollapsibleSection title="デザイン設定">
               <ThemeSection />
             </CollapsibleSection>
@@ -948,6 +952,9 @@ export default function SettingsPage() {
                 <NotificationSection />
               </CollapsibleSection>
             )}
+            <CollapsibleSection title="LINE連携">
+              <LineLinkSection />
+            </CollapsibleSection>
             <CollapsibleSection title="デザイン設定">
               <ThemeSection />
             </CollapsibleSection>

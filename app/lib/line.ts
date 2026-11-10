@@ -119,3 +119,32 @@ export function coachLineUserIds() {
     .map((s) => s.trim())
     .filter((s) => s.startsWith("U"));
 }
+
+// ---------- LINEログイン ----------
+// LIFF で取得した IDトークンを LINE に問い合わせて検証し、LINEのユーザーIDと表示名を返す
+export async function verifyLineIdToken(idToken: string) {
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || "2012523269-UmgHPVzJ";
+  const clientId = process.env.LINE_LOGIN_CHANNEL_ID || liffId.split("-")[0];
+  const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ id_token: idToken, client_id: clientId }),
+  });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { sub?: string; name?: string };
+  return j.sub ? { userId: j.sub, name: j.name ?? "" } : null;
+}
+
+// 監督・コーチなら、監督用のリッチメニューを表示する（失敗しても無視）
+export async function linkCoachMenuIfCoach(lineUserId: string, role: string) {
+  if (!lineConfigured()) return;
+  try {
+    const menus = await listRichMenus();
+    const coach = menus.find((m) => m.name === "監督・コーチ用");
+    const member = menus.find((m) => m.name === "部員用");
+    if (role === "coach" && coach) await linkRichMenu(lineUserId, coach.richMenuId);
+    else if (member) await linkRichMenu(lineUserId, member.richMenuId);
+  } catch (e) {
+    console.error("[line richmenu link]", e);
+  }
+}

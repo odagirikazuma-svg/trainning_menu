@@ -371,6 +371,21 @@ export default function AuthGate({
           <span className="inline-block h-5 w-1.5 rounded-full bg-red-600" />
           練習ノート ログイン
         </h1>
+        {!inviteToken && (
+          <>
+            <a
+              href={`/liff?to=${encodeURIComponent(
+                typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"
+              )}`}
+              className="flex items-center justify-center rounded-xl bg-[#06C755] py-3 text-sm font-bold text-white active:opacity-80"
+            >
+              LINEでログイン
+            </a>
+            <p className="text-center text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+              または、メールアドレスでログイン
+            </p>
+          </>
+        )}
         {inviteToken && rosterPreview && (
           <p className="rounded bg-emerald-950/40 p-2 text-xs text-emerald-400">
             招待リンクから開いています。以下の内容で登録されます。
