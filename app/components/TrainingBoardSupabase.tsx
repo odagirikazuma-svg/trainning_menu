@@ -1379,6 +1379,8 @@ export default function TrainingBoardSupabase({
             {/* 計算用メニュー（予定）と練習後の実施報告 */}
             {selected && !selected.is_off && (
               <StructuredMenuCard
+                // メニューを保存し直したら読み込み直す（テンプレートから予定が入る場合がある）
+                key={`${selected.id}:${selected.last_edited_at ?? ""}:${selected.content.length}`}
                 profile={profile}
                 menuId={selected.id}
                 date={selected.date}
