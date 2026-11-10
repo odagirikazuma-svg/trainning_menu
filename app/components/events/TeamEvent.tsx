@@ -167,12 +167,67 @@ export function TeamEventTab({
       </p>
     );
 
+  // 試合の振り返り：自分の通算戦績
+  const record = (() => {
+    if (type !== "match_reflection") return null;
+    const list = events
+      .map((ev) => ({ ev, sub: mine.get(ev.id) }))
+      .filter((x) => x.sub && (x.sub.win_count != null || x.sub.loss_count != null || x.sub.match_result));
+    if (list.length === 0) return null;
+    const wins = list.reduce((a, x) => a + (x.sub!.win_count ?? 0), 0);
+    const losses = list.reduce((a, x) => a + (x.sub!.loss_count ?? 0), 0);
+    return { list: list.slice(0, 3), wins, losses, count: list.length };
+  })();
+
   return (
     <div className="flex flex-col gap-3">
       {errorMsg && (
         <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
+      )}
+      {record && (
+        <section className="flex flex-col gap-2 rounded-2xl border border-border-color bg-surface p-4 shadow-sm">
+          <span className="text-xs font-semibold text-neutral-500">あなたの通算戦績（{record.count}大会）</span>
+          <span className="flex items-baseline gap-3">
+            <span className="text-3xl font-extrabold tabular-nums text-foreground">
+              {record.wins}
+              <span className="mx-0.5 text-base font-bold text-neutral-500">勝</span>
+              {record.losses}
+              <span className="ml-0.5 text-base font-bold text-neutral-500">敗</span>
+            </span>
+            {record.wins + record.losses > 0 && (
+              <span className="text-sm font-semibold text-neutral-600 dark:text-neutral-300">
+                勝率 {Math.round((record.wins / (record.wins + record.losses)) * 100)}%
+              </span>
+            )}
+          </span>
+          <ul className="flex flex-col gap-1">
+            {record.list.map(({ ev, sub }) => (
+              <li key={ev.id} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs dark:bg-neutral-900">
+                <span className="truncate text-neutral-800 dark:text-neutral-200">{sub!.match_title || ev.title}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {(sub!.win_count != null || sub!.loss_count != null) && (
+                    <span className="tabular-nums text-neutral-500">
+                      {sub!.win_count ?? 0}勝{sub!.loss_count ?? 0}敗
+                    </span>
+                  )}
+                  {sub!.match_result && (
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${
+                        /優勝|準優勝|3位/.test(sub!.match_result)
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                          : "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+                      }`}
+                    >
+                      {sub!.match_result}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {events.map((ev) => {
         const submitted = mine.get(ev.id);
@@ -182,7 +237,7 @@ export function TeamEventTab({
         return (
           <div
             key={ev.id}
-            className="flex flex-col gap-2 rounded-lg border border-border-color bg-surface-2 p-3 text-sm"
+            className="flex flex-col gap-2 rounded-2xl border border-border-color bg-surface p-3.5 text-sm shadow-sm"
           >
             <button
               onClick={() => setExpandedId(isExpanded ? null : ev.id)}

@@ -60,6 +60,13 @@ function isReportOpen(menu: MenuRow): boolean {
   return new Date() >= threshold;
 }
 
+// 「11/10（火）17:00〜」
+function formatMenuHeading(date: string, start: string | null) {
+  const [, m, d] = date.split("-").map(Number);
+  const w = ["日", "月", "火", "水", "木", "金", "土"][new Date(`${date}T00:00:00`).getDay()];
+  return `${m}/${d}（${w}）${start ? ` ${start.slice(0, 5)}〜` : ""}`;
+}
+
 export default function TrainingBoardSupabase({
   profile,
 }: {
@@ -138,6 +145,7 @@ export default function TrainingBoardSupabase({
   // 新しいメニューの項目（本文はここから作る）
   const [newItems, setNewItems] = useState<MenuItemDraft[]>([]);
   const [newTemplateId, setNewTemplateId] = useState<string | null>(null);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [showCommentForm, setShowCommentForm] = useState(false);
   // 実施報告・未実施報告を送信中かどうか（二重送信防止）
@@ -1266,11 +1274,6 @@ export default function TrainingBoardSupabase({
           )}
         </div>
 
-      {isCoachView && (
-        <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
-          {formatMonthDay(viewDate)}の練習メニュー
-        </h3>
-      )}
       {jointNoticeDate && jointElsewhere.get(jointNoticeDate) ? (
           <div className="rounded-lg border border-purple-200 bg-purple-950/40 p-4 text-sm text-purple-800">
             <p className="mb-2">
@@ -1350,23 +1353,21 @@ export default function TrainingBoardSupabase({
                 </form>
               ) : (
                 <>
-                  <div className="mb-1 text-xs text-neutral-500">
-                    {locationLabel[selected.location]}・{selected.date}
-                    {selected.start_time &&
-                      `・${selected.start_time.slice(0, 5)}〜`}
-                    {selected.content ? (
-                      <>・作成者: {selected.creator?.display_name ?? "不明"}</>
-                    ) : (
-                      <>・メニュー未記入</>
-                    )}
-                    {selected.editor && (
-                      <>（編集: {selected.editor.display_name}）</>
+                  {/* 見出しは1行：日付・時刻・拠点。作成者は小さく右に */}
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2">
+                    <h2 className="text-base font-bold text-foreground">
+                      {selected.title || formatMenuHeading(selected.date, selected.start_time)}
+                      <span className="ml-1.5 text-xs font-normal text-neutral-500">
+                        {selected.is_joint ? "全体練習" : locationLabel[selected.location]}
+                      </span>
+                    </h2>
+                    {selected.content && (
+                      <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">
+                        {(selected.editor ?? selected.creator)?.display_name ?? ""}
+                        {selected.editor ? "が編集" : selected.creator ? "が作成" : ""}
+                      </span>
                     )}
                   </div>
-                  <h2 className="mb-2 text-lg font-bold text-foreground">
-                    {selected.title ||
-                      formatFullDateTime(selected.date, selected.start_time)}
-                  </h2>
                   {/* メニュー本文（項目）と練習後の実施報告。実施報告のあとは実績だけを出す */}
                   <StructuredMenuCard
                     // メニューを保存し直したら読み込み直す
@@ -1412,47 +1413,6 @@ export default function TrainingBoardSupabase({
               />
             )}
 
-            {/* 意見・コメント */}
-            <section className="flex flex-col gap-3">
-              <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
-                意見・コメント
-              </h3>
-              <ul className="flex flex-col gap-2">
-                {opinions.length === 0 && (
-                  <li className="text-xs text-neutral-500">
-                    まだコメントはありません。
-                  </li>
-                )}
-                {opinions.map((c) => (
-                  <CommentItem key={c.id} c={c} />
-                ))}
-              </ul>
-              {!showCommentForm ? (
-                <button
-                  onClick={() => setShowCommentForm(true)}
-                  className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-700 dark:text-red-400 underline"
-                >
-                  意見・コメントする
-                </button>
-              ) : (
-                <form onSubmit={handleAddComment} className="flex flex-col gap-2">
-                  <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="意見・コメントを入力"
-                    rows={3}
-                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
-                  />
-                  <button
-                    type="submit"
-                    className="self-start rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white active:bg-red-700"
-                  >
-                    コメントする
-                  </button>
-                </form>
-              )}
-            </section>
-
             {/* 実施報告・未実施報告（日報）。提出はマイページの「日報」から行い、ここは見る・コメント・リアクションの場 */}
             {(
               <>
@@ -1482,215 +1442,6 @@ export default function TrainingBoardSupabase({
                 )}
               </section>
             )}
-            {/* 実施報告 */}
-            <section className="flex flex-col gap-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
-                  実施報告
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowMissingPopup(true)}
-                  className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
-                >
-                  {`${reportSubmittedCount}人 / ${selectedMemberTotal}人 提出済み`}
-                </button>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {visibleReports.length === 0 && (
-                  <p className="text-xs text-neutral-500">
-                    まだ実施報告はありません。
-                  </p>
-                )}
-                {visibleReports.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedReportIds((prev) =>
-                        prev.size === visibleReports.length
-                          ? new Set()
-                          : new Set(visibleReports.map((r) => r.id))
-                      )
-                    }
-                    className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
-                  >
-                    {expandedReportIds.size === visibleReports.length
-                      ? "すべて閉じる"
-                      : "全員の詳細を表示"}
-                  </button>
-                )}
-                {visibleReports.map((r) => {
-                  const isOpen = expandedReportIds.has(r.id);
-                  return (
-                    <div key={r.id} className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedReportIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(r.id)) next.delete(r.id);
-                            else next.add(r.id);
-                            return next;
-                          })
-                        }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-100 dark:active:bg-neutral-800"
-                      >
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
-                            {r.author?.display_name ?? "不明"}
-                            {r.author_id === profile.id && (
-                              <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">
-                                自分
-                              </span>
-                            )}
-                          </span>
-                          {!isOpen && (
-                            <span className="truncate text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                              {r.text.replace(/\s+/g, " ")}
-                            </span>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2 text-neutral-500">
-                          {reactionCountOf(r.id) > 0 && (
-                            <span>👍{reactionCountOf(r.id)}</span>
-                          )}
-                          {repliesOf(r.id).length > 0 && (
-                            <span>💬{repliesOf(r.id).length}</span>
-                          )}
-                          <span>{isOpen ? "▴" : "▾"}</span>
-                        </span>
-                      </button>
-                      {isOpen && (
-                        <ReportThread
-                          report={r}
-                          replies={repliesOf(r.id)}
-                          onReply={(text) =>
-                            submitComment("opinion", text, r.id).then(() => {})
-                          }
-                          currentUserId={profile.id}
-                          onUpdate={(text) => handleUpdateComment(r.id, text)}
-                          onDelete={() => handleDeleteComment(r.id)}
-                          reactionSlot={
-                            <ReactionBar
-                              commentId={r.id}
-                              reactions={reactions}
-                              profileId={profile.id}
-                              teamId={profile.team_id}
-                              supabase={supabase}
-                              onChanged={() => reloadReactions()}
-                            />
-                          }
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-
-            </section>
-
-            {/* 未実施報告 */}
-            <section className="flex flex-col gap-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
-              <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
-                未実施報告（授業・通院などで参加できなかった場合）
-              </h3>
-              <div className="flex flex-col gap-1.5">
-                {visibleAbsentReports.length === 0 && (
-                  <p className="text-xs text-neutral-500">
-                    まだ未実施報告はありません。
-                  </p>
-                )}
-                {visibleAbsentReports.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedAbsentIds((prev) =>
-                        prev.size === visibleAbsentReports.length
-                          ? new Set()
-                          : new Set(visibleAbsentReports.map((c) => c.id))
-                      )
-                    }
-                    className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
-                  >
-                    {expandedAbsentIds.size === visibleAbsentReports.length
-                      ? "すべて閉じる"
-                      : "全員の詳細を表示"}
-                  </button>
-                )}
-                {visibleAbsentReports.map((c) => {
-                  const isOpen = expandedAbsentIds.has(c.id);
-                  return (
-                    <div key={c.id} className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedAbsentIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(c.id)) next.delete(c.id);
-                            else next.add(c.id);
-                            return next;
-                          })
-                        }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-100 dark:active:bg-neutral-800"
-                      >
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
-                            {c.author?.display_name ?? "不明"}
-                            {c.author_id === profile.id && (
-                              <span className="rounded bg-red-600 px-1 py-px text-[length:calc(9px+var(--fs-add))] font-bold text-white">
-                                自分
-                              </span>
-                            )}
-                          </span>
-                          {!isOpen && (
-                            <span className="truncate text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-                              {c.text.replace(/\s+/g, " ")}
-                            </span>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2 text-neutral-500">
-                          {reactionCountOf(c.id) > 0 && (
-                            <span>👍{reactionCountOf(c.id)}</span>
-                          )}
-                          {repliesOf(c.id).length > 0 && (
-                            <span>💬{repliesOf(c.id).length}</span>
-                          )}
-                          <span>{isOpen ? "▴" : "▾"}</span>
-                        </span>
-                      </button>
-                      {isOpen && (
-                        <ReportThread
-                          report={c}
-                          replies={repliesOf(c.id)}
-                          onReply={(text) =>
-                            submitComment("opinion", text, c.id).then(() => {})
-                          }
-                          tone="neutral"
-                          currentUserId={profile.id}
-                          editableAltType
-                          onUpdate={(text, altType) =>
-                            handleUpdateComment(c.id, text, altType ?? null)
-                          }
-                          onDelete={() => handleDeleteComment(c.id)}
-                          reactionSlot={
-                            <ReactionBar
-                              commentId={c.id}
-                              reactions={reactions}
-                              profileId={profile.id}
-                              teamId={profile.team_id}
-                              supabase={supabase}
-                              onChanged={() => reloadReactions()}
-                            />
-                          }
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
             {isCoachView &&
               matSessionForViewDate &&
               viewDateSchedule?.sessions.some(
@@ -1835,7 +1586,7 @@ export default function TrainingBoardSupabase({
                 {boardTasks.length}
               </span>
             </h3>
-            {boardTasks.map((t) => {
+            {(showAllTasks ? boardTasks : boardTasks.slice(0, 3)).map((t) => {
               const [, mm, dd] = t.date.split("-").map(Number);
               return (
                 <button
@@ -1856,17 +1607,20 @@ export default function TrainingBoardSupabase({
                 </button>
               );
             })}
-            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-              参加する人なら誰が登録・報告してもかまいません。
-            </span>
+            {boardTasks.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllTasks((v) => !v)}
+                className="self-start text-[length:calc(11px+var(--fs-add))] text-red-700 underline dark:text-red-400"
+              >
+                {showAllTasks ? "閉じる" : `ほか${boardTasks.length - 3}件を表示`}
+              </button>
+            )}
           </section>
         )}
 
         {/* 練習スケジュール */}
         <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
-            練習スケジュール
-          </h3>
           <MenuCalendar
             menus={menus}
             viewDate={viewDate}

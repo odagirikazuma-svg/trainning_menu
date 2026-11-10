@@ -13,6 +13,9 @@ import {
   sortForAllView,
   GradedMemberList,
   useEventMembers,
+  Sparkline,
+  DiffBadge,
+  StatTile,
   } from "./shared";
 
 // イベント「体組成」（部員の提出）
@@ -166,8 +169,16 @@ export function BodyCompositionTab({
         </p>
       )}
 
+      <BodySummary
+        subs={submissions
+          .filter((x) => x.author_id === profile.id)
+          .map((x) => ({ ...x, key: x.measurement_date ?? eventById.get(x.event_id)?.deadline ?? "" }))
+          .sort((a, b) => a.key.localeCompare(b.key))}
+        weightClass={members.find((m) => m.id === profile.id)?.weight_class ?? null}
+      />
+
       {openEvent && !myOpenSubmission && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border-color bg-surface-2 p-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-2xl border border-border-color bg-surface p-3.5 text-sm shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
               {openEvent.title || "体組成測定"}
@@ -276,7 +287,7 @@ export function BodyCompositionTab({
             return (
               <div
                 key={g.key}
-                className="overflow-hidden rounded-lg border border-border-color bg-surface-2"
+                className="overflow-hidden rounded-2xl border border-border-color bg-surface shadow-sm"
               >
                 <button
                   type="button"
@@ -359,3 +370,64 @@ export function BodyCompositionTab({
   );
 }
 
+
+
+// 自分の体組成のまとめ：最新値・前回比・体重の推移・階級までの差
+function BodySummary({
+  subs,
+  weightClass,
+}: {
+  subs: (BodyCompositionSubmissionRow & { key: string })[];
+  weightClass: number | null;
+}) {
+  if (subs.length === 0) return null;
+  const latest = subs[subs.length - 1];
+  const prev = subs.length > 1 ? subs[subs.length - 2] : null;
+  const weights = subs.map((x) => x.weight_kg).filter((v): v is number => v != null);
+  const toClass = weightClass && latest.weight_kg != null ? Math.round((latest.weight_kg - weightClass) * 10) / 10 : null;
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-border-color bg-surface p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-neutral-500">
+            あなたの体重{latest.key ? `（${formatMonthDay(latest.key)}）` : ""}
+          </span>
+          <span className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold tabular-nums text-foreground">{latest.weight_kg ?? "―"}</span>
+            {latest.weight_kg != null && <span className="text-sm text-neutral-500">kg</span>}
+            <DiffBadge current={latest.weight_kg} previous={prev?.weight_kg} unit="kg" goodWhen="none" />
+          </span>
+          {toClass != null && (
+            <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+              {weightClass}kg級まで{" "}
+              <b className={toClass > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
+                {toClass > 0 ? `+${toClass}kg オーバー` : toClass === 0 ? "ぴったり" : `${-toClass}kg 余裕あり`}
+              </b>
+            </span>
+          )}
+        </div>
+        <Sparkline values={weights} className="shrink-0 text-red-600" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <StatTile
+          label="体脂肪率"
+          value={latest.body_fat_pct}
+          unit="%"
+          sub={<DiffBadge current={latest.body_fat_pct} previous={prev?.body_fat_pct} unit="%" goodWhen="down" />}
+        />
+        <StatTile
+          label="骨格筋量"
+          value={latest.muscle_mass_kg}
+          unit="kg"
+          sub={<DiffBadge current={latest.muscle_mass_kg} previous={prev?.muscle_mass_kg} unit="kg" />}
+        />
+        <StatTile
+          label="除脂肪体重"
+          value={latest.lean_body_mass_kg}
+          unit="kg"
+          sub={<DiffBadge current={latest.lean_body_mass_kg} previous={prev?.lean_body_mass_kg} unit="kg" />}
+        />
+      </div>
+    </section>
+  );
+}

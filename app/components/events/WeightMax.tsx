@@ -17,7 +17,21 @@ import {
   GradedMemberList,
   EventTargetPicker,
   useEventMembers,
+  Sparkline,
+  DiffBadge,
+  StatTile,
   } from "./shared";
+
+const LIFTS = [
+  { key: "bench", label: "ベンチプレス" },
+  { key: "squat", label: "スクワット" },
+  { key: "deadlift", label: "デッドリフト" },
+] as const;
+
+function big3(r: WeightMaxAuthorRow | undefined | null) {
+  if (!r || r.bench == null || r.squat == null || r.deadlift == null) return null;
+  return Math.round((r.bench + r.squat + r.deadlift) * 10) / 10;
+}
 
 // イベント「ウェイトMAX」（部員の提出・管理者の集計）
 
@@ -162,6 +176,10 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
           {errorMsg}
         </p>
       )}
+      <WeightMaxSummary events={events} allRows={allRows} profileId={profile.id} members={members} />
+      {events.length > 0 && (
+        <h3 className="mt-1 text-xs font-semibold text-neutral-500">測定会</h3>
+      )}
       {events.map((ev, idx) => {
         const submitted = mine.get(ev.id);
         const isOpenEvent = !ev.closed_at;
@@ -182,11 +200,12 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
         return (
           <div
             key={ev.id}
-            className="flex flex-col gap-2 rounded-lg border border-border-color bg-surface-2 p-3 text-sm"
+            className="flex flex-col gap-2 rounded-2xl border border-border-color bg-surface p-3.5 text-sm shadow-sm"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-neutral-500 dark:text-neutral-400">
-                測定会（〜{formatMonthDay(ev.deadline)}）
+              <span className="flex items-baseline gap-2">
+                <span className="font-bold text-foreground">ウェイトMAX測定会</span>
+                <span className="text-xs text-neutral-500">〜{formatMonthDay(ev.deadline)}</span>
               </span>
               {submitted ? (
                 <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-300">
@@ -209,17 +228,18 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
               )}
             </div>
             {submitted ? (
-              <p className="flex flex-wrap gap-x-3 text-neutral-700 dark:text-neutral-200">
-                {renderLiftValue("BP", submitted.bench, profile.id, idx, "bench")}
-                {renderLiftValue("SQ", submitted.squat, profile.id, idx, "squat")}
-                {renderLiftValue(
-                  "DL",
-                  submitted.deadlift,
-                  profile.id,
-                  idx,
-                  "deadlift"
-                )}
-              </p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {LIFTS.map(({ key, label }) => (
+                  <StatTile
+                    key={key}
+                    label={label.replace("ベンチプレス", "ベンチ").replace("デッドリフト", "デッド")}
+                    value={submitted[key]}
+                    unit="kg"
+                    sub={<DiffBadge current={submitted[key]} previous={getPreviousValue(prevLookup, profile.id, idx, key)} unit="kg" />}
+                  />
+                ))}
+                <StatTile label="合計" value={big3(submitted)} unit="kg" />
+              </div>
             ) : isOpenEvent ? (
               openEventId === ev.id ? (
                 <div className="flex flex-col gap-2">
@@ -289,13 +309,17 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                           : "border-border-color bg-background"
                       }`}
                     >
-                      <span className="font-medium text-foreground">
-                        {r.display_name}
-                        {r.id === profile.id && (
-                          <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-700 dark:text-red-400">
-                            (自分)
-                          </span>
-                        )}
+                      <span className="flex items-baseline justify-between font-medium text-foreground">
+                        <span>
+                          {r.display_name}
+                          {r.id === profile.id && (
+                            <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-700 dark:text-red-400">
+                              (自分)
+                            </span>
+                          )}
+                          {r.weight_class && <span className="ml-1 text-[length:calc(10px+var(--fs-add))] font-normal text-neutral-500">{r.weight_class}kg級</span>}
+                        </span>
+                        {big3(r.data) != null && <span className="tabular-nums">合計 {big3(r.data)}kg</span>}
                       </span>
                       <span className="flex flex-wrap gap-x-3 text-neutral-700 dark:text-neutral-200">
                         {renderLiftValue(
@@ -651,3 +675,94 @@ export function WeightMaxCoachManagement({
   );
 }
 
+
+
+// 自分の記録のまとめ：BIG3合計・前回比・自己ベスト・チーム内の順位・推移
+function WeightMaxSummary({
+  events,
+  allRows,
+  profileId,
+  members,
+}: {
+  events: WeightMaxEventRow[];
+  allRows: WeightMaxAuthorRow[];
+  profileId: string;
+  members: { id: string; weight_class?: number | null; role: string }[];
+}) {
+  // events は新しい順。自分の提出を古い順に並べる
+  const idxOf = new Map(events.map((e, i) => [e.id, i]));
+  const mine = allRows
+    .filter((r) => r.author_id === profileId && idxOf.has(r.event_id))
+    .sort((a, b) => idxOf.get(b.event_id)! - idxOf.get(a.event_id)!);
+  if (mine.length === 0) return null;
+  const latest = mine[mine.length - 1];
+  const prev = mine.length > 1 ? mine[mine.length - 2] : null;
+  const me = members.find((m) => m.id === profileId);
+  const total = big3(latest);
+  const prevTotal = big3(prev);
+  const bestOf = (k: "bench" | "squat" | "deadlift", upto: WeightMaxAuthorRow[]) =>
+    upto.reduce<number | null>((a, r) => (r[k] != null && (a == null || r[k]! > a) ? r[k]! : a), null);
+  const totals = mine.map(big3).filter((v): v is number => v != null);
+  const bestTotal = totals.length ? Math.max(...totals) : null;
+
+  // 最新の測定会でのチーム内順位（3種目そろっている人だけ）
+  const students = new Set(members.filter((m) => !["coach", "manager", "ob"].includes(m.role)).map((m) => m.id));
+  const ranked = allRows
+    .filter((r) => r.event_id === latest.event_id && students.has(r.author_id) && big3(r) != null)
+    .sort((a, b) => big3(b)! - big3(a)!);
+  const rank = total != null ? ranked.findIndex((r) => r.author_id === profileId) + 1 : 0;
+  const wc = me?.weight_class ?? null;
+  const classRanked = wc ? ranked.filter((r) => members.find((m) => m.id === r.author_id)?.weight_class === wc) : [];
+  const classRank = classRanked.findIndex((r) => r.author_id === profileId) + 1;
+
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-border-color bg-surface p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-neutral-500">あなたのBIG3合計</span>
+          <span className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold tabular-nums text-foreground">{total ?? "―"}</span>
+            {total != null && <span className="text-sm text-neutral-500">kg</span>}
+            <DiffBadge current={total} previous={prevTotal} unit="kg" />
+            {total != null && prevTotal != null && total === bestTotal && total > prevTotal && (
+              <span className="rounded bg-amber-100 px-1.5 text-[length:calc(10px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                自己ベスト更新
+              </span>
+            )}
+          </span>
+          <span className="flex flex-wrap gap-x-3 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+            {rank > 0 && (
+              <span>
+                チーム内 <b className="text-foreground">{rank}位</b>／{ranked.length}人
+              </span>
+            )}
+            {wc && classRank > 0 && (
+              <span>
+                {wc}kg級で <b className="text-foreground">{classRank}位</b>／{classRanked.length}人
+              </span>
+            )}
+            {wc && total != null && <span>体重比 ×{(total / wc).toFixed(1)}</span>}
+          </span>
+        </div>
+        <Sparkline values={totals} className="shrink-0 text-red-600" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {LIFTS.map(({ key, label }) => {
+          const v = latest[key];
+          const best = bestOf(key, mine);
+          const before = bestOf(key, mine.slice(0, -1));
+          return (
+            <StatTile
+              key={key}
+              label={label}
+              value={v}
+              unit="kg"
+              sub={<DiffBadge current={v} previous={prev?.[key]} unit="kg" />}
+              highlight={v != null && before != null && v > before ? "ベスト更新" : best != null && v !== best ? `ベスト${best}` : null}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}

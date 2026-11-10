@@ -229,6 +229,7 @@ export type EventMemberRow = {
   home_location: Location | null;
   role: string;
   entry_year: number | null;
+  weight_class?: number | null;
 };
 
 // 「全員の数値」表示の並び順：自分を一番上、その下は学年が上の人から
@@ -445,7 +446,7 @@ export function useEventMembers(teamId: string) {
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, home_location, role, entry_year")
+        .select("id, display_name, home_location, role, entry_year, weight_class")
         .eq("team_id", teamId);
       setMembers((data ?? []) as EventMemberRow[]);
     })();
@@ -487,3 +488,93 @@ export function buildEventQueueTask(
   };
 }
 
+
+
+// ---------- 自分の記録のまとめ（イベント上部）で使う部品 ----------
+
+// 推移の小さな折れ線（2点以上あるとき）
+export function Sparkline({ values, className = "" }: { values: number[]; className?: string }) {
+  if (values.length < 2) return null;
+  const w = 120;
+  const h = 32;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * (w - 6) + 3, h - 4 - ((v - min) / span) * (h - 8)]);
+  const last = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className={`h-8 w-[120px] ${className}`} aria-hidden>
+      <polyline
+        points={pts.map((p) => p.join(",")).join(" ")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx={last[0]} cy={last[1]} r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
+// 前回との差（goodWhen：増えると良い／減ると良い／どちらでもない）
+export function DiffBadge({
+  current,
+  previous,
+  unit,
+  goodWhen = "up",
+}: {
+  current: number | null | undefined;
+  previous: number | null | undefined;
+  unit: string;
+  goodWhen?: "up" | "down" | "none";
+}) {
+  if (current == null || previous == null) return null;
+  const d = Math.round((current - previous) * 10) / 10;
+  const good = goodWhen === "none" || d === 0 ? null : goodWhen === "up" ? d > 0 : d < 0;
+  return (
+    <span
+      className={`text-[length:calc(10px+var(--fs-add))] font-semibold tabular-nums ${
+        good === null
+          ? "text-neutral-500"
+          : good
+            ? "text-emerald-600 dark:text-emerald-400"
+            : "text-red-600 dark:text-red-400"
+      }`}
+    >
+      {d === 0 ? `±0${unit}` : `${d > 0 ? "+" : ""}${d}${unit}`}
+    </span>
+  );
+}
+
+export function StatTile({
+  label,
+  value,
+  unit,
+  sub,
+  highlight,
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit: string;
+  sub?: React.ReactNode;
+  highlight?: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl bg-neutral-50 px-2.5 py-2 dark:bg-neutral-900">
+      <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">{label}</span>
+      <span className="text-lg font-bold tabular-nums leading-tight text-foreground">
+        {value ?? "―"}
+        <span className="ml-0.5 text-xs font-normal text-neutral-500">{value != null ? unit : ""}</span>
+      </span>
+      <span className="flex min-h-[14px] flex-wrap items-center gap-1">
+        {sub}
+        {highlight && (
+          <span className="rounded bg-amber-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+            {highlight}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}

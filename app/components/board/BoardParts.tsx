@@ -665,24 +665,6 @@ export function MenuCalendar({
           );
         })}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[length:calc(10px+var(--fs-add))] text-neutral-500 dark:text-neutral-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded border border-blue-400 bg-blue-100 dark:bg-blue-950/40" />
-          今日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded border border-amber-400 bg-amber-100 dark:bg-amber-950/40" />
-          表示中の日
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-purple-100 dark:bg-purple-950/40" />
-          全体練習（別拠点）
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded bg-neutral-200 dark:bg-neutral-800" />
-          オフ
-        </span>
-      </p>
     </div>
   );
 }
