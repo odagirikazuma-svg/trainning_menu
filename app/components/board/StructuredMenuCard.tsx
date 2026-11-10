@@ -325,26 +325,33 @@ export default function StructuredMenuCard({
     "rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300";
   const btnMain = "rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white active:bg-red-700 disabled:opacity-50";
 
+  const templateChips = (
+    <div className="flex flex-wrap gap-1.5">
+      {templates.map((t) => (
+        <span key={t.id} className="flex items-center overflow-hidden rounded-full border border-neutral-300 text-xs dark:border-neutral-700">
+          <button type="button" onClick={() => applyTemplate(t)} className="px-2.5 py-1 text-neutral-800 dark:text-neutral-200">
+            📄 {t.name}
+            {t.purpose && <span className="ml-1 text-neutral-400">{t.purpose}</span>}
+          </button>
+          {mode === "plan" && (
+            <button type="button" onClick={() => deleteTemplate(t)} className="border-l border-neutral-300 px-1.5 py-1 text-neutral-400 dark:border-neutral-700" aria-label="テンプレートを削除">
+              ×
+            </button>
+          )}
+        </span>
+      ))}
+      <button type="button" onClick={copyPrevious} className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
+        前回のメニューをコピー
+      </button>
+    </div>
+  );
+
   // ---------- 予定メニューの編集 ----------
   if (mode === "plan") {
     return (
       <section className={box}>
         <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">📋 計算用メニュー（予定）を編集</span>
-        <div className="flex flex-wrap gap-1.5">
-          {templates.map((t) => (
-            <span key={t.id} className="flex items-center overflow-hidden rounded-full border border-neutral-300 text-xs dark:border-neutral-700">
-              <button type="button" onClick={() => applyTemplate(t)} className="px-2.5 py-1 text-neutral-800 dark:text-neutral-200">
-                📄 {t.name}
-              </button>
-              <button type="button" onClick={() => deleteTemplate(t)} className="border-l border-neutral-300 px-1.5 py-1 text-neutral-400 dark:border-neutral-700" aria-label="テンプレートを削除">
-                ×
-              </button>
-            </span>
-          ))}
-          <button type="button" onClick={copyPrevious} className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
-            前回のメニューをコピー
-          </button>
-        </div>
+        {templateChips}
         <MenuItemsEditor items={draft} onChange={setDraft} />
         {msg && <p className={`text-xs ${msg.ok ? "text-emerald-600" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>}
         <div className="flex flex-wrap gap-2">
@@ -369,9 +376,18 @@ export default function StructuredMenuCard({
     return (
       <section className={box}>
         <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">✅ 実施報告（練習後）</span>
-        <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-          予定メニューを引き継いでいます。実際と違ったところ（本数・時間など）だけ直してください。
-        </p>
+        {plan.length > 0 || actual.length > 0 ? (
+          <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+            予定メニューを引き継いでいます。実際と違ったところ（本数・時間など）だけ直してください。
+          </p>
+        ) : (
+          <>
+            <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+              予定メニューが入っていなかったので、テンプレートか前回のメニューから実際にやった内容を入れてください。
+            </p>
+            {templateChips}
+          </>
+        )}
         <MenuItemsEditor items={draft} onChange={setDraft} />
 
         <div className="flex flex-col gap-2 rounded-lg bg-neutral-50 p-2.5 dark:bg-neutral-950">
