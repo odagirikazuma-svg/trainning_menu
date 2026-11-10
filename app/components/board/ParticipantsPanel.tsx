@@ -112,7 +112,7 @@ export default function ParticipantsPanel({
   }
 
   const badge: Record<Absent["badge"], { text: string; cls: string }> = {
-    approved: { text: "承認済み", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300" },
+    approved: { text: "報告済み", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300" },
     pending: { text: "申請中", cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" },
     report: { text: "申請なし", cls: "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" },
   };

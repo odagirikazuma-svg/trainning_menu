@@ -22,6 +22,15 @@ export function planToBlocks(plan: PlanBlock[] | null | undefined): ExerciseBloc
 export type AbsenceReasonType = "sick" | "injury" | "school" | "away" | "job" | "other";
 export type AbsencePlanType = "weight" | "running" | "other" | "none";
 export type AbsenceStatus = "pending" | "approved" | "rejected";
+export type ApprovalMethod = "line" | "phone";
+
+export const approvalMethodLabel: Record<ApprovalMethod, string> = {
+  line: "LINE",
+  phone: "電話",
+};
+
+// 届け出だけでよい理由（監督の許可は不要）
+export const noPermissionNeeded = (t: AbsenceReasonType) => t === "school";
 
 export type AbsenceRequest = {
   id: string;
@@ -34,6 +43,9 @@ export type AbsenceRequest = {
   plan: string;
   plan_sets?: PlanBlock[] | null;
   status: AbsenceStatus;
+  // 直接許可をくれた監督・管理者と、その方法（授業・学業は不要）
+  permitted_by?: string | null;
+  approval_method?: ApprovalMethod | null;
   review_comment: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -58,9 +70,21 @@ export const absencePlanLabel: Record<AbsencePlanType, string> = {
 
 export const absenceStatusLabel: Record<AbsenceStatus, string> = {
   pending: "承認待ち",
-  approved: "承認済み",
-  rejected: "差し戻し",
+  approved: "報告済み",
+  rejected: "取り消し",
 };
+
+// 一覧に出す状態のことば（届け出／直接許可済み／取り消し）
+export function absenceStateText(
+  r: Pick<AbsenceRequest, "status" | "reason_type" | "approval_method">,
+  permitterName?: string | null
+) {
+  if (r.status === "rejected") return "取り消し";
+  if (r.status === "pending") return "承認待ち";
+  if (noPermissionNeeded(r.reason_type)) return "届け出";
+  const how = r.approval_method ? approvalMethodLabel[r.approval_method] : "";
+  return `直接許可済み${permitterName || how ? `（${[permitterName, how].filter(Boolean).join("・")}）` : ""}`;
+}
 
 export const absenceStatusCls: Record<AbsenceStatus, string> = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",

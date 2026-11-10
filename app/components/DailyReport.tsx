@@ -1716,7 +1716,7 @@ export default function DailyReport({
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : isFuture ? (
         <p className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-xs text-neutral-500">
-          まだ来ていない日の日報は書けません。練習を休む場合は、上の「休む申請」から前日までに申請してください。
+          まだ来ていない日の日報は書けません。練習を休む場合は、上の「休みを報告する」から報告してください。
         </p>
       ) : (
         <>

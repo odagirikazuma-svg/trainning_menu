@@ -1,6 +1,6 @@
 // 監督・コーチ用リッチメニューのボタンへの返信（サーバー側専用・返信なので通数0）
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { absencePlanLabel, absenceReasonText, type AbsenceRequest } from "./absence";
+import { absencePlanLabel, absenceReasonText, absenceStateText, type AbsenceRequest } from "./absence";
 import { buildDailySummary, jstDateKey } from "./dailySummary";
 import { coachLineUserIds, type LineMessage } from "./line";
 import { appButton, liffUrl } from "./liffConfig";
@@ -106,34 +106,38 @@ async function pendingRequests(admin: SupabaseClient, teamId: string) {
 export async function replyPending(admin: SupabaseClient, teamId: string, staff: Staff): Promise<LineMessage[]> {
   const rows = await pendingRequests(admin, teamId);
   if (rows.length === 0) {
-    // 承認待ちが無いときは、これから1週間の休み（承認済み）を拠点別に見せる
+    // これから1週間の休みの報告を、日付・拠点別に見せる
     const { data } = await admin
       .from("absence_requests")
-      .select("date, author:profiles!absence_requests_author_id_fkey(display_name, home_location)")
+      .select(
+        "date, reason_type, reason, approval_method, status, author:profiles!absence_requests_author_id_fkey(display_name, home_location), permitter:profiles!absence_requests_permitted_by_fkey(display_name)"
+      )
       .eq("team_id", teamId)
       .eq("status", "approved")
       .gte("date", jstDateKey(0))
       .lte("date", jstDateKey(7))
       .order("date", { ascending: true });
-    const approved = (data ?? []) as unknown as {
-      date: string;
+    const list = (data ?? []) as unknown as (Pick<AbsenceRequest, "date" | "reason_type" | "reason" | "approval_method" | "status"> & {
       author: { display_name: string; home_location: string | null } | null;
-    }[];
-    const lines = ["✅ 承認待ちの休み申請はありません。"];
-    if (approved.length > 0) {
-      lines.push("", "▪️これから1週間の休み（承認済み）");
-      const dates = Array.from(new Set(approved.map((r) => r.date)));
-      for (const d of dates) {
-        const list = approved.filter((r) => r.date === d);
-        const byLoc = ["tama", "otsuka"]
-          .map((l) => {
-            const names = list.filter((r) => r.author?.home_location === l).map((r) => r.author?.display_name ?? "?");
-            return names.length ? `${LOC_LABEL[l]}：${names.join("、")}` : null;
-          })
-          .filter(Boolean);
-        lines.push(`${md(d)} ${list.length}人`, ...byLoc.map((x) => `　${x}`));
+      permitter: { display_name: string } | null;
+    })[];
+    const lines = ["🙋 休みの報告（これから1週間）"];
+    if (list.length === 0) lines.push("", "報告はありません。");
+    for (const d of Array.from(new Set(list.map((r) => r.date)))) {
+      const day = list.filter((r) => r.date === d);
+      lines.push("", `▪️${md(d)} ${day.length}人`);
+      for (const l of ["tama", "otsuka"]) {
+        const inLoc = day.filter((r) => r.author?.home_location === l);
+        if (inLoc.length === 0) continue;
+        lines.push(`${LOC_LABEL[l]}：`);
+        for (const r of inLoc) {
+          lines.push(
+            `・${r.author?.display_name ?? "?"}：${absenceReasonText(r)}／${absenceStateText(r, r.permitter?.display_name)}`
+          );
+        }
       }
     }
+    lines.push("", "身に覚えのない「直接許可済み」があれば、アプリの「報告」タブから取り消せます。");
     return [{ type: "text", text: lines.join("\n") }, appButton("/admin#absence")];
   }
   const canApprove = staff.role === "coach";
