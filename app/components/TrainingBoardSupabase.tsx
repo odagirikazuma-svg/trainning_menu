@@ -24,6 +24,7 @@ import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
 import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
+import ParticipantsPanel from "./board/ParticipantsPanel";
 import { CommentItem, ReportThread, toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
 
 const locationSubTabItems = locations.map((loc) => ({
@@ -1314,6 +1315,19 @@ export default function TrainingBoardSupabase({
                 </>
               )}
             </section>
+
+            {/* 参加予定者・参加者・欠席者 */}
+            {selected && !selected.is_off && (
+              <ParticipantsPanel
+                menuId={selected.id}
+                teamId={profile.team_id}
+                date={selected.date}
+                location={selected.location}
+                isJoint={selected.is_joint}
+                started={isReportOpen(selected)}
+                isStaff={isStaffRole(profile.role)}
+              />
+            )}
 
             {/* 意見・コメント */}
             <section className="flex flex-col gap-3">

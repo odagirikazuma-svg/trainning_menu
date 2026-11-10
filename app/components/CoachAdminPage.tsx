@@ -19,11 +19,10 @@ import SubTabBar from "./shell/SubTabBar";
 import { fatigueColor } from "./FatigueSelector";
 import AbsenceReviewSection from "./AbsenceReviewSection";
 
-const adminSubTabItems: {
-  value: "submissions" | "training" | "injuries";
-  label: string;
-}[] = [
+type AdminSubTab = "submissions" | "reports" | "training" | "injuries";
+const adminSubTabItems: { value: AdminSubTab; label: string }[] = [
   { value: "submissions", label: "日報" },
+  { value: "reports", label: "報告" },
   { value: "injuries", label: "怪我の管理" },
 ];
 
@@ -930,14 +929,26 @@ export default function CoachAdminPage({
   );
   const [showPastInjuries, setShowPastInjuries] = useState(false);
 
-  const [adminSubTab, setAdminSubTab] = useState<
-    "submissions" | "training" | "injuries"
-  >(() =>
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("tab") === "injuries"
-      ? "injuries"
-      : "submissions"
-  );
+  const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>(() => {
+    if (typeof window === "undefined") return "submissions";
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "injuries") return "injuries";
+    if (tab === "reports" || window.location.hash === "#absence") return "reports";
+    return "submissions";
+  });
+  // 「報告」タブのバッジ（承認待ちの休み申請の件数）
+  const [pendingAbsences, setPendingAbsences] = useState(0);
+  useEffect(() => {
+    const today = toDateKey(new Date());
+    supabase
+      .from("absence_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", profile.team_id)
+      .eq("status", "pending")
+      .gte("date", today)
+      .then(({ count, error }) => setPendingAbsences(error ? 0 : count ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminSubTab]);
 
   // フッター上のサブナビ（提出状況／怪我の報告の切り替え）を登録
   // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと
@@ -946,12 +957,14 @@ export default function CoachAdminPage({
   const adminSubNav = useMemo(
     () => (
       <SubTabBar
-        items={adminSubTabItems}
+        items={adminSubTabItems.map((it) =>
+          it.value === "reports" ? { ...it, badge: pendingAbsences } : it
+        )}
         active={adminSubTab}
         onChange={setAdminSubTab}
       />
     ),
-    [adminSubTab]
+    [adminSubTab, pendingAbsences]
   );
   useSubNav(adminSubNav);
 
@@ -964,13 +977,17 @@ export default function CoachAdminPage({
           </p>
         )}
 
+        {adminSubTab === "reports" && (
+          <AbsenceReviewSection
+            teamId={profile.team_id}
+            reviewerId={profile.id}
+            canReview={profile.role === "coach"}
+            onChanged={setPendingAbsences}
+          />
+        )}
+
         {adminSubTab === "submissions" && (
         <>
-        <AbsenceReviewSection
-          teamId={profile.team_id}
-          reviewerId={profile.id}
-          canReview={profile.role === "coach"}
-        />
         {/* 日報の提出状況 */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">

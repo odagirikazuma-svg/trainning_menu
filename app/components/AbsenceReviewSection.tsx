@@ -11,7 +11,9 @@ import {
   type AbsenceRequest,
 } from "../lib/absence";
 
-type Row = AbsenceRequest & { author: { display_name: string } | null };
+type Loc = "tama" | "otsuka";
+type Row = AbsenceRequest & { author: { display_name: string; home_location: Loc | null } | null };
+const LOC_LABEL: Record<Loc, string> = { tama: "多摩", otsuka: "大塚" };
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -35,11 +37,16 @@ export default function AbsenceReviewSection({
   teamId,
   reviewerId,
   canReview,
+  onChanged,
 }: {
   teamId: string;
   reviewerId: string;
   canReview: boolean;
+  // 承認待ちの件数が変わったとき（タブのバッジ用）
+  onChanged?: (pending: number) => void;
 }) {
+  const [loc, setLoc] = useState<Loc>("tama");
+  const [locPicked, setLocPicked] = useState(false);
   const router = useRouter();
   const supabase = createClient();
   const [rows, setRows] = useState<Row[]>([]);
@@ -56,7 +63,7 @@ export default function AbsenceReviewSection({
   async function load() {
     const { data, error } = await supabase
       .from("absence_requests")
-      .select("*, author:profiles!absence_requests_author_id_fkey(display_name)")
+      .select("*, author:profiles!absence_requests_author_id_fkey(display_name, home_location)")
       .eq("team_id", teamId)
       .gte("date", todayStr)
       .order("date", { ascending: true })
@@ -64,7 +71,14 @@ export default function AbsenceReviewSection({
     if (error) {
       setUnavailable(true);
     } else {
-      setRows((data ?? []) as unknown as Row[]);
+      const list = (data ?? []) as unknown as Row[];
+      setRows(list);
+      onChanged?.(list.filter((r) => r.status === "pending").length);
+      // 最初は、承認待ちがある拠点を開く
+      if (!locPicked) {
+        const p = list.filter((r) => r.status === "pending");
+        if (p.length > 0 && p.every((r) => r.author?.home_location === "otsuka")) setLoc("otsuka");
+      }
     }
     setLoaded(true);
   }
@@ -81,14 +95,15 @@ export default function AbsenceReviewSection({
     }
   }, [loaded]);
 
+  const rowsOf = (l: Loc) => rows.filter((r) => (r.author?.home_location ?? "tama") === l);
   const byDate = useMemo(() => {
     const m = new Map<string, Row[]>();
-    for (const r of rows) {
+    for (const r of rows.filter((x) => (x.author?.home_location ?? "tama") === loc)) {
       if (!m.has(r.date)) m.set(r.date, []);
       m.get(r.date)!.push(r);
     }
     return Array.from(m.entries());
-  }, [rows]);
+  }, [rows, loc]);
 
   async function review(ids: string[], status: "approved" | "rejected", reviewComment: string | null) {
     setBusy(ids.join(","));
@@ -124,10 +139,38 @@ export default function AbsenceReviewSection({
           </span>
         )}
       </h2>
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-neutral-800">
+        {(["tama", "otsuka"] as Loc[]).map((l) => {
+          const pend = rowsOf(l).filter((r) => r.status === "pending").length;
+          return (
+            <button
+              key={l}
+              type="button"
+              onClick={() => {
+                setLoc(l);
+                setLocPicked(true);
+              }}
+              className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold ${
+                loc === l
+                  ? "bg-white text-neutral-900 shadow dark:bg-neutral-950 dark:text-neutral-100"
+                  : "text-neutral-500"
+              }`}
+            >
+              {LOC_LABEL[l]}
+              <span className="text-xs font-normal text-neutral-500">{rowsOf(l).length}件</span>
+              {pend > 0 && (
+                <span className="rounded-full bg-amber-500 px-1.5 text-[length:calc(10px+var(--fs-add))] font-bold text-white">
+                  {pend}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
       {error && <p className="rounded bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400">{error}</p>}
       {byDate.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs text-neutral-500 dark:border-neutral-700">
-          今日以降の休み申請はありません。
+          {LOC_LABEL[loc]}の今日以降の休み申請はありません。
         </p>
       ) : (
         byDate.map(([date, list]) => {
