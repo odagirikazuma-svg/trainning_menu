@@ -404,6 +404,9 @@ export function MenuCalendar({
   }
 
   useEffect(() => {
+    // 表示する週・月がすぐ切り替わると、前の範囲の結果が後から届いて上書きすることがある。
+    // 古い範囲の結果は捨てる
+    let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from("schedule_days")
@@ -450,8 +453,11 @@ export function MenuCalendar({
           sessions: row.sessions,
         });
       }
-      setScheduleByDate(map);
+      if (!cancelled) setScheduleByDate(map);
     })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart, rangeEnd, location, refreshKey]);
 

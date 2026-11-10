@@ -211,11 +211,13 @@ export function describeAmount(d: MenuItemDraft, showUnconfirmed = false) {
       if (d.sets_basis === "total") main += `（全体${formatDuration(d.unit_seconds * d.sets)}）`;
     } else if (d.unit_seconds) {
       main = formatDuration(d.unit_seconds);
+    } else if (d.sets) {
+      main = `${d.sets}本`;
     }
   } else if (d.amount_type === "total") {
     main = d.total_seconds ? formatDuration(d.total_seconds) : "";
   } else {
-    main = `${d.reps ? `${d.reps}回` : "MAX"}${d.sets ? `×${d.sets}セット` : ""}`;
+    main = d.reps || d.sets ? `${d.reps ? `${d.reps}回` : "MAX"}${d.sets ? `×${d.sets}セット` : ""}` : "";
   }
   const group =
     d.format === "rotation" && d.group_size

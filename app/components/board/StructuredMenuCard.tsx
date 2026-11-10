@@ -15,9 +15,11 @@ import {
 import { currentGrade, type Location } from "../../lib/types";
 import type { Profile } from "../AuthGate";
 import MenuItemsEditor from "./MenuItemsEditor";
+import { parseMenuText } from "../../lib/menuParse";
 import { notifyBoardTasksChanged } from "../shell/useBoardTasks";
 
-// 練習予定表：メニューの下に出す「メニュー項目」と「練習後の実施報告」。
+// 練習予定表のメニュー本文（メニュー項目）と「練習後の実施報告」。
+// 項目が入っていれば項目を、実施報告後は実績だけを出す。項目がない昔のメニューは自由記述をそのまま出す。
 // - 練習前：予定メニュー（plan）を、テンプレート・前回のメニューから作る
 // - 練習後：予定を引き継いで実績（actual）に直し、参加者が休みの報告と合っているかを確認する
 // メニューを作る人と実施報告をする人は、別の人でもよい（部員・マネージャー・管理者なら誰でも）
@@ -90,7 +92,10 @@ export default function StructuredMenuCard({
   isJoint,
   started,
   canEdit,
+  canEditPlan,
   canConfirm,
+  legacyContent,
+  onPlanSaved,
 }: {
   profile: Profile;
   menuId: string;
@@ -99,6 +104,12 @@ export default function StructuredMenuCard({
   isJoint: boolean;
   started: boolean;
   canEdit: boolean;
+  // 予定（メニュー）を書ける・直せる（この拠点のページで見ているとき）
+  canEditPlan: boolean;
+  // 項目がまだない昔のメニューの自由記述
+  legacyContent: string;
+  // 予定を保存したあと（親でメニュー本文を項目から作り直す）
+  onPlanSaved?: (items: MenuItemDraft[]) => Promise<void>;
   // 監督・管理者：「要確認」（本数が全体か個人か）を決められる
   canConfirm: boolean;
 }) {
@@ -202,7 +213,8 @@ export default function StructuredMenuCard({
       await saveItems("plan", draft);
       await load();
       setMode("view");
-      setMsg({ ok: true, text: "予定メニューを保存しました。" });
+      setMsg({ ok: true, text: "メニューを保存しました。" });
+      if (onPlanSaved) await onPlanSaved(draft.filter((d) => d.name.trim()));
     } catch (e) {
       setMsg({ ok: false, text: `保存できませんでした：${e instanceof Error ? e.message : ""}` });
     }
@@ -210,14 +222,15 @@ export default function StructuredMenuCard({
   }
 
   function startPlan() {
-    setDraft(plan.map((p) => ({ ...p })));
+    // 項目がない昔のメニューは、自由記述から項目を起こす（読み取れない量は空のまま）
+    setDraft(plan.length > 0 ? plan.map((p) => ({ ...p })) : legacyContent.trim() ? parseMenuText(legacyContent) : []);
     setMode("plan");
     setMsg(null);
   }
 
   function startReport() {
     // 実績がまだなら、予定を引き継ぐ（変わったところだけ直せばよい）
-    const base = actual.length > 0 ? actual : plan;
+    const base = actual.length > 0 ? actual : plan.length > 0 ? plan : legacyContent.trim() ? parseMenuText(legacyContent) : [];
     // 目印（item_key）は引き継ぐ。予定と実績、本人の報告の対応がずれないように
     setDraft(base.map((p) => ({ ...p })));
     setMatches(report ? report.attendance_matches : null);
@@ -340,7 +353,7 @@ export default function StructuredMenuCard({
   if (!loaded) return null;
   if (unavailable) return null;
 
-  const box = "flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900/60";
+  const box = "flex flex-col gap-2";
   const btnSub =
     "rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300";
   const btnMain = "rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white active:bg-red-700 disabled:opacity-50";
@@ -370,7 +383,7 @@ export default function StructuredMenuCard({
   if (mode === "plan") {
     return (
       <section className={box}>
-        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">📋 メニュー項目（予定）を編集</span>
+        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">メニューを編集</span>
         {templateChips}
         <MenuItemsEditor items={draft} onChange={setDraft} canConfirm={canConfirm} />
         {msg && <p className={`text-xs ${msg.ok ? "text-emerald-600" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>}
@@ -382,7 +395,7 @@ export default function StructuredMenuCard({
             テンプレートとして保存
           </button>
           <button type="button" disabled={busy} onClick={handleSavePlan} className={`${btnMain} ml-auto`}>
-            {busy ? "保存中…" : "予定を保存"}
+            {busy ? "保存中…" : "保存する"}
           </button>
         </div>
       </section>
@@ -396,9 +409,9 @@ export default function StructuredMenuCard({
     return (
       <section className={box}>
         <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">✅ 実施報告（練習後）</span>
-        {plan.length > 0 || actual.length > 0 ? (
+        {draft.length > 0 ? (
           <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            予定メニューを引き継いでいます。実際と違ったところ（本数・時間など）だけ直してください。
+            予定のメニューを引き継いでいます。実際と違ったところ（本数・時間など）だけ直してください。
           </p>
         ) : (
           <>
@@ -538,24 +551,28 @@ export default function StructuredMenuCard({
   }
 
   // ---------- 表示 ----------
+  // 実施報告のあとは実績だけ。予定もないときは、昔の自由記述をそのまま出す
   const shown = report && actual.length > 0 ? actual : plan;
   return (
-    <section className={box}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-          📋 メニュー項目（{report ? "実績" : "予定"}）
+    <div className={box}>
+      {report ? (
+        <span className="self-start rounded-full bg-emerald-100 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+          実施報告済み（実際にやったメニュー）
         </span>
-        {report ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-            実施報告済み
-          </span>
-        ) : started ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-            実施報告まだ
-          </span>
-        ) : null}
-      </div>
-      <ItemList items={shown} onConfirm={canConfirm ? confirmBasis : undefined} />
+      ) : started ? (
+        <span className="self-start rounded-full bg-amber-100 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+          実施報告まだ
+        </span>
+      ) : null}
+      {shown.length > 0 ? (
+        <ItemList items={shown} onConfirm={canConfirm ? confirmBasis : undefined} />
+      ) : legacyContent.trim() ? (
+        <p className="whitespace-pre-wrap text-sm text-foreground">{legacyContent}</p>
+      ) : (
+        <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
+          この練習のメニューはまだ書かれていません。
+        </p>
+      )}
       {report && (
         <div className="flex flex-col gap-1 rounded-lg bg-neutral-50 p-2 text-xs dark:bg-neutral-950">
           <span className="text-neutral-600 dark:text-neutral-400">
@@ -573,20 +590,20 @@ export default function StructuredMenuCard({
         </div>
       )}
       {msg && <p className={`text-xs ${msg.ok ? "text-emerald-600" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>}
-      {canEdit && (
-        <div className="flex flex-wrap gap-2">
-          {!report && (
-            <button type="button" onClick={startPlan} className={btnSub}>
-              {plan.length > 0 ? "予定を編集" : "予定を入力（テンプレート・前回から）"}
+      {(canEditPlan && !report) || (canEdit && started) ? (
+        <div className="flex flex-wrap justify-end gap-2">
+          {canEditPlan && !report && (
+            <button type="button" onClick={startPlan} className={shown.length > 0 || legacyContent.trim() ? btnSub : btnMain}>
+              {shown.length > 0 || legacyContent.trim() ? "メニューを編集" : "メニューを書く（テンプレート・前回から）"}
             </button>
           )}
-          {started && (
+          {canEdit && started && (
             <button type="button" onClick={startReport} className={report ? btnSub : btnMain}>
               {report ? "実施報告を直す" : "練習後の実施報告をする"}
             </button>
           )}
         </div>
-      )}
-    </section>
+      ) : null}
+    </div>
   );
 }

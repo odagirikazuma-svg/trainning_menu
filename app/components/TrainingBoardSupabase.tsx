@@ -28,7 +28,8 @@ import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
 import TemplatePicker from "./board/TemplatePicker";
 import { notifyBoardTasksChanged, useBoardTasks, type BoardTask } from "./shell/useBoardTasks";
-import { toRow, type MenuItemDraft } from "../lib/menuItems";
+import { itemsToText, toRow, type MenuItemDraft } from "../lib/menuItems";
+import MenuItemsEditor from "./board/MenuItemsEditor";
 import { CommentItem, ReportThread, toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
 
 const locationSubTabItems = locations.map((loc) => ({
@@ -133,10 +134,10 @@ export default function TrainingBoardSupabase({
   const [confirmingNew, setConfirmingNew] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
-  const [newContent, setNewContent] = useState("");
   // テンプレートから入力したとき：保存時にメニュー項目（予定）にも入れる
-  const [newTemplate, setNewTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
-  const [editTemplate, setEditTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
+  // 新しいメニューの項目（本文はここから作る）
+  const [newItems, setNewItems] = useState<MenuItemDraft[]>([]);
+  const [newTemplateId, setNewTemplateId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [showCommentForm, setShowCommentForm] = useState(false);
   // 実施報告・未実施報告を送信中かどうか（二重送信防止）
@@ -160,7 +161,6 @@ export default function TrainingBoardSupabase({
   const [editingMenu, setEditingMenu] = useState(false);
   const [editDate, setEditDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
-  const [editContent, setEditContent] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberCounts, setMemberCounts] = useState<{
     tama: number;
@@ -385,6 +385,8 @@ export default function TrainingBoardSupabase({
   // 「＋ メニューを作成」ボタン：閉じている場合は開き、
   // 管理者が設定した時間割にマットのセッションがあれば日付・開始時刻を自動入力する
   async function handleOpenNewForm() {
+    setNewItems([]);
+    setNewTemplateId(null);
     if (showNewForm) {
       setShowNewForm(false);
       return;
@@ -616,7 +618,8 @@ export default function TrainingBoardSupabase({
   async function handleCreateMenu(e: React.FormEvent) {
     e.preventDefault();
     if (!newDate) return;
-    if (newMenuType !== "off" && !newContent) return;
+    const newBody = itemsToText(newItems);
+    if (newMenuType !== "off" && !newBody) return;
 
     const otherLocation = locations.find((l) => l !== activeLocation)!;
     const createdIds: string[] = [];
@@ -670,7 +673,7 @@ export default function TrainingBoardSupabase({
         ? await supabase
             .from("menus")
             .update({
-              content: newContent,
+              content: newBody,
               created_by: profile.id,
               last_edited_by: null,
               last_edited_at: null,
@@ -680,7 +683,7 @@ export default function TrainingBoardSupabase({
         : await supabase.from("menus").insert({
         ...basePayload,
         title: "",
-        content: newContent,
+        content: newBody,
         location: targetLocation,
         start_time: newStartTime || null,
         is_joint: newMenuType === "joint",
@@ -693,7 +696,7 @@ export default function TrainingBoardSupabase({
         const res2 = await supabase.from("menus").insert({
           ...basePayload,
           title: "",
-          content: newContent,
+          content: newBody,
           location: otherLocation,
           start_time: newStartTime || null,
           is_joint: false,
@@ -708,14 +711,14 @@ export default function TrainingBoardSupabase({
       setErrorMsg(error.message);
       return;
     }
-    if (newTemplate && newMenuType !== "off" && createdIds.length > 0) {
-      await writePlanItems(createdIds, newTemplate.items);
+    if (newMenuType !== "off" && createdIds.length > 0) {
+      await writePlanItems(createdIds, newItems);
     }
-    setNewTemplate(null);
+    setNewItems([]);
+    setNewTemplateId(null);
     notifyBoardTasksChanged();
     setNewDate("");
     setNewStartTime("");
-    setNewContent("");
     setNewMenuType("normal");
     setNewOffBothLocations(false);
     setShowNewForm(false);
@@ -744,14 +747,34 @@ export default function TrainingBoardSupabase({
   function startEditingMenu(m: MenuRow) {
     setEditDate(m.date);
     setEditStartTime(m.start_time ?? "");
-    setEditContent(m.content);
-    setEditTemplate(null);
     setEditingMenu(true);
+  }
+
+  // メニュー項目を保存したら、メニュー本文（LINEや昔の画面で使う文章）も項目から作り直す
+  async function savePlanBody(m: MenuRow, items: MenuItemDraft[]) {
+    const body = itemsToText(items);
+    const isFillingPlaceholder = !m.content;
+    const { error } = await supabase
+      .from("menus")
+      .update(
+        isFillingPlaceholder
+          ? { content: body, created_by: profile.id }
+          : { content: body, last_edited_by: profile.id, last_edited_at: new Date().toISOString() }
+      )
+      .eq("id", m.id);
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+    notifyBoardTasksChanged();
+    const rows = await loadMenus();
+    await applySelectionForDate(m.date, rows, jointElsewhere);
+    setSelectedId(m.id);
   }
 
   async function handleUpdateMenu(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedId || !editDate || !editContent) return;
+    if (!selectedId || !editDate) return;
     // 自動で用意された空の枠に初めて書き込む場合は「作成」として記録する
     const editingTarget =
       menus.find((m) => m.id === selectedId) ??
@@ -764,13 +787,11 @@ export default function TrainingBoardSupabase({
           ? {
               date: editDate,
               start_time: editStartTime || null,
-              content: editContent,
               created_by: profile.id,
             }
           : {
               date: editDate,
               start_time: editStartTime || null,
-              content: editContent,
               last_edited_by: profile.id,
               last_edited_at: new Date().toISOString(),
             }
@@ -780,10 +801,6 @@ export default function TrainingBoardSupabase({
     if (error) {
       setErrorMsg(error.message);
       return;
-    }
-    if (editTemplate) {
-      await writePlanItems([selectedId], editTemplate.items);
-      setEditTemplate(null);
     }
     notifyBoardTasksChanged();
     const rows = await loadMenus();
@@ -1083,7 +1100,7 @@ export default function TrainingBoardSupabase({
                           : newMenuType === "joint" && "・全体練習"}
                       </p>
                       <p className="whitespace-pre-wrap text-neutral-900 dark:text-neutral-100">
-                        {newContent}
+                        {itemsToText(newItems)}
                       </p>
                     </>
                   )}
@@ -1180,21 +1197,18 @@ export default function TrainingBoardSupabase({
                       )}
                       <TemplatePicker
                         teamId={profile.team_id}
-                        selected={newTemplate?.id ?? null}
+                        selected={newTemplateId}
                         onPick={(t) => {
-                          setNewTemplate(t ? { id: t.id, items: t.items } : null);
-                          if (t && (!newContent.trim() || window.confirm("メニュー詳細を、テンプレートの内容に置き換えますか？"))) {
-                            setNewContent(t.text);
-                          }
+                          if (!t) return setNewTemplateId(null);
+                          if (newItems.some((i) => i.name.trim()) && !window.confirm("今の項目を、テンプレートの内容に置き換えますか？")) return;
+                          setNewTemplateId(t.id);
+                          setNewItems(t.items);
                         }}
                       />
-                      <textarea
-                        placeholder="メニュー詳細（自由記述）"
-                        value={newContent}
-                        onChange={(e) => setNewContent(e.target.value)}
-                        rows={4}
-                        className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
-                        required
+                      <MenuItemsEditor
+                        items={newItems}
+                        onChange={setNewItems}
+                        canConfirm={profile.role === "coach"}
                       />
                       {newMenuType === "joint" && !isAwayLikeForViewDate && (
                         <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
@@ -1238,7 +1252,7 @@ export default function TrainingBoardSupabase({
                     onClick={() => {
                       if (
                         newDate &&
-                        (newMenuType === "off" || newContent)
+                        (newMenuType === "off" || itemsToText(newItems))
                       )
                         setConfirmingNew(true);
                     }}
@@ -1317,23 +1331,7 @@ export default function TrainingBoardSupabase({
                       onChange={setEditStartTime}
                     />
                   </label>
-                  <TemplatePicker
-                    teamId={profile.team_id}
-                    selected={editTemplate?.id ?? null}
-                    onPick={(t) => {
-                      setEditTemplate(t ? { id: t.id, items: t.items } : null);
-                      if (t && (!editContent.trim() || window.confirm("メニュー詳細を、テンプレートの内容に置き換えますか？"))) {
-                        setEditContent(t.text);
-                      }
-                    }}
-                  />
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={4}
-                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
-                    required
-                  />
+
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1369,56 +1367,37 @@ export default function TrainingBoardSupabase({
                     {selected.title ||
                       formatFullDateTime(selected.date, selected.start_time)}
                   </h2>
-                  {selected.content ? (
-                    <p className="whitespace-pre-wrap text-sm text-foreground">
-                      {selected.content}
-                    </p>
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-sm text-neutral-600 dark:text-neutral-400">
-                      このセッションのメニューはまだ書かれていません。
-                      {!isCoachView && "練習後の実施報告・未実施報告は、このまま提出できます。"}
-                    </p>
-                  )}
+                  {/* メニュー本文（項目）と練習後の実施報告。実施報告のあとは実績だけを出す */}
+                  <StructuredMenuCard
+                    // メニューを保存し直したら読み込み直す
+                    key={`${selected.id}:${selected.last_edited_at ?? ""}:${selected.content.length}`}
+                    profile={profile}
+                    menuId={selected.id}
+                    date={selected.date}
+                    location={selected.location}
+                    isJoint={selected.is_joint}
+                    started={isReportOpen(selected)}
+                    canEdit={canCreateMenu(profile.role)}
+                    canEditPlan={canCreateMenu(profile.role) && selected.location === activeLocation}
+                    canConfirm={profile.role === "coach"}
+                    legacyContent={selected.content}
+                    onPlanSaved={(items) => savePlanBody(selected, items)}
+                  />
                   {canCreateMenu(profile.role) &&
-                    (!isReportOpen(selected) || !selected.content) &&
+                    !isReportOpen(selected) &&
                     selected.location === activeLocation && (
                       <div className="mt-2 flex justify-end">
-                        {selected.content ? (
-                          <button
-                            onClick={() => startEditingMenu(selected)}
-                            className="shrink-0 rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
-                          >
-                            編集する
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => startEditingMenu(selected)}
-                            className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white active:bg-red-700"
-                          >
-                            このセッションのメニューを書く
-                          </button>
-                        )}
+                        <button
+                          onClick={() => startEditingMenu(selected)}
+                          className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline"
+                        >
+                          日付・開始時刻を変える
+                        </button>
                       </div>
                     )}
                 </>
               )}
             </section>
-
-            {/* メニュー項目（予定）と練習後の実施報告 */}
-            {selected && !selected.is_off && (
-              <StructuredMenuCard
-                // メニューを保存し直したら読み込み直す（テンプレートから予定が入る場合がある）
-                key={`${selected.id}:${selected.last_edited_at ?? ""}:${selected.content.length}`}
-                profile={profile}
-                menuId={selected.id}
-                date={selected.date}
-                location={selected.location}
-                isJoint={selected.is_joint}
-                started={isReportOpen(selected)}
-                canEdit={canCreateMenu(profile.role)}
-                canConfirm={profile.role === "coach"}
-              />
-            )}
 
             {/* 参加予定者・参加者・欠席者 */}
             {selected && !selected.is_off && (

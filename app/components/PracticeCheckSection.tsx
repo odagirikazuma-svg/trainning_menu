@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { toDraft, type MenuItemDraft } from "../lib/menuItems";
+import { toDraft, toRow, type MenuItemDraft } from "../lib/menuItems";
+import { parseMenuText } from "../lib/menuParse";
 import {
   CALC_VERSION,
   accumulate,
@@ -391,6 +392,7 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
 
   return (
     <div className="flex flex-col gap-5">
+      <LegacyMenuConvert teamId={teamId} coachId={coachId} />
       <div className="flex items-center justify-between gap-2">
         <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-neutral-800">
           {(["tama", "otsuka"] as Loc[]).map((l) => (
@@ -659,4 +661,74 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
 
 function scopeText(p: Participation) {
   return { full: "全メニュー参加", until: "途中まで参加", from: "遅れて参加", partial: "一部だけ参加・中抜け" }[p.scope];
+}
+
+// これまでの自由記述だけのメニューを、メニュー項目（予定）に変換する（監督だけ・何度押しても同じ）。
+// 自由記述の本文はそのまま残す。読み取れなかった量は空のまま、本数の数え方は「未確認」になる
+export function LegacyMenuConvert({ teamId, coachId }: { teamId: string; coachId: string }) {
+  const supabase = createClient();
+  const [targets, setTargets] = useState<{ id: string; content: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function count() {
+    const menus = await fetchAll<{ id: string; content: string }>((a, b) =>
+      supabase.from("menus").select("id, content").eq("team_id", teamId).eq("is_off", false).neq("content", "").order("id").range(a, b)
+    );
+    const withItems = new Set(
+      (
+        await fetchAll<{ menu_id: string }>((a, b) =>
+          supabase.from("menu_items").select("menu_id").eq("team_id", teamId).order("id").range(a, b)
+        )
+      ).map((r) => r.menu_id)
+    );
+    setTargets(menus.filter((m) => !withItems.has(m.id)));
+  }
+
+  useEffect(() => {
+    count().catch((e) => setMsg(e instanceof Error ? e.message : "読み込めませんでした"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
+
+  async function run() {
+    if (!targets || targets.length === 0) return;
+    if (!window.confirm(`${targets.length}件のメニューを、メニュー項目に変換しますか？（自由記述の本文はそのまま残ります）`)) return;
+    setBusy(true);
+    let done = 0;
+    for (const m of targets) {
+      const rows = parseMenuText(m.content).map((it, i) => ({
+        ...toRow(it, true),
+        team_id: teamId,
+        menu_id: m.id,
+        phase: "plan",
+        sort_order: i,
+        created_by: coachId,
+      }));
+      if (rows.length === 0) continue;
+      const { error: e } = await supabase.from("menu_items").insert(rows);
+      if (e) {
+        setMsg(`途中で止まりました（${done}件変換済み）：${e.message}`);
+        break;
+      }
+      done++;
+    }
+    setBusy(false);
+    if (done === targets.length) setMsg(`${done}件を変換しました。量が読み取れなかった項目は「量が未入力」になっています。`);
+    await count();
+  }
+
+  if (!targets || (targets.length === 0 && !msg)) return null;
+  return (
+    <section className="flex flex-col gap-1.5 rounded-xl border border-dashed border-neutral-300 p-3 dark:border-neutral-700">
+      <span className="text-xs text-neutral-700 dark:text-neutral-300">
+        自由記述だけのメニューが <b>{targets.length}件</b> あります。メニュー項目に変換すると、練習予定表で項目として表示され、試算にも使えます。
+      </span>
+      {msg && <span className="text-xs text-neutral-600 dark:text-neutral-400">{msg}</span>}
+      {targets.length > 0 && (
+        <button type="button" disabled={busy} onClick={run} className="self-start rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50 dark:bg-neutral-200 dark:text-neutral-900">
+          {busy ? "変換中…" : "まとめて変換する"}
+        </button>
+      )}
+    </section>
+  );
 }
