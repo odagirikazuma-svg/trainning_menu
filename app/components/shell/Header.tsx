@@ -208,7 +208,7 @@ function MemberHeaderInfo({ profile }: { profile: Profile }) {
     (async () => {
       const { data } = await supabase
         .from("matches")
-        .select("name, date")
+        .select("id, name, date, member_id")
         .eq("team_id", profile.team_id)
         .eq("member_id", profile.id)
         .gte("date", toDateKey(new Date()))
