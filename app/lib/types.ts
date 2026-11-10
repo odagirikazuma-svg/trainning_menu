@@ -85,7 +85,7 @@ export function currentGrade(entryYear: number): number {
 }
 
 export const roleLabel: Record<Role, string> = {
-  leader: "リーダー",
+  leader: "部員",
   vice_leader: "副主将",
   captain: "主将",
   coach: "管理者",
@@ -100,13 +100,11 @@ export const roleLabel: Record<Role, string> = {
 export const isStaffRole = (role: Role) => role === "coach" || role === "manager";
 export const isAdminEditor = (role: Role) => role === "coach";
 
-// メニューを作成できる権限を持つロール
-// キャプテンはリーダーと同じ権限に加え、将来的に追加の権限を持つ想定
+// 練習メニューの作成・編集・報告ができるロール。
+// その日に誰が参加するか分からないため、役職に関係なく部員なら誰でもできる
+// （マネージャーとOBは除く）。
 export const canCreateMenu = (role: Role) =>
-  role === "leader" ||
-  role === "vice_leader" ||
-  role === "captain" ||
-  role === "coach";
+  role !== "manager" && role !== "ob";
 
 // トレーニングタイトルごとに割り当てる色のパレット（最大10個まで保存できるタイトルと対応）。
 // 「何番目に登録されたタイトルか」（スロット番号 0〜9）によって色を決める。

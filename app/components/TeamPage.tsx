@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import {
+  canCreateMenu,
   currentGrade,
   DayType,
   dayTypeLabel,
@@ -162,11 +163,7 @@ export default function TeamPage({
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  const canEditMatMenu =
-    profile.role === "captain" ||
-    profile.role === "leader" ||
-    profile.role === "vice_leader" ||
-    profile.role === "coach";
+  const canEditMatMenu = canCreateMenu(profile.role);
   const isCoach = profile.role === "coach";
   const todayStr = toDateKey(new Date());
 

@@ -9,7 +9,6 @@ type RosterRoleChoice =
   | "coach"
   | "captain"
   | "vice_captain"
-  | "leader"
   | "manager"
   | "member";
 
@@ -17,7 +16,6 @@ const rosterRoleLabel: Record<RosterRoleChoice, string> = {
   coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
-  leader: "リーダー",
   manager: "マネージャー",
   member: "役職なし",
 };
@@ -36,8 +34,8 @@ const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
   coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
-  leader: "リーダー",
-  vice_leader: "副リーダー",
+  leader: "役職なし",
+  vice_leader: "副主将",
   manager: "マネージャー",
   member: "役職なし",
   ob: "OB(引退)",
@@ -365,7 +363,7 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
       <div className="flex items-center justify-between gap-2">
         <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
           {s.showRoleLocationEdit
-            ? "役職は主将・副主将・リーダー・副リーダー・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。"
+            ? "役職は主将・副主将・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。"
             : "部員の役職・所属拠点を確認・編集できます。"}
         </p>
         <button
@@ -466,7 +464,15 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                     >
                       {(
                         Object.keys(memberRoleEditLabel) as MemberRoleForEdit[]
-                      ).map((r) => (
+                      )
+                        // リーダーは廃止。副主将は vice_captain に一本化して表示する
+                        // （今その役職の人だけは選択肢に残す）
+                        .filter(
+                          (r) =>
+                            (r !== "leader" && r !== "vice_leader") ||
+                            r === m.role
+                        )
+                        .map((r) => (
                         <option key={r} value={r}>
                           {memberRoleEditLabel[r]}
                         </option>

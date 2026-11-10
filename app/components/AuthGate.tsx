@@ -18,12 +18,11 @@ export type Profile = {
 };
 
 type SignupCategory = "member" | "coach" | "manager";
-type SignupRoleChoice = "captain" | "vice_leader" | "leader" | "member";
+type SignupRoleChoice = "captain" | "vice_leader" | "member";
 
 const roleChoiceLabel: Record<SignupRoleChoice, string> = {
   captain: "主将",
   vice_leader: "副主将",
-  leader: "リーダー",
   member: "役職なし",
 };
 
@@ -32,7 +31,7 @@ const rosterRoleDisplayLabel: Record<string, string> = {
   coach: "管理者（コーチ）",
   captain: "主将",
   vice_captain: "副主将",
-  leader: "リーダー",
+  leader: "役職なし",
   manager: "マネージャー",
   member: "役職なし",
 };
@@ -218,7 +217,9 @@ export default function AuthGate({
         ? "coach"
         : metaCategory === "manager"
           ? "manager"
-          : ((meta?.role_choice as SignupRoleChoice | undefined) ?? "member");
+          : meta?.role_choice === "captain" || meta?.role_choice === "vice_leader"
+            ? (meta.role_choice as SignupRoleChoice)
+            : "member";
     const metaLocation =
       metaCategory === "member"
         ? ((meta?.home_location as Location | undefined) ?? null)
@@ -520,7 +521,7 @@ export default function AuthGate({
                       <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
                         役職
                       </span>
-                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                      <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
                         {(
                           Object.keys(roleChoiceLabel) as SignupRoleChoice[]
                         ).map((v) => (
