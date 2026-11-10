@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { lineConfigured, lineReply, verifyLineSignature, type LineMessage } from "../../../lib/line";
 import { approve, findStaff, replyInjuries, replyPending, replyStatus } from "../../../lib/lineCoach";
 import { buildDailySummary, buildTomorrowMenuText } from "../../../lib/dailySummary";
 import { appButton } from "../../../lib/liffConfig";
 
 // アプリのデータを読む（サービスロール。無い環境では null）
+// 同じサーバーが温まっている間は、クライアントとチームIDを使い回す（問い合わせを減らす）
+let cached: { admin: SupabaseClient; teamId: string } | null = null;
 async function adminContext() {
+  if (cached) return cached;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data } = await admin.from("teams").select("id").limit(1).maybeSingle();
   if (!data) return null;
-  return { admin, teamId: (data as { id: string }).id };
+  cached = { admin, teamId: (data as { id: string }).id };
+  return cached;
 }
 
 const NOT_READY = "準備中です（アプリ側の設定がまだ終わっていません）。";

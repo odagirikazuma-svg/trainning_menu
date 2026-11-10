@@ -41,7 +41,7 @@ export default function LineLinkSection() {
       )}
       <button
         type="button"
-        onClick={() => (window.location.href = "/liff?to=%2Fsettings")}
+        onClick={() => (window.location.href = "/liff?link=1&to=%2Fsettings")}
         className="rounded-xl bg-[#06C755] py-2.5 text-sm font-bold text-white active:opacity-80"
       >
         {lineName ? "別のLINEで連携し直す" : "LINEと連携する"}

@@ -24,6 +24,28 @@ type Stage =
   | { kind: "unlinked"; lineName: string; roster: RosterRow[] }
   | { kind: "password"; lineName: string };
 
+function markLinked(userId: string) {
+  try {
+    localStorage.setItem(`line-linked:${userId}`, "1");
+  } catch {
+    // 保存できなくても、次回LINEで確認し直すだけ
+  }
+}
+
+// LIFF を読み込む前に、行き先（?to=）を取り出す。
+// LINEから開いたときは ?liff.state=%3Fto%3D... の形で届く
+function earlyDestination() {
+  const q = new URLSearchParams(window.location.search);
+  const direct = q.get("to");
+  if (direct) return safeTo(direct);
+  const state = q.get("liff.state");
+  if (state) {
+    const inner = new URLSearchParams(state.startsWith("?") ? state.slice(1) : state.split("?")[1] ?? "");
+    return safeTo(inner.get("to"));
+  }
+  return "/";
+}
+
 function safeTo(raw: string | null) {
   // 自分のアプリの中のページだけに移動する
   return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
@@ -61,14 +83,25 @@ export default function LiffPage() {
 
   async function finishWithToken(tokenHash: string, dest: string) {
     setStage({ kind: "loading", text: "ログインしています…" });
-    const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+    const { data, error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
     if (error) throw new Error(error.message);
+    if (data.user) markLinked(data.user.id);
     window.location.replace(dest);
   }
 
   useEffect(() => {
     (async () => {
       try {
+        // 近道：このブラウザがすでにアプリにログイン済みで、LINE連携も済んでいれば、
+        // LINEの確認（LIFFの読み込み）を飛ばして、すぐ目的のページを開く
+        const early = earlyDestination();
+        const { data: s0 } = await supabase.auth.getSession();
+        const forceLink = new URLSearchParams(window.location.search).get("link") === "1";
+        if (s0.session && !forceLink && localStorage.getItem(`line-linked:${s0.session.user.id}`) === "1") {
+          window.location.replace(early);
+          return;
+        }
+
         const liff = (await import("@line/liff")).default;
         await liff.init({ liffId: LIFF_ID });
         const dest = safeTo(new URLSearchParams(window.location.search).get("to"));
@@ -86,6 +119,7 @@ export default function LiffPage() {
         if (data.session) {
           setStage({ kind: "loading", text: "LINEと連携しています…" });
           await call("link", { idToken: tok }, data.session.access_token);
+          markLinked(data.session.user.id);
           window.location.replace(dest);
           return;
         }
@@ -123,6 +157,7 @@ export default function LiffPage() {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error || !data.session) throw new Error("メールアドレスかパスワードが違います");
       await call("link", {}, data.session.access_token);
+      markLinked(data.session.user.id);
       window.location.replace(to);
     } catch (err) {
       alert(err instanceof Error ? err.message : "ログインできませんでした");
