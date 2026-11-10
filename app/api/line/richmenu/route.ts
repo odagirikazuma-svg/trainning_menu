@@ -65,9 +65,20 @@ export async function POST(request: NextRequest) {
     const memberId = await createRichMenu("部員用", "メニュー", memberActions, memberImg);
     const coachId = await createRichMenu("監督・コーチ用", "メニュー", coachActions, coachImg);
     await setDefaultRichMenu(memberId);
-    const coaches = coachLineUserIds();
+    // 環境変数の宛先＋アプリとLINE連携した監督・コーチ・マネージャー
+    const coaches = new Set(coachLineUserIds());
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: staff } = await admin
+        .from("profiles")
+        .select("line_user_id")
+        .in("role", ["coach", "manager"])
+        .not("line_user_id", "is", null);
+      for (const r of (staff ?? []) as { line_user_id: string }[]) coaches.add(r.line_user_id);
+    }
     for (const u of coaches) await linkRichMenu(u, coachId);
-    return NextResponse.json({ ok: true, member: memberId, coach: coachId, linkedCoaches: coaches.length });
+    return NextResponse.json({ ok: true, member: memberId, coach: coachId, linkedCoaches: coaches.size });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "失敗しました" }, { status: 502 });
   }

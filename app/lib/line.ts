@@ -142,7 +142,7 @@ export async function linkCoachMenuIfCoach(lineUserId: string, role: string) {
     const menus = await listRichMenus();
     const coach = menus.find((m) => m.name === "監督・コーチ用");
     const member = menus.find((m) => m.name === "部員用");
-    if (role === "coach" && coach) await linkRichMenu(lineUserId, coach.richMenuId);
+    if ((role === "coach" || role === "manager") && coach) await linkRichMenu(lineUserId, coach.richMenuId);
     else if (member) await linkRichMenu(lineUserId, member.richMenuId);
   } catch (e) {
     console.error("[line richmenu link]", e);
