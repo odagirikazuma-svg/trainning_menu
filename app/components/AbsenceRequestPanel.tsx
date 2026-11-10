@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import type { Profile } from "./AuthGate";
+import SetLogger, { blocksHaveData, SetSummary, type ExerciseBlock } from "./SetLogger";
 import {
+  blocksToPlan,
+  planToBlocks,
   absencePlanLabel,
   absencePlanText,
   absenceReasonLabel,
@@ -19,6 +23,7 @@ import {
 // - 過去の日：申請があれば表示だけ
 // - readOnly（管理者が部員のページを見ているとき）：表示だけ
 export default function AbsenceRequestPanel({
+  profile,
   memberId,
   teamId,
   date,
@@ -26,6 +31,7 @@ export default function AbsenceRequestPanel({
   readOnly = false,
   onChange,
 }: {
+  profile: Profile;
   memberId: string;
   teamId: string;
   date: string;
@@ -45,6 +51,7 @@ export default function AbsenceRequestPanel({
   const [reason, setReason] = useState("");
   const [planType, setPlanType] = useState<AbsencePlanType | null>(null);
   const [plan, setPlan] = useState("");
+  const [planBlocks, setPlanBlocks] = useState<ExerciseBlock[]>([]);
 
   const canEdit = !readOnly && date >= todayStr;
 
@@ -83,6 +90,7 @@ export default function AbsenceRequestPanel({
     setReason(req?.reason ?? "");
     setPlanType(req?.plan_type ?? null);
     setPlan(req?.plan ?? "");
+    setPlanBlocks(planToBlocks(req?.plan_sets));
     setError(null);
     setEditing(true);
   }
@@ -91,7 +99,12 @@ export default function AbsenceRequestPanel({
     if (!reasonType) return setError("休む理由を選んでください。");
     if (reasonType === "other" && !reason.trim()) return setError("「その他」の場合は理由を書いてください。");
     if (!planType) return setError("代替メニューを選んでください。");
-    if (planType !== "none" && !plan.trim()) return setError("代替メニューの内容を書いてください。");
+    if (planType === "weight" && !blocksHaveData(planBlocks) && !plan.trim()) {
+      return setError("ウェイトの予定（種目とセット）を入れてください。");
+    }
+    if ((planType === "running" || planType === "other") && !plan.trim()) {
+      return setError("代替メニューの内容を書いてください。");
+    }
     setSaving(true);
     setError(null);
     const body = {
@@ -102,6 +115,7 @@ export default function AbsenceRequestPanel({
       reason: reason.trim(),
       plan_type: planType,
       plan: plan.trim(),
+      plan_sets: planType === "weight" && blocksHaveData(planBlocks) ? blocksToPlan(planBlocks) : null,
       status: "pending" as const,
       review_comment: null,
       reviewed_at: null,
@@ -179,18 +193,35 @@ export default function AbsenceRequestPanel({
               </button>
             ))}
           </div>
+          {planType === "weight" && (
+            <div className="rounded-lg bg-white p-2 ring-1 ring-neutral-200 dark:bg-neutral-950 dark:ring-neutral-800">
+              <SetLogger
+                supabase={supabase}
+                profile={profile}
+                date={date}
+                blocks={planBlocks}
+                onChange={setPlanBlocks}
+              />
+            </div>
+          )}
           {planType !== "none" && (
             <textarea
               value={plan}
               maxLength={300}
               rows={3}
               onChange={(e) => setPlan(e.target.value)}
-              placeholder="例：BIG3（スクワット・ベンチ・デッド）各5×5、ラン30分"
+              placeholder={
+                planType === "weight"
+                  ? "補足（任意）例：〇〇ジムで実施"
+                  : planType === "running"
+                    ? "例：ジョグ30分、インターバル400m×8"
+                    : "例：出稽古先の練習に参加"
+              }
               className={inputCls}
             />
           )}
           <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            当日は、実際にやった内容を日報（トレーニング）に記録してください。予定と実績を管理者が確認できます。
+            休みが承認されても、日報の提出は必要です。当日は、この予定がトレーニング欄に入った状態で開くので、実際にやった内容に直して提出してください（予定と変わっても大丈夫です）。
           </span>
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -245,6 +276,11 @@ export default function AbsenceRequestPanel({
         <span className="text-neutral-500">代替メニュー（予定）：</span>
         {absencePlanText(req)}
       </p>
+      {req.plan_sets && req.plan_sets.length > 0 && (
+        <div className="rounded-lg bg-white px-2.5 py-2 ring-1 ring-neutral-200 dark:bg-neutral-950 dark:ring-neutral-800">
+          <SetSummary blocks={planToBlocks(req.plan_sets)} />
+        </div>
+      )}
       {req.review_comment && (
         <p className="rounded-lg bg-white px-2.5 py-1.5 text-xs text-neutral-800 ring-1 ring-neutral-200 dark:bg-neutral-950 dark:text-neutral-200 dark:ring-neutral-800">
           💬 {req.review_comment}
@@ -252,7 +288,7 @@ export default function AbsenceRequestPanel({
       )}
       {req.status === "approved" && !readOnly && (
         <p className="text-[length:calc(10px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
-          当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。
+          休みでも日報の提出は必要です。当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。
         </p>
       )}
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}

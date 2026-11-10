@@ -1,4 +1,23 @@
 import type { TrainingType } from "./types";
+import type { ExerciseBlock, SetDraft } from "../components/SetLogger";
+
+// 代替メニュー（ウェイト）の予定。日報のセット記録と同じ形（keyなどの画面用の情報は除く）
+export type PlanBlock = {
+  exercise: ExerciseBlock["exercise"];
+  sets: SetDraft[];
+};
+
+export function blocksToPlan(blocks: ExerciseBlock[]): PlanBlock[] {
+  return blocks.map((b) => ({ exercise: b.exercise, sets: b.sets }));
+}
+
+let planKey = 0;
+export function planToBlocks(plan: PlanBlock[] | null | undefined): ExerciseBlock[] {
+  return (plan ?? []).map((b) => {
+    planKey += 1;
+    return { key: `plan-${Date.now()}-${planKey}`, exercise: b.exercise, sets: b.sets.map((x) => ({ ...x })) };
+  });
+}
 
 export type AbsenceReasonType = "sick" | "injury" | "school" | "away" | "job" | "other";
 export type AbsencePlanType = "weight" | "running" | "other" | "none";
@@ -13,6 +32,7 @@ export type AbsenceRequest = {
   reason: string;
   plan_type: AbsencePlanType;
   plan: string;
+  plan_sets?: PlanBlock[] | null;
   status: AbsenceStatus;
   review_comment: string | null;
   reviewed_at: string | null;

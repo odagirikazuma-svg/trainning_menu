@@ -4,6 +4,7 @@ import FatigueSelector from "./FatigueSelector";
 import AbsenceRequestPanel from "./AbsenceRequestPanel";
 import {
   absenceReasonText,
+  planToBlocks,
   planToTrainingType,
   type AbsenceRequest,
 } from "../lib/absence";
@@ -581,7 +582,34 @@ export default function DailyReport({
   const openMenus = menus.filter((m) => isMenuOpen(m));
   const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id));
   const nonMatSessions = sessions.filter((s) => s.session_type !== "mat");
-  const trainingRequired = !exempt && nonMatSessions.length > 0;
+  // 休み申請の代替メニューの予定を、その日のトレーニング欄に最初から入れておく
+  // （まだ提出しておらず、書きかけもないときだけ。差し戻された申請は使わない）
+  const prefilledFromPlan = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || readOnly || !absenceReq || absenceReq.status === "rejected") return;
+    if (date > todayStr || log || absenceReq.plan_type === "none") return;
+    const key = `${absenceReq.id}:${date}`;
+    if (prefilledFromPlan.current === key) return;
+    const planBlocks = planToBlocks(absenceReq.plan_sets);
+    if (planBlocks.length === 0 && !absenceReq.plan.trim()) return;
+    if (blocksHaveData(blocks) || training.content.trim()) return;
+    prefilledFromPlan.current = key;
+    if (planBlocks.length > 0) {
+      setBlocks(planBlocks.map((b) => ({ ...b, prefilled: true, prefilledFrom: "plan" as const })));
+    }
+    setTraining((t) => ({
+      ...t,
+      type: t.type ?? planToTrainingType(absenceReq.plan_type),
+      title: t.title || "代替メニュー",
+      content: t.content || (planBlocks.length > 0 ? "" : absenceReq.plan),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, absenceReq, log, date]);
+
+  // 休みが承認されていても、代替メニュー（安静以外）の実績報告は必須
+  const absenceNeedsTraining =
+    !!absenceReq && absenceReq.status === "approved" && absenceReq.plan_type !== "none";
+  const trainingRequired = !exempt && (nonMatSessions.length > 0 || absenceNeedsTraining);
   const isFuture = date > todayStr;
   const maxDateStr = shiftDate(todayStr, 14);
 
@@ -1672,6 +1700,7 @@ export default function DailyReport({
 
       {!isPopup && (
         <AbsenceRequestPanel
+          profile={profile}
           memberId={profile.id}
           teamId={profile.team_id}
           date={date}

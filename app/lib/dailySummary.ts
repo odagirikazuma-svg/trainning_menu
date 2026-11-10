@@ -93,7 +93,7 @@ export async function buildDailySummary(
       .eq("team_id", teamId)
       .gte("date", weekAgo)
       .lte("date", today),
-    supabase.from("absence_requests").select("author_id, status").eq("team_id", teamId).eq("date", today),
+    supabase.from("absence_requests").select("author_id, status, plan_type").eq("team_id", teamId).eq("date", today),
     supabase
       .from("absence_requests")
       .select("*")
@@ -132,7 +132,20 @@ export async function buildDailySummary(
   );
   const submitted = new Set<string>();
   for (const r of (commentsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
-  for (const r of (logsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
+  const trainingLogged = new Set<string>();
+  for (const r of (logsRes.data ?? []) as { author_id: string }[]) {
+    submitted.add(r.author_id);
+    trainingLogged.add(r.author_id);
+  }
+  // 承認済みの休みで、代替メニュー（安静以外）の実績がまだの人
+  const altMissing = new Set(
+    ((absTodayRes.error ? [] : absTodayRes.data) ?? [])
+      .filter(
+        (r: { status: string; plan_type: string; author_id: string }) =>
+          r.status === "approved" && r.plan_type !== "none" && !trainingLogged.has(r.author_id)
+      )
+      .map((r: { author_id: string }) => r.author_id)
+  );
   const approvedToday = new Set(
     ((absTodayRes.error ? [] : absTodayRes.data) ?? [])
       .filter((r: { status: string }) => r.status === "approved")
@@ -154,6 +167,10 @@ export async function buildDailySummary(
         (rest > 0 ? `（うち休み${rest}人）` : "")
     );
     lines.push(`未提出者：${missing.length === 0 ? "なし 🎉" : joinNames(missing.map((m) => m.display_name), 15)}`);
+    const alt = required.filter((m) => altMissing.has(m.id) && submitted.has(m.id));
+    if (alt.length > 0) {
+      lines.push(`代替メニュー未報告：${joinNames(alt.map((m) => m.display_name), 15)}`);
+    }
   }
 
   // ---------- 2) 疲労度（拠点別・前回との比較） ----------

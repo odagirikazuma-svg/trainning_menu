@@ -1515,3 +1515,8 @@ alter table profiles add column if not exists line_user_id text;
 alter table profiles add column if not exists line_display_name text;
 create unique index if not exists profiles_line_user_id_key
   on profiles (line_user_id) where line_user_id is not null;
+
+-- ============================================
+-- 追加: 休み申請の代替メニュー（ウェイト）を、日報と同じセット記録の形で保存する
+-- ============================================
+alter table absence_requests add column if not exists plan_sets jsonb;

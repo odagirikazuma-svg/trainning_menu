@@ -29,6 +29,8 @@ export type ExerciseBlock = {
   sets: SetDraft[];
   // 前回の記録を自動で入れた状態（「今日の数字に直してください」と案内する）
   prefilled?: boolean;
+  // prefilled の出どころ（"plan" = 休み申請の代替メニューの予定）
+  prefilledFrom?: "plan";
 };
 
 type SetRow = {
@@ -663,7 +665,9 @@ export default function SetLogger({
           </div>
           {b.prefilled && (
             <p className="rounded bg-sky-50 px-2 py-1 text-[length:calc(10px+var(--fs-add))] text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
-              前回の記録を入れてあります。今日の数字に直してください（同じならそのままでOK）。
+              {b.prefilledFrom === "plan"
+                ? "休み申請の予定を入れてあります。実際にやった数字に直してください（予定と違っても大丈夫です）。"
+                : "前回の記録を入れてあります。今日の数字に直してください（同じならそのままでOK）。"}
             </p>
           )}
           <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
