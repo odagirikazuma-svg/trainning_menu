@@ -343,3 +343,43 @@ export async function buildTomorrowMenuText(supabase: SupabaseClient, teamId: st
     400
   );
 }
+
+// 部員のリッチメニュー「練習メニュー」への返信：今日と明日の練習メニュー
+// loc を渡すと、その拠点と合同練習だけにしぼる
+export async function buildPracticeMenuText(
+  supabase: SupabaseClient,
+  teamId: string,
+  loc: Loc | null
+) {
+  const days = [jstDateKey(0), jstDateKey(1)];
+  const [menusRes, schedRes] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("date, title, content, location, start_time, is_joint")
+      .eq("team_id", teamId)
+      .in("date", days)
+      .eq("is_off", false)
+      .order("start_time", { ascending: true }),
+    supabase.from("schedule_days").select("date, location, is_off").eq("team_id", teamId).in("date", days),
+  ]);
+  const menus = (menusRes.data ?? []) as (MenuRow & { date: string })[];
+  const sched = (schedRes.data ?? []) as { date: string; location: Loc; is_off: boolean }[];
+  const out: string[] = [`🥋 練習メニュー${loc ? `（${LOC_LABEL[loc]}）` : ""}`];
+  days.forEach((d, i) => {
+    out.push("", `▪️${i === 0 ? "今日" : "明日"} ${mdw(d)}`);
+    const list = menus.filter((m) => m.date === d && (!loc || m.is_joint || m.location === loc));
+    if (list.length === 0) {
+      const off = sched.some((s) => s.date === d && s.is_off && (!loc || s.location === loc));
+      out.push(off ? "オフ" : "まだ登録されていません");
+      return;
+    }
+    for (const m of list) {
+      const where = m.is_joint ? "合同" : loc ? "" : LOC_LABEL[m.location];
+      out.push(
+        `・${m.start_time ? m.start_time.slice(0, 5) + " " : ""}${m.title?.trim() || "マット練習"}${where ? `（${where}）` : ""}`
+      );
+      if (m.content?.trim()) out.push(m.content.trim().slice(0, 600));
+    }
+  });
+  return out.join("\n");
+}

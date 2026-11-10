@@ -38,15 +38,18 @@ export async function POST(request: NextRequest) {
     { type: "uri", label: "日報を書く", uri: open("/mypage") },
     { type: "uri", label: "休み申請", uri: open("/mypage?absence=1") },
     { type: "uri", label: "振り返り", uri: open("/mypage?tab=review") },
-    { type: "uri", label: "アプリを開く", uri: open("/mypage") },
+    { type: "postback", label: "練習メニュー", data: "action=menu", displayText: "練習メニュー" },
   ];
+  const memberBottom: RichMenuAction = { type: "uri", label: "アプリを開く", uri: open("/mypage") };
+
 
   const coachActions: RichMenuAction[] = [
     { type: "postback", label: "休みの報告", data: "action=pending", displayText: "休みの報告" },
     { type: "postback", label: "提出状況", data: "action=status", displayText: "提出状況" },
     { type: "postback", label: "怪我の状況", data: "action=injuries", displayText: "怪我の状況" },
-    { type: "uri", label: "アプリを開く", uri: open("/admin") },
   ];
+  const coachBottom: RichMenuAction = { type: "uri", label: "アプリを開く", uri: open("/admin") };
+
 
 
 
@@ -60,8 +63,8 @@ export async function POST(request: NextRequest) {
     );
     // 古いリッチメニューを消してから作り直す
     for (const m of await listRichMenus()) await deleteRichMenu(m.richMenuId);
-    const memberId = await createRichMenu("部員用", "メニュー", memberActions, memberImg);
-    const coachId = await createRichMenu("監督・コーチ用", "メニュー", coachActions, coachImg);
+    const memberId = await createRichMenu("部員用", "メニュー", memberActions, memberBottom, memberImg);
+    const coachId = await createRichMenu("監督・コーチ用", "メニュー", coachActions, coachBottom, coachImg);
     await setDefaultRichMenu(memberId);
     // 環境変数の宛先＋アプリとLINE連携した監督・コーチ・マネージャー
     const coaches = new Set(coachLineUserIds());

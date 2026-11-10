@@ -72,24 +72,24 @@ export type RichMenuAction =
   | { type: "postback"; label: string; data: string; displayText?: string };
 
 // リッチメニューを作り、画像を載せて、IDを返す。
-// - ボタン3つ：1段（2500×843）
-// - ボタン4つ：上に3つ並べ、4つ目を下の段に横長で（2500×1143）
-// - ボタン6つ：3列×2段（2500×1686）
-export async function createRichMenu(name: string, chatBarText: string, actions: RichMenuAction[], image: ArrayBuffer) {
-  const W = [0, 833, 1667, 2500];
+// 上の段にボタンを横に並べ（3つか4つ）、bottom があれば下の段に横長のボタンを置く。
+// 高さ：上の段 843、下の段 300（2500×843 または 2500×1143）
+export async function createRichMenu(
+  name: string,
+  chatBarText: string,
+  top: RichMenuAction[],
+  bottom: RichMenuAction | null,
+  image: ArrayBuffer
+) {
   const TOP = 843;
-  const height = actions.length <= 3 ? TOP : actions.length === 4 ? TOP + 300 : TOP * 2;
-  const areas = actions.map((action, i) => {
-    if (actions.length === 4 && i === 3) {
-      return { bounds: { x: 0, y: TOP, width: 2500, height: height - TOP }, action };
-    }
-    const r = Math.floor(i / 3);
-    const c = i % 3;
-    return {
-      bounds: { x: W[c], y: r * TOP, width: W[c + 1] - W[c], height: TOP },
-      action,
-    };
-  });
+  const height = bottom ? TOP + 300 : TOP;
+  const n = top.length;
+  const xs = Array.from({ length: n + 1 }, (_, i) => Math.round((2500 * i) / n));
+  const areas = top.map((action, i) => ({
+    bounds: { x: xs[i], y: 0, width: xs[i + 1] - xs[i], height: TOP },
+    action,
+  }));
+  if (bottom) areas.push({ bounds: { x: 0, y: TOP, width: 2500, height: height - TOP }, action: bottom });
   const created = (await api("POST", `${API}/richmenu`, {
     size: { width: 2500, height },
     selected: true,

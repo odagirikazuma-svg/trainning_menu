@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { lineConfigured, lineReply, verifyLineSignature, type LineMessage } from "../../../lib/line";
 import { approve, findStaff, replyInjuries, replyPending, replyStatus } from "../../../lib/lineCoach";
-import { buildDailySummary, buildTomorrowMenuText } from "../../../lib/dailySummary";
+import { buildDailySummary, buildPracticeMenuText, buildTomorrowMenuText } from "../../../lib/dailySummary";
 import { appButton } from "../../../lib/liffConfig";
 
 // アプリのデータを読む（サービスロール。無い環境では null）
@@ -34,6 +34,17 @@ async function handleAction(
   if (!ctx) return [{ type: "text", text: NOT_READY }];
   const { admin, teamId } = ctx;
 
+  if (action === "menu") {
+    // LINE連携した部員なら、その拠点のメニューだけ
+    const { data: me } = userId
+      ? await admin.from("profiles").select("home_location").eq("line_user_id", userId).maybeSingle()
+      : { data: null };
+    const loc = ((me as { home_location: "tama" | "otsuka" | null } | null)?.home_location ?? null);
+    return [
+      { type: "text", text: await buildPracticeMenuText(admin, teamId, loc) },
+      appButton("/board", "練習予定表はアプリで確認できます"),
+    ];
+  }
   if (action === "menu_tomorrow") {
     return [{ type: "text", text: await buildTomorrowMenuText(admin, teamId) }, appButton("/board", "練習予定表はアプリで確認できます")];
   }
@@ -64,6 +75,7 @@ async function handleAction(
 // トークに直接打った言葉でも同じ返事をする
 const KEYWORDS: Record<string, string> = {
   明日のメニュー: "menu_tomorrow",
+  練習メニュー: "menu",
   今日のまとめ: "summary",
   承認待ち: "pending",
   休みの報告: "pending",
