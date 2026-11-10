@@ -1458,9 +1458,11 @@ export default function DailyReport({
       title: "トレーニング",
       sub: log
         ? `${trainingTypeLabel[log.type]}${log.title ? `・${log.title}` : ""}`
-        : types.length > 0
-          ? Array.from(new Set(types)).join("・")
-          : "任意（自主トレをした日に）",
+        : absenceNeedsTraining
+          ? "代替メニューの実績（休みの日も必須）"
+          : types.length > 0
+            ? Array.from(new Set(types)).join("・")
+            : "任意（自主トレをした日に）",
     };
   }
 
