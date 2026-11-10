@@ -71,10 +71,11 @@ export type RichMenuAction =
   | { type: "uri"; label: string; uri: string }
   | { type: "postback"; label: string; data: string; displayText?: string };
 
-// 3列×2段（2500×1686）のリッチメニューを作り、画像を載せて、IDを返す
+// 3列のリッチメニューを作り、画像を載せて、IDを返す。
+// ボタンが3つ以下なら1段（2500×843）、それより多ければ2段（2500×1686）
 export async function createRichMenu(name: string, chatBarText: string, actions: RichMenuAction[], image: ArrayBuffer) {
   const W = [0, 833, 1667, 2500];
-  const H = [0, 843, 1686];
+  const H = actions.length <= 3 ? [0, 843] : [0, 843, 1686];
   const areas = actions.map((action, i) => {
     const r = Math.floor(i / 3);
     const c = i % 3;
@@ -84,7 +85,7 @@ export async function createRichMenu(name: string, chatBarText: string, actions:
     };
   });
   const created = (await api("POST", `${API}/richmenu`, {
-    size: { width: 2500, height: 1686 },
+    size: { width: 2500, height: H[H.length - 1] },
     selected: true,
     name,
     chatBarText,

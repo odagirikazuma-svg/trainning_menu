@@ -37,11 +37,9 @@ export async function POST(request: NextRequest) {
   const memberActions: RichMenuAction[] = [
     { type: "uri", label: "日報を書く", uri: open("/mypage") },
     { type: "uri", label: "休み申請", uri: open("/mypage?absence=1") },
-    { type: "postback", label: "明日のメニュー", data: "action=menu_tomorrow", displayText: "明日のメニュー" },
     { type: "uri", label: "振り返り", uri: open("/mypage?tab=review") },
-    { type: "uri", label: "練習予定表", uri: open("/board") },
-    { type: "uri", label: "設定", uri: open("/settings") },
   ];
+
   const coachActions: RichMenuAction[] = [
     { type: "postback", label: "承認待ち", data: "action=pending", displayText: "承認待ち" },
     { type: "postback", label: "今日のまとめ", data: "action=summary", displayText: "今日のまとめ" },
