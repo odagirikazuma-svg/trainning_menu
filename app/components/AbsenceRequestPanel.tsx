@@ -351,6 +351,18 @@ export default function AbsenceRequestPanel({
           監督・管理者がこの報告を取り消しました。理由を確認して、直接相談してください。
         </p>
       )}
+      {canEdit && req.status === "rejected" && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={saving}
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"
+          >
+            この報告を消す（相談のうえ出し直す場合）
+          </button>
+        </div>
+      )}
       {canEdit && req.status !== "rejected" && (
         <div className="flex gap-2 pt-1">
           <button
