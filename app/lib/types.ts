@@ -100,11 +100,10 @@ export const roleLabel: Record<Role, string> = {
 export const isStaffRole = (role: Role) => role === "coach" || role === "manager";
 export const isAdminEditor = (role: Role) => role === "coach";
 
-// 練習メニューの作成・編集・報告ができるロール。
-// その日に誰が参加するか分からないため、役職に関係なく部員なら誰でもできる
-// （マネージャーとOBは除く）。
-export const canCreateMenu = (role: Role) =>
-  role !== "manager" && role !== "ob";
+// 練習メニューの作成・編集・事後報告ができるロール。
+// その日に誰が参加するか分からないため、役職に関係なく部員なら誰でもできる。
+// マネージャー・管理者もできる（OBは除く）。
+export const canCreateMenu = (role: Role) => role !== "ob";
 
 // トレーニングタイトルごとに割り当てる色のパレット（最大10個まで保存できるタイトルと対応）。
 // 「何番目に登録されたタイトルか」（スロット番号 0〜9）によって色を決める。
