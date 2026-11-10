@@ -68,6 +68,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
   const [nextMatch, setNextMatch] = useState<{ name: string; date: string } | null>(null);
   const [injuries, setInjuries] = useState<InjuryInfo[]>([]);
   const [goals, setGoals] = useState<{ term: string; content: string }[]>([]);
+  const [weightClass, setWeightClass] = useState<number | null>(null);
   const [tab, setTab] = useState<"daily" | "review">("daily");
   const [date, setDate] = useState(initialDate);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -80,7 +81,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
     let cancelled = false;
     (async () => {
       const todayStr = toDateKey(new Date());
-      const [memberRes, matchRes, injuryRes, goalRes] = await Promise.all([
+      const [memberRes, matchRes, injuryRes, goalRes, classRes] = await Promise.all([
         supabase
           .from("profiles")
           .select(
@@ -109,6 +110,8 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
           .select("term, content")
           .eq("author_id", memberId)
           .in("term", ["long", "short"]),
+        // 階級（列がまだ無い環境ではエラーになるので、別に読んで無視する）
+        supabase.from("profiles").select("weight_class").eq("id", memberId).maybeSingle(),
       ]);
       if (cancelled) return;
       if (memberRes.error) setErrorMsg(memberRes.error.message);
@@ -117,6 +120,11 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
       setInjuries((injuryRes.data ?? []) as InjuryInfo[]);
       setGoals(
         ((goalRes.error ? [] : goalRes.data) ?? []) as { term: string; content: string }[]
+      );
+      setWeightClass(
+        classRes.error
+          ? null
+          : ((classRes.data as { weight_class: number | null } | null)?.weight_class ?? null)
       );
     })();
     return () => {
@@ -181,6 +189,9 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
             )}
             {member.entry_year != null && (
               <span className="rounded bg-surface-2 px-2 py-1">{currentGrade(member.entry_year)}年</span>
+            )}
+            {weightClass != null && (
+              <span className="rounded bg-surface-2 px-2 py-1">{weightClass}kg級</span>
             )}
             {nextMatch && matchDays != null && (
               <span className="rounded bg-amber-100 px-2.5 py-1 font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">

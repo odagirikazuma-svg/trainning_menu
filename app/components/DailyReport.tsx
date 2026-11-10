@@ -1,5 +1,6 @@
 "use client";
 
+import FatigueSelector from "./FatigueSelector";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
@@ -1729,6 +1730,14 @@ export default function DailyReport({
               );
             })}
           </ol>
+
+          {/* 今日の疲労度（自己評価・参考値） */}
+          <FatigueSelector
+            memberId={profile.id}
+            teamId={profile.team_id}
+            date={date}
+            readOnly={readOnly}
+          />
 
           {/* 一言メモ（自分だけ） */}
           {!isPopup && !readOnly && (

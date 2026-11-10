@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../components/shell/AppShell";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
+import WeightClassSection from "../../components/WeightClassSection";
 import { useGoalTasks } from "../../components/shell/useGoalTasks";
 import { useTheme, type ThemePref } from "../../components/shell/ThemeProvider";
 import {
@@ -965,6 +966,9 @@ export default function SettingsPage() {
             </CollapsibleSection>
             <CollapsibleSection title="プロフィールアイコンの設定">
               <IconSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="階級">
+              <WeightClassSection />
             </CollapsibleSection>
             <CollapsibleSection title="次の試合">
               <NextMatchSection />

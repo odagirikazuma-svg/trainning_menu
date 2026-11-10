@@ -16,6 +16,7 @@ import { isExemptOn, loadExemptions } from "../lib/exemptions";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
+import { fatigueColor } from "./FatigueSelector";
 
 const adminSubTabItems: {
   value: "submissions" | "training" | "injuries";
@@ -725,6 +726,22 @@ export default function CoachAdminPage({
   async function loadDaySubmissionDetail(dateStr: string) {
     setLoadingDaySubmissionDetail(true);
 
+    // 疲労度（自己評価）。テーブルが未作成の環境ではエラーになるので無視する
+    supabase
+      .from("daily_conditions")
+      .select("author_id, fatigue")
+      .eq("team_id", profile.team_id)
+      .eq("date", dateStr)
+      .then(({ data, error }) => {
+        const m = new Map<string, number>();
+        if (!error) {
+          for (const r of (data ?? []) as { author_id: string; fatigue: number }[]) {
+            m.set(r.author_id, r.fatigue);
+          }
+        }
+        setFatigueByMember(m);
+      });
+
     const { data: scheduleData } = await supabase
       .from("schedule_days")
       .select(
@@ -902,6 +919,9 @@ export default function CoachAdminPage({
   }
 
 
+  const [fatigueByMember, setFatigueByMember] = useState<Map<string, number>>(
+    new Map()
+  );
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
   const [expandedInjuryId, setExpandedInjuryId] = useState<string | null>(
@@ -1075,6 +1095,16 @@ export default function CoachAdminPage({
                               <span className="truncate">
                                 {d.displayName}
                               </span>
+                              {fatigueByMember.has(d.memberId) && (
+                                <span
+                                  title="疲労度（自己評価）"
+                                  className={`ml-auto shrink-0 rounded px-1 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${fatigueColor(
+                                    fatigueByMember.get(d.memberId)!
+                                  )}`}
+                                >
+                                  疲{fatigueByMember.get(d.memberId)}
+                                </span>
+                              )}
                               {d.isPending ? (
                                 <span className="shrink-0 text-[length:calc(10px+var(--fs-add))] text-neutral-600">
                                   未登録
