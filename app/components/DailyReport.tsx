@@ -583,6 +583,7 @@ export default function DailyReport({
   const nonMatSessions = sessions.filter((s) => s.session_type !== "mat");
   const trainingRequired = !exempt && nonMatSessions.length > 0;
   const isFuture = date > todayStr;
+  const maxDateStr = shiftDate(todayStr, 14);
 
   // 承認済みの休み申請がある日は、マット練習の報告を「休み」＋申請内容で最初から埋めておく
   const absenceDraft: MatDraft =
@@ -1583,7 +1584,9 @@ export default function DailyReport({
             {weekDays.map((d) => {
               const [, , day] = d.split("-").map(Number);
               const w = "月火水木金土日"[weekDays.indexOf(d)];
-              const future = d > todayStr;
+              // 休み申請のため、2週間先までは開ける
+              const future = d > maxDateStr;
+              const upcoming = d > todayStr;
               const selected = d === date;
               const pending = pendingSet.has(d);
               const submitted = weekSubmitted.has(d);
@@ -1596,7 +1599,9 @@ export default function DailyReport({
                   className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 ${
                     selected
                       ? "bg-red-600 text-white"
-                      : "bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
+                      : upcoming
+                        ? "border border-dashed border-neutral-300 dark:border-neutral-700 text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800"
+                        : "bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                   } disabled:opacity-30`}
                 >
                   <span
@@ -1623,9 +1628,9 @@ export default function DailyReport({
               type="button"
               onClick={() => {
                 const next = shiftDate(date, 7);
-                onDateChange(next > todayStr ? todayStr : next);
+                onDateChange(next > maxDateStr ? maxDateStr : next);
               }}
-              disabled={shiftDate(weekStartStr, 7) > todayStr}
+              disabled={shiftDate(weekStartStr, 7) > maxDateStr}
               aria-label="次の週"
               className="w-6 shrink-0 rounded text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-30"
             >
