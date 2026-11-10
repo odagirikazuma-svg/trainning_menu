@@ -245,35 +245,14 @@ export async function buildDailySummary(
   }
 
   // ---------- 5) 明日の練習メニュー（拠点別） ----------
-  const menus = ((menusRes.data ?? []) as MenuRow[]);
-  const offTomorrow = new Set(
-    ((schedTomorrowRes.data ?? []) as { location: Loc; is_off: boolean }[])
-      .filter((r) => r.is_off)
-      .map((r) => r.location)
-  );
-  const menuLine = (m: MenuRow) => {
-    const head = `・${m.start_time ? m.start_time.slice(0, 5) + " " : ""}${m.title?.trim() || "マット練習"}`;
-    const body = m.content?.trim() ? `\n　${oneLine(m.content, 120)}` : "";
-    return head + body;
-  };
   lines.push("");
-  lines.push(`▪️明日 ${mdw(tomorrow)} の練習メニュー`);
-  const joint = menus.filter((m) => m.is_joint);
-  if (joint.length > 0) {
-    lines.push("合同：");
-    for (const m of joint) lines.push(menuLine(m));
-  }
-  for (const loc of LOCS) {
-    const own = menus.filter((m) => !m.is_joint && m.location === loc);
-    if (own.length > 0) {
-      lines.push(`${LOC_LABEL[loc]}：`);
-      for (const m of own) lines.push(menuLine(m));
-    } else if (offTomorrow.has(loc)) {
-      lines.push(`${LOC_LABEL[loc]}：オフ`);
-    } else if (joint.length === 0) {
-      lines.push(`${LOC_LABEL[loc]}：まだ登録されていません`);
-    }
-  }
+  lines.push(
+    menuLines(
+      (menusRes.data ?? []) as MenuRow[],
+      (schedTomorrowRes.data ?? []) as { location: Loc; is_off: boolean }[],
+      tomorrow
+    )
+  );
 
   lines.push("");
   // openExternalBrowser=1：LINEの中ではなく、普段のブラウザ（ログイン済み）で開く
@@ -281,4 +260,58 @@ export async function buildDailySummary(
 
   const text = lines.join("\n");
   return text.length > 4900 ? `${text.slice(0, 4890)}\n…（続きはアプリで）` : text;
+}
+
+function menuLines(
+  menus: MenuRow[],
+  sched: { location: Loc; is_off: boolean }[],
+  date: string,
+  maxContent = 120
+) {
+  const out: string[] = [];
+  const offs = new Set(sched.filter((r) => r.is_off).map((r) => r.location));
+  const menuLine = (m: MenuRow) => {
+    const head = `・${m.start_time ? m.start_time.slice(0, 5) + " " : ""}${m.title?.trim() || "マット練習"}`;
+    const body = m.content?.trim() ? `\n　${oneLine(m.content, maxContent)}` : "";
+    return head + body;
+  };
+  out.push(`▪️明日 ${mdw(date)} の練習メニュー`);
+  const joint = menus.filter((m) => m.is_joint);
+  if (joint.length > 0) {
+    out.push("合同：");
+    for (const m of joint) out.push(menuLine(m));
+  }
+  for (const loc of LOCS) {
+    const own = menus.filter((m) => !m.is_joint && m.location === loc);
+    if (own.length > 0) {
+      out.push(`${LOC_LABEL[loc]}：`);
+      for (const m of own) out.push(menuLine(m));
+    } else if (offs.has(loc)) {
+      out.push(`${LOC_LABEL[loc]}：オフ`);
+    } else if (joint.length === 0) {
+      out.push(`${LOC_LABEL[loc]}：まだ登録されていません`);
+    }
+  }
+  return out.join("\n");
+}
+
+// リッチメニュー「明日のメニュー」への返信
+export async function buildTomorrowMenuText(supabase: SupabaseClient, teamId: string) {
+  const tomorrow = jstDateKey(1);
+  const [menusRes, schedRes] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("title, content, location, start_time, is_joint")
+      .eq("team_id", teamId)
+      .eq("date", tomorrow)
+      .eq("is_off", false)
+      .order("start_time", { ascending: true }),
+    supabase.from("schedule_days").select("location, is_off").eq("team_id", teamId).eq("date", tomorrow),
+  ]);
+  return menuLines(
+    (menusRes.data ?? []) as MenuRow[],
+    (schedRes.data ?? []) as { location: Loc; is_off: boolean }[],
+    tomorrow,
+    400
+  );
 }

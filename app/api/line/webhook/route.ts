@@ -1,5 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { lineConfigured, lineReply, verifyLineSignature } from "../../../lib/line";
+import { createClient } from "@supabase/supabase-js";
+import {
+  coachLineUserIds,
+  lineConfigured,
+  lineReply,
+  verifyLineSignature,
+} from "../../../lib/line";
+import { buildDailySummary, buildTomorrowMenuText } from "../../../lib/dailySummary";
+
+// アプリのデータを読む（サービスロール。無い環境では null）
+async function adminContext() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data } = await admin.from("teams").select("id").limit(1).maybeSingle();
+  if (!data) return null;
+  return { admin, teamId: (data as { id: string }).id };
+}
+
+const NOT_READY = "準備中です（アプリ側の設定がまだ終わっていません）。";
+
+async function handleAction(action: string, userId: string | undefined, origin: string) {
+  if (action === "menu_tomorrow") {
+    const ctx = await adminContext();
+    if (!ctx) return NOT_READY;
+    return buildTomorrowMenuText(ctx.admin, ctx.teamId);
+  }
+  if (action === "summary") {
+    if (!userId || !coachLineUserIds().includes(userId)) {
+      return "このボタンは監督・コーチ専用です。";
+    }
+    const ctx = await adminContext();
+    if (!ctx) return NOT_READY;
+    return buildDailySummary(ctx.admin, ctx.teamId, process.env.APP_URL || origin);
+  }
+  return null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +46,7 @@ type LineEvent = {
   replyToken?: string;
   source?: LineSource;
   message?: { type: string; text?: string };
+  postback?: { data: string };
 };
 
 // 接続確認用：鍵が設定されているかだけを返す（値は返さない）
@@ -38,6 +76,20 @@ export async function POST(request: NextRequest) {
     events.map(async (ev) => {
       if (!ev.replyToken) return;
       try {
+        // リッチメニューのボタン（返信なので通数にカウントされない）
+        const action =
+          ev.type === "postback"
+            ? new URLSearchParams(ev.postback?.data ?? "").get("action")
+            : ev.type === "message" && ev.message?.text?.trim() === "明日のメニュー"
+              ? "menu_tomorrow"
+              : ev.type === "message" && ev.message?.text?.trim() === "今日のまとめ"
+                ? "summary"
+                : null;
+        if (action) {
+          const text = await handleAction(action, ev.source?.userId, request.nextUrl.origin);
+          if (text) await lineReply(ev.replyToken, [{ type: "text", text }]);
+          return;
+        }
         if (ev.type === "join") {
           // グループに招待されたとき
           await lineReply(ev.replyToken, [

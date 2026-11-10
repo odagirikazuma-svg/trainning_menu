@@ -932,7 +932,12 @@ export default function CoachAdminPage({
 
   const [adminSubTab, setAdminSubTab] = useState<
     "submissions" | "training" | "injuries"
-  >("submissions");
+  >(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("tab") === "injuries"
+      ? "injuries"
+      : "submissions"
+  );
 
   // フッター上のサブナビ（提出状況／怪我の報告の切り替え）を登録
   // ※ node は必ず useMemo で安定させること。毎レンダー新しいJSXを渡すと

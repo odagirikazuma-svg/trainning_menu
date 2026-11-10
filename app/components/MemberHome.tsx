@@ -256,6 +256,19 @@ export default function MemberHome({
   // 練習予定表の「日報を書く」から来た場合は、その日の日報を開く
   const [reportDate, setReportDate] = useState<string>(() => {
     if (typeof window === "undefined") return todayStr;
+    // LINEのリッチメニューから：?absence=1 は明日の日報（休み申請）、?date=YYYY-MM-DD はその日
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get("absence") === "1") {
+        const t = new Date();
+        t.setDate(t.getDate() + 1);
+        return toDateKey(t);
+      }
+      const d = q.get("date");
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    } catch {
+      // 読めなくても今日の日報を開く
+    }
     try {
       const jump = sessionStorage.getItem("dailyReportDate");
       if (jump) {
@@ -268,7 +281,11 @@ export default function MemberHome({
     return todayStr;
   });
   const [reportRefreshKey, setReportRefreshKey] = useState(0);
-  const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>("daily");
+  const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>(() => {
+    if (typeof window === "undefined") return "daily";
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return tab === "review" ? "training" : tab === "injury" ? "injury" : "daily";
+  });
 
   useEffect(() => {
     if (isManager) {

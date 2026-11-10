@@ -74,6 +74,13 @@ export default function AbsenceReviewSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
+  // LINEの「承認待ち」ボタンから来たとき（#absence）は、この欄までスクロールする
+  useEffect(() => {
+    if (loaded && typeof window !== "undefined" && window.location.hash === "#absence") {
+      document.getElementById("absence")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loaded]);
+
   const byDate = useMemo(() => {
     const m = new Map<string, Row[]>();
     for (const r of rows) {
@@ -107,7 +114,7 @@ export default function AbsenceReviewSection({
   const pendingCount = rows.filter((r) => r.status === "pending").length;
 
   return (
-    <section className="flex flex-col gap-2">
+    <section id="absence" className="flex scroll-mt-24 flex-col gap-2">
       <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <span className="inline-block h-3.5 w-1 rounded-full bg-amber-500" />
         休み申請

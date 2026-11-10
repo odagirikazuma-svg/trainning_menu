@@ -36,6 +36,28 @@ export default function LineSummarySection() {
     setBusy(false);
   }
 
+  async function setupRichMenu() {
+    if (!window.confirm("公式LINEのリッチメニュー（部員用・監督用）を作り直しますか？")) return;
+    setBusy(true);
+    setMsg(null);
+    const { data } = await supabase.auth.getSession();
+    try {
+      const res = await fetch("/api/line/richmenu", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session?.access_token}` },
+      });
+      const json = (await res.json()) as { error?: string; linkedCoaches?: number };
+      setMsg(
+        res.ok
+          ? { ok: true, text: `リッチメニューを設定しました（監督用を${json.linkedCoaches ?? 0}人に表示）。LINEのトーク画面を開き直すと反映されます。` }
+          : { ok: false, text: json.error ?? `エラー（${res.status}）` }
+      );
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "通信に失敗しました" });
+    }
+    setBusy(false);
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
@@ -62,6 +84,14 @@ export default function LineSummarySection() {
           今すぐLINEに送る
         </button>
       </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={setupRichMenu}
+        className="rounded-lg border border-red-300 py-2 text-xs font-medium text-red-700 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+      >
+        リッチメニュー（トーク画面のボタン）を設定し直す
+      </button>
       {msg && (
         <p className={`text-xs ${msg.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
           {msg.text}

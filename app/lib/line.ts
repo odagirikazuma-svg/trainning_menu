@@ -46,3 +46,76 @@ export function lineReply(replyToken: string, messages: LineMessage[]) {
 export function linePush(to: string, messages: LineMessage[]) {
   return call("/message/push", { to, messages: messages.slice(0, 5) });
 }
+
+// ---------- リッチメニュー ----------
+async function api(method: string, url: string, body?: unknown, contentType = "application/json") {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      ...(body !== undefined ? { "Content-Type": contentType } : {}),
+    },
+    body:
+      body === undefined
+        ? undefined
+        : contentType === "application/json"
+          ? JSON.stringify(body)
+          : (body as BodyInit),
+  });
+  const text = await res.text().catch(() => "");
+  if (!res.ok) throw new Error(`LINE API ${method} ${url.replace(/^https:\/\/[^/]+/, "")} ${res.status}: ${text.slice(0, 200)}`);
+  return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+}
+
+export type RichMenuAction =
+  | { type: "uri"; label: string; uri: string }
+  | { type: "postback"; label: string; data: string; displayText?: string };
+
+// 3列×2段（2500×1686）のリッチメニューを作り、画像を載せて、IDを返す
+export async function createRichMenu(name: string, chatBarText: string, actions: RichMenuAction[], image: ArrayBuffer) {
+  const W = [0, 833, 1667, 2500];
+  const H = [0, 843, 1686];
+  const areas = actions.map((action, i) => {
+    const r = Math.floor(i / 3);
+    const c = i % 3;
+    return {
+      bounds: { x: W[c], y: H[r], width: W[c + 1] - W[c], height: H[r + 1] - H[r] },
+      action,
+    };
+  });
+  const created = (await api("POST", `${API}/richmenu`, {
+    size: { width: 2500, height: 1686 },
+    selected: true,
+    name,
+    chatBarText,
+    areas,
+  })) as { richMenuId: string };
+  await api("POST", `https://api-data.line.me/v2/bot/richmenu/${created.richMenuId}/content`, image, "image/png");
+  return created.richMenuId;
+}
+
+export async function listRichMenus() {
+  const r = (await api("GET", `${API}/richmenu/list`)) as { richmenus?: { richMenuId: string; name: string }[] };
+  return r.richmenus ?? [];
+}
+
+export function deleteRichMenu(id: string) {
+  return api("DELETE", `${API}/richmenu/${id}`);
+}
+
+export function setDefaultRichMenu(id: string) {
+  return api("POST", `${API}/user/all/richmenu/${id}`);
+}
+
+export function linkRichMenu(userId: string, id: string) {
+  return api("POST", `${API}/user/${userId}/richmenu/${id}`);
+}
+
+// 監督・コーチの LINE ユーザーID（LINE_COACH_USER_IDS、無ければ LINE_SUMMARY_TO のうち U で始まるもの）
+export function coachLineUserIds() {
+  const raw = process.env.LINE_COACH_USER_IDS || process.env.LINE_SUMMARY_TO || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.startsWith("U"));
+}
