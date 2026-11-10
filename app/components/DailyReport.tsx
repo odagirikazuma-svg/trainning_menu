@@ -215,6 +215,8 @@ export default function DailyReport({
   titleColors,
   onSubmitted,
   onTitlesChanged,
+  readOnly = false,
+  viewer,
 }: {
   profile: Profile;
   date: string;
@@ -229,6 +231,10 @@ export default function DailyReport({
   onSubmitted?: () => void | Promise<void>;
   // タイトル候補を整理したあとに、候補を読み直す（入力中の内容は消さない）
   onTitlesChanged?: () => void | Promise<void>;
+  // 管理者などが部員の日報を見るとき（書く・直すはできない。リアクション・コメントはできる）
+  readOnly?: boolean;
+  // 見ている人（readOnly のとき、リアクション・コメントはこの人として付ける）
+  viewer?: Profile;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -455,7 +461,9 @@ export default function DailyReport({
         .eq("author_id", profile.id)
         .eq("date", date)
         .maybeSingle(),
-      supabase
+      readOnly
+        ? none
+        : supabase
         .from("personal_memos")
         .select("id, content")
         .eq("author_id", profile.id)
@@ -534,7 +542,7 @@ export default function DailyReport({
     setMemoId(memoRow?.id ?? null);
     setMemoSaved(memoRow?.content ?? "");
     if (resetDrafts) setMemo(memoRow?.content ?? "");
-    if (resetDrafts) {
+    if (resetDrafts && !readOnly) {
       // 書きかけの下書きがあれば戻す
       if (!skipDraftRestore.current) {
         const d = readDraft(draftKey);
@@ -1025,24 +1033,26 @@ export default function DailyReport({
             >
               {commentKindLabel[r.kind]}・提出済み
             </span>
-            <button
-              type="button"
-              onClick={() => startEditReport(r)}
-              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
-            >
-              修正する
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => startEditReport(r)}
+                className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
+              >
+                修正する
+              </button>
+            )}
           </div>
           <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{r.text}</p>
         </div>
         <ReactionBar
           commentId={r.id}
           reactions={reactions}
-          profileId={profile.id}
+          profileId={readOnly && viewer ? viewer.id : profile.id}
           teamId={profile.team_id}
           supabase={supabase}
           onChanged={reloadReactions}
-          readOnly
+          readOnly={!readOnly}
         />
         {myReplies.length > 0 && (
           <ul className="flex flex-col gap-1.5 border-l-2 border-neutral-300 dark:border-neutral-700 pl-3">
@@ -1057,7 +1067,23 @@ export default function DailyReport({
             ))}
           </ul>
         )}
-        {!isPopup && (
+        {readOnly && viewer && (
+          <ReplyForm
+            onSubmit={async (text) => {
+              const { error } = await supabase.from("comments").insert({
+                menu_id: m.id,
+                author_id: viewer.id,
+                parent_id: r.id,
+                kind: "opinion",
+                text,
+              });
+              if (error) return error.message;
+              await load(false);
+              return null;
+            }}
+          />
+        )}
+        {!isPopup && !readOnly && (
           <button
             type="button"
             onClick={() => jumpToBoard(m)}
@@ -1361,6 +1387,8 @@ export default function DailyReport({
   function isExpanded(item: TimelineItem) {
     if (item.key in expanded) return expanded[item.key];
     // 提出済み・開始前は閉じた状態、残っているものは開いた状態から始める
+    // （管理者が見るときは、提出済みの中身を読みたいので開いた状態から始める）
+    if (readOnly) return !item.upcoming;
     return !item.done && !item.upcoming;
   }
   function toggle(item: TimelineItem) {
@@ -1422,7 +1450,13 @@ export default function DailyReport({
               メニューは未記入です。やった内容を自分の言葉で書いてください。
             </p>
           )}
-          {r ? renderSubmittedReport(m, r) : renderMatForm(m.id)}
+          {r ? (
+            renderSubmittedReport(m, r)
+          ) : readOnly ? (
+            <p className="text-xs text-neutral-500">まだ提出されていません。</p>
+          ) : (
+            renderMatForm(m.id)
+          )}
         </div>
       );
     }
@@ -1436,13 +1470,15 @@ export default function DailyReport({
               {log.title ? `・${log.title}` : ""}
               {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
             </span>
-            <button
-              type="button"
-              onClick={() => setEditingTraining(true)}
-              className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
-            >
-              修正する
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setEditingTraining(true)}
+                className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
+              >
+                修正する
+              </button>
+            )}
           </div>
           <SetSummary blocks={savedBlocks} />
           {log.content && log.content !== blocksSummaryText(savedBlocks) && (
@@ -1455,8 +1491,17 @@ export default function DailyReport({
             </p>
           )}
         </div>
-        {!isPopup && <TrainingCommentThread weightLogId={log.id} profile={profile} />}
+        {!isPopup && (
+          <TrainingCommentThread
+            weightLogId={log.id}
+            profile={readOnly && viewer ? viewer : profile}
+          />
+        )}
       </div>
+    ) : readOnly ? (
+      <p className="text-xs text-neutral-500">
+        {trainingRequired ? "まだ提出されていません。" : "この日のトレーニングの記録はありません。"}
+      </p>
     ) : (
       renderTrainingForm()
     );
@@ -1485,7 +1530,9 @@ export default function DailyReport({
                   }`}
                 >
                   {remaining > 0
-                    ? `あと${remaining}件`
+                    ? readOnly
+                      ? `未提出 ${remaining}件`
+                      : `あと${remaining}件`
                     : dayComplete
                       ? "この日はすべて提出済み"
                       : "提出が必要な練習はありません"}
@@ -1684,7 +1731,7 @@ export default function DailyReport({
           </ol>
 
           {/* 一言メモ（自分だけ） */}
-          {!isPopup && (
+          {!isPopup && !readOnly && (
             <section className="flex flex-col gap-1 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 p-3">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
@@ -1706,7 +1753,7 @@ export default function DailyReport({
           )}
 
           {/* 提出（画面の下に固定） */}
-          {dayComplete && !hasOptionalToSubmit ? (
+          {readOnly ? null : dayComplete && !hasOptionalToSubmit ? (
             <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               ✓ この日の日報はすべて提出済みです
             </p>
@@ -1745,6 +1792,41 @@ export default function DailyReport({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// 管理者が部員の日報にコメントを返す欄
+function ReplyForm({ onSubmit }: { onSubmit: (text: string) => Promise<string | null> }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={1}
+          placeholder="コメントを書く"
+          className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+        />
+        <button
+          type="button"
+          disabled={busy || !text.trim()}
+          onClick={async () => {
+            setBusy(true);
+            const err = await onSubmit(text.trim());
+            setBusy(false);
+            setError(err);
+            if (!err) setText("");
+          }}
+          className="shrink-0 rounded-lg bg-red-600 px-3 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
+        >
+          送信
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }
