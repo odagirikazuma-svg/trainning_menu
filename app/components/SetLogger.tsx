@@ -14,7 +14,28 @@ type SupabaseBrowserClient = ReturnType<typeof createClient>;
  */
 
 export type Measure = "reps" | "time";
-export type Exercise = { id: string; name: string; measure: Measure; created_by?: string | null };
+export type Better = "higher" | "lower";
+export type Exercise = {
+  id: string;
+  name: string;
+  measure: Measure;
+  created_by?: string | null;
+  // 大きい値が良い（重さ・回数・プランクの時間など）／小さい値が良い（走るタイムなど）
+  better?: Better;
+};
+
+export const betterLabel: Record<Better, string> = {
+  higher: "長いほど良い",
+  lower: "短いほど良い（タイム）",
+};
+
+// 名前から、時間の種目が「短いほど良い（走るタイム）」かを推測する
+export function guessBetter(name: string, measure: Measure): Better {
+  if (measure !== "time") return "higher";
+  return /(走|ラン|ダッシュ|シャトル|スプリント|[0-9０-９]+\s*(m|km|ｍ|ｋｍ|メートル|キロ))/i.test(name)
+    ? "lower"
+    : "higher";
+}
 // warmup = ウォーミングアップのセット（分析の「メインセット」から外す）
 export type SetDraft = {
   weight: string;
@@ -309,6 +330,8 @@ export default function SetLogger({
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [newMeasure, setNewMeasure] = useState<Measure>("reps");
+  // 時間の種目の「短いほど良い／長いほど良い」（null = 名前から推測）
+  const [newBetter, setNewBetter] = useState<Better | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   // 非同期で前回の記録を入れるときに、最新の入力内容を参照するため
@@ -326,7 +349,7 @@ export default function SetLogger({
       const [ex, used] = await Promise.all([
         supabase
           .from("exercises")
-          .select("id, name, measure, created_by")
+          .select("*")
           .eq("team_id", profile.team_id)
           .order("name"),
         supabase
@@ -412,16 +435,22 @@ export default function SetLogger({
     const name = query.trim().slice(0, 30);
     if (!name) return;
     setBusy(true);
-    const { data, error } = await supabase
+    const row = {
+      team_id: profile.team_id,
+      name,
+      measure: newMeasure,
+      created_by: profile.id,
+    };
+    const better = newMeasure === "time" ? (newBetter ?? guessBetter(name, newMeasure)) : "higher";
+    let { data, error } = await supabase
       .from("exercises")
-      .insert({
-        team_id: profile.team_id,
-        name,
-        measure: newMeasure,
-        created_by: profile.id,
-      })
-      .select("id, name, measure, created_by")
+      .insert({ ...row, better })
+      .select("*")
       .single();
+    // better 列がまだ無いDBでは、列なしで作り直す
+    if (error && (error.code === "42703" || error.code === "PGRST204")) {
+      ({ data, error } = await supabase.from("exercises").insert(row).select("*").single());
+    }
     setBusy(false);
     if (error || !data) {
       setMessage(
@@ -789,7 +818,7 @@ export default function SetLogger({
               <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                 「{query.trim()}」を新しい種目として追加（チームのみんなも選べるようになります）
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
                   {(["reps", "time"] as Measure[]).map((m) => (
                     <button
@@ -804,6 +833,24 @@ export default function SetLogger({
                     </button>
                   ))}
                 </div>
+                {newMeasure === "time" && (
+                  <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
+                    {(["lower", "higher"] as Better[]).map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setNewBetter(b)}
+                        className={`rounded-md px-2 py-1.5 font-medium ${
+                          (newBetter ?? guessBetter(query, "time")) === b
+                            ? "bg-neutral-700 text-white"
+                            : "text-neutral-600 dark:text-neutral-400"
+                        }`}
+                      >
+                        {b === "lower" ? "短いほど良い" : "長いほど良い"}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={createExercise}
@@ -900,6 +947,7 @@ function ExerciseEditor({
 }) {
   const [name, setName] = useState(exercise.name);
   const [measure, setMeasure] = useState<Measure>(exercise.measure);
+  const [better, setBetter] = useState<Better>(exercise.better ?? guessBetter(exercise.name, exercise.measure));
   const [counts, setCounts] = useState<{ mine: number; others: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -938,10 +986,18 @@ function ExerciseEditor({
     }
     setBusy(true);
     setError(null);
-    const { error: err } = await supabase
+    const nextMeasure = used ? exercise.measure : measure;
+    const nextBetter: Better = nextMeasure === "time" ? better : "higher";
+    let { error: err } = await supabase
       .from("exercises")
-      .update({ name: trimmed, measure: used ? exercise.measure : measure })
+      .update({ name: trimmed, measure: nextMeasure, better: nextBetter })
       .eq("id", exercise.id);
+    if (err && (err.code === "42703" || err.code === "PGRST204")) {
+      ({ error: err } = await supabase
+        .from("exercises")
+        .update({ name: trimmed, measure: nextMeasure })
+        .eq("id", exercise.id));
+    }
     setBusy(false);
     if (err) {
       setError(
@@ -949,7 +1005,7 @@ function ExerciseEditor({
       );
       return;
     }
-    onSaved({ ...exercise, name: trimmed, measure: used ? exercise.measure : measure });
+    onSaved({ ...exercise, name: trimmed, measure: nextMeasure, better: nextBetter });
   }
 
   async function handleDelete() {
@@ -1007,6 +1063,25 @@ function ExerciseEditor({
           </span>
         )}
       </div>
+      {(used ? exercise.measure : measure) === "time" && (
+        <div className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
+          自己ベストの決め方
+          <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
+            {(["lower", "higher"] as Better[]).map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setBetter(b)}
+                className={`flex-1 rounded-md py-1.5 font-medium ${
+                  better === b ? "bg-red-600 text-white" : "text-neutral-600 dark:text-neutral-400"
+                }`}
+              >
+                {b === "lower" ? "短いほど良い（走るタイム）" : "長いほど良い（プランクなど）"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

@@ -70,7 +70,7 @@ type Summary = {
 // 種目ごとの記録（ExerciseProgress）と共有する、セット記録1行
 export type SetRowWithExercise = LoadSetRow & {
   seconds: number | null;
-  exercise: { id: string; name: string; measure: "reps" | "time" } | null;
+  exercise: { id: string; name: string; measure: "reps" | "time"; better?: "higher" | "lower" } | null;
 };
 
 type MaxRow = {
@@ -213,12 +213,12 @@ export default function TrainingInsights({
         .gte("date", windowStart)
         .lte("date", todayStr),
       setQuery(`${setBase}, is_warmup`),
-      supabase.from("exercises").select("id, name, measure").eq("team_id", profile.team_id),
+      supabase.from("exercises").select("*").eq("team_id", profile.team_id),
     ]);
     // is_warmup 列がまだ無いDBでは、列なしで読み直す
     const setRes = setResFirst.error ? await setQuery(setBase) : setResFirst;
     const exerciseById = new Map(
-      ((exRes.data ?? []) as { id: string; name: string; measure: "reps" | "time" }[]).map((e) => [
+      ((exRes.data ?? []) as { id: string; name: string; measure: "reps" | "time"; better?: "higher" | "lower" }[]).map((e) => [
         e.id,
         e,
       ])

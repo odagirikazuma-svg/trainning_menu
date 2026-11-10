@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatSeconds, type Measure } from "./SetLogger";
+import { formatSeconds, guessBetter, type Measure } from "./SetLogger";
 import InsightCard from "./InsightCard";
 
 /**
@@ -25,10 +25,11 @@ export type Row = {
   reps: number | null;
   seconds: number | null;
   is_warmup?: boolean | null;
-  exercise: { id: string; name: string; measure: Measure } | null;
+  exercise: { id: string; name: string; measure: Measure; better?: "higher" | "lower" } | null;
 };
 
-type MetricKind = "e1rm" | "reps" | "time";
+// time_low = 短いほど良い時間（走るタイム）
+type MetricKind = "e1rm" | "reps" | "time" | "time_low";
 type SetItem = { w: number | null; r: number | null; s: number | null; warmup: boolean };
 type Session = {
   date: string;
@@ -78,6 +79,7 @@ const kindLabel: Record<MetricKind, string> = {
   e1rm: "推定MAX",
   reps: "最高回数",
   time: "最長時間",
+  time_low: "最速タイム",
 };
 
 function formatValue(kind: MetricKind, v: number) {
@@ -96,6 +98,7 @@ const volumeLabel: Record<MetricKind, string> = {
   e1rm: "練習量（重量×回数）",
   reps: "練習量（合計回数）",
   time: "練習量（合計時間）",
+  time_low: "練習量（合計時間）",
 };
 
 function formatVolume(kind: MetricKind, v: number) {
@@ -128,7 +131,13 @@ export default function ExerciseProgress({
       const ex = list[0].exercise!;
       const weighted = list.some((r) => r.weight_kg != null && (r.reps ?? 0) > 0);
       const kind: MetricKind =
-        ex.measure === "time" ? "time" : weighted ? "e1rm" : "reps";
+        ex.measure === "time"
+          ? (ex.better ?? guessBetter(ex.name, "time")) === "lower"
+            ? "time_low"
+            : "time"
+          : weighted
+            ? "e1rm"
+            : "reps";
       const byDate = new Map<string, Row[]>();
       for (const r of list) {
         const l = byDate.get(r.date) ?? [];
@@ -162,8 +171,10 @@ export default function ExerciseProgress({
           if (kind === "reps") return x.r ?? null;
           return x.s ?? null;
         };
-        const value = Math.max(0, ...sets.map((x) => metric(x) ?? 0));
-        if (value <= 0) continue;
+        const vals = sets.map(metric).filter((v): v is number => v != null && v > 0);
+        if (vals.length === 0) continue;
+        // 短いほど良い時間は、その日いちばん速いタイム
+        const value = kind === "time_low" ? Math.min(...vals) : Math.max(...vals);
         const mainValues = main.map(metric).filter((v): v is number => v != null && v > 0);
         const mainAvg =
           mainValues.length > 0 ? mainValues.reduce((a, b) => a + b, 0) / mainValues.length : null;
@@ -177,7 +188,9 @@ export default function ExerciseProgress({
       }
       if (sessions.length === 0) continue;
       sessions.sort((a, b) => a.date.localeCompare(b.date));
-      const best = sessions.reduce((a, b) => (b.value > a.value ? b : a));
+      const best = sessions.reduce((a, b) =>
+        kind === "time_low" ? (b.value < a.value ? b : a) : b.value > a.value ? b : a
+      );
       out.push({ id, name: ex.name, measure: ex.measure, kind, sessions, best });
     }
     // よく記録している種目が先
@@ -314,7 +327,8 @@ function ExerciseDetail({ stats, todayStr }: { stats: ExerciseStats; todayStr: s
 
   const recentQuality = sessions.filter((s) => s.mainAvg != null);
   const lastQ = recentQuality[recentQuality.length - 1];
-  const diff = last.value - first.value;
+  // 短いほど良いタイムは、縮んだ分を「伸び」とする
+  const diff = stats.kind === "time_low" ? first.value - last.value : last.value - first.value;
   const recentVolume = stats.sessions
     .filter((s) => {
       const [yy, mm, dd] = s.date.split("-").map(Number);
