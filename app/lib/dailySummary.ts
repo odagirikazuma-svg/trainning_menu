@@ -9,6 +9,9 @@ import {
 } from "./absence";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
+type Loc = "tama" | "otsuka";
+const LOCS: Loc[] = ["tama", "otsuka"];
+const LOC_LABEL: Record<Loc, string> = { tama: "多摩", otsuka: "大塚" };
 
 // 日本時間の YYYY-MM-DD
 export function jstDateKey(offsetDays = 0) {
@@ -27,6 +30,28 @@ function joinNames(names: string[], max: number) {
   return `${names.slice(0, max).join("、")} ほか${names.length - max}人`;
 }
 
+function diffText(now: number, prev: number | null, digits = 1) {
+  if (prev === null) return "";
+  const d = now - prev;
+  const p = prev.toFixed(digits);
+  if (Math.abs(d) < 0.05) return `（前回${p} →）`;
+  return `（前回${p} ${d > 0 ? "▲" : "▼"}${Math.abs(d).toFixed(digits)}）`;
+}
+
+function oneLine(s: string, max: number) {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+type Member = { id: string; display_name: string; home_location: Loc | null };
+type MenuRow = {
+  title: string | null;
+  content: string | null;
+  location: Loc;
+  start_time: string | null;
+  is_joint: boolean;
+};
+
 export async function buildDailySummary(
   supabase: SupabaseClient,
   teamId: string,
@@ -34,126 +59,226 @@ export async function buildDailySummary(
 ): Promise<string> {
   const today = jstDateKey(0);
   const tomorrow = jstDateKey(1);
+  const weekAgo = jstDateKey(-7);
 
-  const [membersRes, schedRes, commentsRes, logsRes, fatigueRes, absTodayRes, absTomorrowRes] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, display_name, home_location, role")
-        .eq("team_id", teamId)
-        .not("role", "in", "(coach,manager,ob)"),
-      supabase
-        .from("schedule_days")
-        .select("location, is_off")
-        .eq("team_id", teamId)
-        .eq("date", today),
-      supabase
-        .from("comments")
-        .select("author_id, menu:menus!inner(date, team_id)")
-        .in("kind", ["report", "absent"])
-        .is("parent_id", null)
-        .eq("menu.date", today)
-        .eq("menu.team_id", teamId),
-      supabase.from("weight_logs").select("author_id").eq("team_id", teamId).eq("date", today),
-      supabase
-        .from("daily_conditions")
-        .select("author_id, fatigue")
-        .eq("team_id", teamId)
-        .eq("date", today),
-      supabase
-        .from("absence_requests")
-        .select("author_id, status")
-        .eq("team_id", teamId)
-        .eq("date", today),
-      supabase
-        .from("absence_requests")
-        .select("*")
-        .eq("team_id", teamId)
-        .eq("date", tomorrow)
-        .order("created_at", { ascending: true }),
-    ]);
+  const [
+    membersRes,
+    schedRes,
+    commentsRes,
+    logsRes,
+    fatigueRes,
+    absTodayRes,
+    absTomorrowRes,
+    menusRes,
+    schedTomorrowRes,
+    injuryRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, display_name, home_location, role")
+      .eq("team_id", teamId)
+      .not("role", "in", "(coach,manager,ob)"),
+    supabase.from("schedule_days").select("location, is_off").eq("team_id", teamId).eq("date", today),
+    supabase
+      .from("comments")
+      .select("author_id, menu:menus!inner(date, team_id)")
+      .in("kind", ["report", "absent"])
+      .is("parent_id", null)
+      .eq("menu.date", today)
+      .eq("menu.team_id", teamId),
+    supabase.from("weight_logs").select("author_id").eq("team_id", teamId).eq("date", today),
+    supabase
+      .from("daily_conditions")
+      .select("author_id, date, fatigue")
+      .eq("team_id", teamId)
+      .gte("date", weekAgo)
+      .lte("date", today),
+    supabase.from("absence_requests").select("author_id, status").eq("team_id", teamId).eq("date", today),
+    supabase
+      .from("absence_requests")
+      .select("*")
+      .eq("team_id", teamId)
+      .eq("date", tomorrow)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("menus")
+      .select("title, content, location, start_time, is_joint")
+      .eq("team_id", teamId)
+      .eq("date", tomorrow)
+      .eq("is_off", false)
+      .order("start_time", { ascending: true }),
+    supabase.from("schedule_days").select("location, is_off").eq("team_id", teamId).eq("date", tomorrow),
+    supabase
+      .from("injuries")
+      .select("author_id, symptom_name, body_part, mat_participation")
+      .eq("team_id", teamId)
+      .gte("created_at", `${today}T00:00:00+09:00`)
+      .order("created_at", { ascending: true }),
+  ]);
 
-  const members = (membersRes.data ?? []) as {
-    id: string;
-    display_name: string;
-    home_location: "tama" | "otsuka" | null;
-  }[];
-  const nameOf = new Map(members.map((m) => [m.id, m.display_name]));
-
-  // 今日、練習（オフ以外）がある拠点
-  const practiceLocs = new Set(
-    ((schedRes.data ?? []) as { location: string; is_off: boolean }[])
-      .filter((r) => !r.is_off)
-      .map((r) => r.location)
-  );
-  const required = members.filter((m) => m.home_location && practiceLocs.has(m.home_location));
-
-  const submitted = new Set<string>();
-  for (const r of (commentsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
-  for (const r of (logsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
+  const members = (membersRes.data ?? []) as Member[];
+  const memberById = new Map(members.map((m) => [m.id, m]));
+  const nameOf = (id: string) => memberById.get(id)?.display_name ?? "?";
+  const locOf = (id: string) => memberById.get(id)?.home_location ?? null;
 
   const lines: string[] = [];
   lines.push(`📋 ${mdw(today)} のまとめ`);
 
-  // 1) 日報
+  // ---------- 1) 今日の日報（拠点別） ----------
+  const practiceToday = new Set(
+    ((schedRes.data ?? []) as { location: Loc; is_off: boolean }[])
+      .filter((r) => !r.is_off)
+      .map((r) => r.location)
+  );
+  const submitted = new Set<string>();
+  for (const r of (commentsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
+  for (const r of (logsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
+  const approvedToday = new Set(
+    ((absTodayRes.error ? [] : absTodayRes.data) ?? [])
+      .filter((r: { status: string }) => r.status === "approved")
+      .map((r: { author_id: string }) => r.author_id)
+  );
+
   lines.push("");
-  if (required.length === 0) {
-    lines.push("■ 今日の日報：練習なし（オフ）");
-  } else {
-    const approvedToday = new Set(
-      ((absTodayRes.data ?? []) as { author_id: string; status: string }[])
-        .filter((r) => r.status === "approved")
-        .map((r) => r.author_id)
-    );
-    const done = required.filter((m) => submitted.has(m.id));
+  lines.push("▪️今日の日報");
+  for (const loc of LOCS) {
+    if (!practiceToday.has(loc)) {
+      lines.push(`${LOC_LABEL[loc]}：練習なし（オフ）`);
+      continue;
+    }
+    const required = members.filter((m) => m.home_location === loc);
     const missing = required.filter((m) => !submitted.has(m.id));
-    lines.push(`■ 今日の日報：${done.length}/${required.length}人 提出`);
-    if (missing.length > 0) {
-      lines.push(`未提出：${joinNames(missing.map((m) => m.display_name), 15)}`);
-    }
-    if (approvedToday.size > 0) {
-      lines.push(`（承認済みの休み ${approvedToday.size}人）`);
-    }
+    const rest = required.filter((m) => approvedToday.has(m.id)).length;
+    lines.push(
+      `${LOC_LABEL[loc]}：${required.length - missing.length}/${required.length}人 提出` +
+        (rest > 0 ? `（うち休み${rest}人）` : "")
+    );
+    lines.push(`未提出者：${missing.length === 0 ? "なし 🎉" : joinNames(missing.map((m) => m.display_name), 15)}`);
   }
 
-  // 2) 疲労度（自己評価）
-  const fatigue = ((fatigueRes.error ? [] : fatigueRes.data) ?? []) as {
+  // ---------- 2) 疲労度（拠点別・前回との比較） ----------
+  const fatigueRows = ((fatigueRes.error ? [] : fatigueRes.data) ?? []) as {
     author_id: string;
+    date: string;
     fatigue: number;
   }[];
-  if (fatigue.length > 0) {
-    const avg = fatigue.reduce((s, r) => s + r.fatigue, 0) / fatigue.length;
-    const high = fatigue
-      .filter((r) => r.fatigue >= 7)
-      .sort((a, b) => b.fatigue - a.fatigue)
-      .map((r) => `${nameOf.get(r.author_id) ?? "?"} ${r.fatigue}`);
+  const todayRows = fatigueRows.filter((r) => r.date === today);
+  if (todayRows.length > 0) {
     lines.push("");
-    lines.push(`■ 疲労度（自己評価）：平均 ${avg.toFixed(1)}（${fatigue.length}人入力）`);
-    if (high.length > 0) lines.push(`高い人：${joinNames(high, 8)}`);
+    lines.push("▪️疲労度（自己評価）");
+    const avg = (rows: { fatigue: number }[]) =>
+      rows.length ? rows.reduce((s, r) => s + r.fatigue, 0) / rows.length : null;
+    for (const loc of LOCS) {
+      const t = todayRows.filter((r) => locOf(r.author_id) === loc);
+      const a = avg(t);
+      if (a === null) continue;
+      // 前回 ＝ 今日より前で、その拠点に入力があった直近の日
+      const prevDates = fatigueRows
+        .filter((r) => r.date < today && locOf(r.author_id) === loc)
+        .map((r) => r.date)
+        .sort();
+      const prevDate = prevDates[prevDates.length - 1];
+      const prevAvg = prevDate
+        ? avg(fatigueRows.filter((r) => r.date === prevDate && locOf(r.author_id) === loc))
+        : null;
+      lines.push(`${LOC_LABEL[loc]}：平均${a.toFixed(1)}${diffText(a, prevAvg)}／${t.length}人入力`);
+    }
+    const high = todayRows
+      .filter((r) => r.fatigue >= 7)
+      .sort((x, y) => y.fatigue - x.fatigue)
+      .map((r) => {
+        const prev = fatigueRows
+          .filter((p) => p.author_id === r.author_id && p.date < today)
+          .sort((x, y) => (x.date < y.date ? 1 : -1))[0];
+        return `${nameOf(r.author_id)} ${r.fatigue}${prev ? diffText(r.fatigue, prev.fatigue, 0) : ""}`;
+      });
+    if (high.length > 0) lines.push(`高い人（7以上）：${joinNames(high, 8)}`);
   }
 
-  // 3) 明日の休み
-  const tomorrowReqs = ((absTomorrowRes.error ? [] : absTomorrowRes.data) ?? []) as AbsenceRequest[];
-  lines.push("");
-  if (tomorrowReqs.length === 0) {
-    lines.push(`■ 明日 ${mdw(tomorrow)} の休み申請：なし`);
-  } else {
-    const pending = tomorrowReqs.filter((r) => r.status === "pending").length;
-    lines.push(`■ 明日 ${mdw(tomorrow)} の休み：${tomorrowReqs.length}人`);
-    if (pending > 0) lines.push(`⚠️ 承認待ち ${pending}人`);
-    const shown = tomorrowReqs.slice(0, 20);
-    for (const r of shown) {
-      const mark = r.status === "pending" ? "⏳" : r.status === "approved" ? "✅" : "↩️";
+  // ---------- 3) 新しい怪我 ----------
+  const injuries = ((injuryRes.error ? [] : injuryRes.data) ?? []) as {
+    author_id: string;
+    symptom_name: string;
+    body_part: string;
+    mat_participation: string;
+  }[];
+  if (injuries.length > 0) {
+    const part: Record<string, string> = { yes: "練習参加可", no: "練習不可", conditional: "条件付きで参加" };
+    lines.push("");
+    lines.push(`▪️新しい怪我の報告：${injuries.length}人`);
+    for (const i of injuries) {
+      const loc = locOf(i.author_id);
       lines.push(
-        `${mark}${nameOf.get(r.author_id) ?? "?"}：${absenceReasonText(r)}／代替 ${absencePlanLabel[r.plan_type]}`
+        `🩹${nameOf(i.author_id)}${loc ? `（${LOC_LABEL[loc]}）` : ""}：${i.body_part}・${i.symptom_name}／${part[i.mat_participation] ?? ""}`
       );
     }
-    if (tomorrowReqs.length > shown.length) {
-      lines.push(`ほか${tomorrowReqs.length - shown.length}人`);
+  }
+
+  // ---------- 4) 明日の休み（拠点別） ----------
+  const tomorrowReqs = ((absTomorrowRes.error ? [] : absTomorrowRes.data) ?? []) as AbsenceRequest[];
+  lines.push("");
+  lines.push(`▪️明日 ${mdw(tomorrow)} の休み`);
+  if (tomorrowReqs.length === 0) {
+    lines.push("申請なし");
+  } else {
+    const pending = tomorrowReqs.filter((r) => r.status === "pending").length;
+    if (pending > 0) lines.push(`⚠️ 承認待ち ${pending}人`);
+    const groups: { label: string; rows: AbsenceRequest[] }[] = [
+      ...LOCS.map((loc) => ({
+        label: LOC_LABEL[loc],
+        rows: tomorrowReqs.filter((r) => locOf(r.author_id) === loc),
+      })),
+      { label: "拠点未設定", rows: tomorrowReqs.filter((r) => !locOf(r.author_id)) },
+    ];
+    for (const g of groups) {
+      if (g.rows.length === 0) {
+        if (g.label !== "拠点未設定") lines.push(`${g.label}：なし`);
+        continue;
+      }
+      lines.push(`${g.label}：${g.rows.length}人`);
+      for (const r of g.rows.slice(0, 15)) {
+        const mark = r.status === "pending" ? "⏳" : r.status === "approved" ? "✅" : "↩️";
+        lines.push(`${mark}${nameOf(r.author_id)}：${absenceReasonText(r)}／代替 ${absencePlanLabel[r.plan_type]}`);
+      }
+      if (g.rows.length > 15) lines.push(`ほか${g.rows.length - 15}人`);
+    }
+  }
+
+  // ---------- 5) 明日の練習メニュー（拠点別） ----------
+  const menus = ((menusRes.data ?? []) as MenuRow[]);
+  const offTomorrow = new Set(
+    ((schedTomorrowRes.data ?? []) as { location: Loc; is_off: boolean }[])
+      .filter((r) => r.is_off)
+      .map((r) => r.location)
+  );
+  const menuLine = (m: MenuRow) => {
+    const head = `・${m.start_time ? m.start_time.slice(0, 5) + " " : ""}${m.title?.trim() || "マット練習"}`;
+    const body = m.content?.trim() ? `\n　${oneLine(m.content, 120)}` : "";
+    return head + body;
+  };
+  lines.push("");
+  lines.push(`▪️明日 ${mdw(tomorrow)} の練習メニュー`);
+  const joint = menus.filter((m) => m.is_joint);
+  if (joint.length > 0) {
+    lines.push("合同：");
+    for (const m of joint) lines.push(menuLine(m));
+  }
+  for (const loc of LOCS) {
+    const own = menus.filter((m) => !m.is_joint && m.location === loc);
+    if (own.length > 0) {
+      lines.push(`${LOC_LABEL[loc]}：`);
+      for (const m of own) lines.push(menuLine(m));
+    } else if (offTomorrow.has(loc)) {
+      lines.push(`${LOC_LABEL[loc]}：オフ`);
+    } else if (joint.length === 0) {
+      lines.push(`${LOC_LABEL[loc]}：まだ登録されていません`);
     }
   }
 
   lines.push("");
-  lines.push(`▶ アプリで確認・承認：${appUrl}/admin`);
-  return lines.join("\n");
+  // openExternalBrowser=1：LINEの中ではなく、普段のブラウザ（ログイン済み）で開く
+  lines.push(`▶ アプリで確認・承認\n${appUrl}/admin?openExternalBrowser=1`);
+
+  const text = lines.join("\n");
+  return text.length > 4900 ? `${text.slice(0, 4890)}\n…（続きはアプリで）` : text;
 }
