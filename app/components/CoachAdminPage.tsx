@@ -17,6 +17,7 @@ import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { fatigueColor } from "./FatigueSelector";
+import AbsenceReviewSection from "./AbsenceReviewSection";
 
 const adminSubTabItems: {
   value: "submissions" | "training" | "injuries";
@@ -960,6 +961,11 @@ export default function CoachAdminPage({
 
         {adminSubTab === "submissions" && (
         <>
+        <AbsenceReviewSection
+          teamId={profile.team_id}
+          reviewerId={profile.id}
+          canReview={profile.role === "coach"}
+        />
         {/* 日報の提出状況 */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">

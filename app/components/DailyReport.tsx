@@ -1,6 +1,12 @@
 "use client";
 
 import FatigueSelector from "./FatigueSelector";
+import AbsenceRequestPanel from "./AbsenceRequestPanel";
+import {
+  absenceReasonText,
+  planToTrainingType,
+  type AbsenceRequest,
+} from "../lib/absence";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
@@ -275,6 +281,8 @@ export default function DailyReport({
   const [copying, setCopying] = useState(false);
   // 前回の記録を読み込んだときの案内（例：11月5日(木)の「BIG3」）
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
+  // この日の休み申請（AbsenceRequestPanel が読み込んで知らせてくる）
+  const [absenceReq, setAbsenceReq] = useState<AbsenceRequest | null>(null);
   // ひとことメモ欄を開いているか（セット記録があるときは閉じておく）
   const [memoOpen, setMemoOpen] = useState(false);
   // ---- 下書き（書きかけの内容を端末に自動保存し、別のタブに移っても消えないようにする） ----
@@ -576,13 +584,24 @@ export default function DailyReport({
   const trainingRequired = !exempt && nonMatSessions.length > 0;
   const isFuture = date > todayStr;
 
+  // 承認済みの休み申請がある日は、マット練習の報告を「休み」＋申請内容で最初から埋めておく
+  const absenceDraft: MatDraft =
+    absenceReq && absenceReq.status === "approved"
+      ? {
+          ...emptyMatDraft,
+          mode: "absent",
+          reason: absenceReasonText(absenceReq),
+          altType: planToTrainingType(absenceReq.plan_type),
+          alt: absenceReq.plan.trim() || "安静",
+        }
+      : emptyMatDraft;
   function draftOf(menuId: string): MatDraft {
-    return matDrafts[menuId] ?? emptyMatDraft;
+    return matDrafts[menuId] ?? absenceDraft;
   }
   function updateDraft(menuId: string, patch: Partial<MatDraft>) {
     setMatDrafts((prev) => ({
       ...prev,
-      [menuId]: { ...(prev[menuId] ?? emptyMatDraft), ...patch },
+      [menuId]: { ...(prev[menuId] ?? absenceDraft), ...patch },
     }));
     setMissing([]);
   }
@@ -1646,11 +1665,22 @@ export default function DailyReport({
         </div>
       )}
 
+      {!isPopup && (
+        <AbsenceRequestPanel
+          memberId={profile.id}
+          teamId={profile.team_id}
+          date={date}
+          todayStr={todayStr}
+          readOnly={readOnly}
+          onChange={setAbsenceReq}
+        />
+      )}
+
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : isFuture ? (
         <p className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-xs text-neutral-500">
-          まだ来ていない日の日報は書けません。
+          まだ来ていない日の日報は書けません。練習を休む場合は、上の「休む申請」から前日までに申請してください。
         </p>
       ) : (
         <>
