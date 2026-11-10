@@ -130,7 +130,7 @@ function GoalTicker({ profile }: { profile: Profile }) {
     async function load() {
       const { data, error } = await supabase
         .from("member_goals")
-        .select("term, content")
+        .select("term, content, updated_at")
         .eq("author_id", profile.id)
         .in("term", ["long", "short"]);
       if (cancelled) return;

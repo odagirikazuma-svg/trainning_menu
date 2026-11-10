@@ -410,7 +410,6 @@ export default function CoachAdminPage({
   >([]);
   const [loadingDaySubmissionDetail, setLoadingDaySubmissionDetail] =
     useState(false);
-  const [loadingMembers, setLoadingMembers] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -453,7 +452,6 @@ export default function CoachAdminPage({
   }
 
   async function loadMembers() {
-    setLoadingMembers(true);
     const { data, error } = await supabase
       .from("profiles")
       .select("id, display_name, home_location, entry_year, role")
@@ -461,7 +459,6 @@ export default function CoachAdminPage({
       .order("display_name", { ascending: true });
     if (error) {
       setErrorMsg(error.message);
-      setLoadingMembers(false);
       return;
     }
 
@@ -478,7 +475,6 @@ export default function CoachAdminPage({
     if (rosterError) {
       setErrorMsg(rosterError.message);
       setMembers(realMembers);
-      setLoadingMembers(false);
       return;
     }
 
@@ -504,7 +500,6 @@ export default function CoachAdminPage({
         a.display_name.localeCompare(b.display_name, "ja")
       )
     );
-    setLoadingMembers(false);
   }
 
   function requiredMembersForLocation(loc: Location): MemberRow[] {
@@ -834,7 +829,7 @@ export default function CoachAdminPage({
       dateStr,
       dateStr
     );
-    let selfLogByAuthor = new Map<string, string>();
+    const selfLogByAuthor = new Map<string, string>();
     if (allRealIds.length > 0) {
       const { data: logData } = await supabase
         .from("weight_logs")

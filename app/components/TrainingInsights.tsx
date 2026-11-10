@@ -172,9 +172,9 @@ export default function TrainingInsights({
         .lte("date", todayStr)
         .order("date", { ascending: true })
         .limit(5000);
-    const setBase =
-      "date, exercise_id, set_no, weight_kg, reps, seconds, exercise:exercises(id, name, measure)";
-    const [own, joint, exemptions, schedRes, logRes, setResFirst] = await Promise.all([
+    // 種目名は行ごとに付けず（通信量が増えるため）、種目一覧を1回だけ読んで後から結びつける
+    const setBase = "date, exercise_id, set_no, weight_kg, reps, seconds";
+    const [own, joint, exemptions, schedRes, logRes, setResFirst, exRes] = await Promise.all([
       homeLocation
         ? supabase
             .from("menus")
@@ -213,10 +213,19 @@ export default function TrainingInsights({
         .gte("date", windowStart)
         .lte("date", todayStr),
       setQuery(`${setBase}, is_warmup`),
+      supabase.from("exercises").select("id, name, measure").eq("team_id", profile.team_id),
     ]);
     // is_warmup 列がまだ無いDBでは、列なしで読み直す
     const setRes = setResFirst.error ? await setQuery(setBase) : setResFirst;
-    const allSetRows = ((setRes.error ? [] : setRes.data) ?? []) as unknown as SetRowWithExercise[];
+    const exerciseById = new Map(
+      ((exRes.data ?? []) as { id: string; name: string; measure: "reps" | "time" }[]).map((e) => [
+        e.id,
+        e,
+      ])
+    );
+    const allSetRows = (
+      ((setRes.error ? [] : setRes.data) ?? []) as unknown as Omit<SetRowWithExercise, "exercise">[]
+    ).map((r) => ({ ...r, exercise: exerciseById.get(r.exercise_id) ?? null }));
     setSetRows(allSetRows);
 
     const menuMap = new Map<string, M>();

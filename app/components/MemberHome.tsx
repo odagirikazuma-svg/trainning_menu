@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { isPushSupported, urlBase64ToUint8Array } from "../lib/push";
 import {
   formatExemptionDate,
   isExemptOn,
@@ -20,7 +19,6 @@ import {
   sessionTypeLabel,
   TitleColor,
   TrainingType,
-  trainingTypeDotColor,
   trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
@@ -40,11 +38,10 @@ import {
   type CalendarSlotOption,
 } from "./shell/CalendarDisplayPrefProvider";
 
+// 未提出の判定に使う分だけ（メニューの本文などは読み込まない）
 type TodoMenuRow = {
   id: string;
   date: string;
-  title: string;
-  content: string;
   location: Location;
   start_time: string | null;
   is_off: boolean;
@@ -73,32 +70,10 @@ type InjuryRow = {
   created_at: string;
 };
 
-const matchResultOptions = [
-  "優勝",
-  "準優勝",
-  "3位",
-  "4位",
-  "5位",
-  "ベスト16",
-  "ベスト32",
-  "3回戦敗退",
-  "2回戦敗退",
-  "1回戦敗退",
-];
-
 const matParticipationLabel: Record<"yes" | "no" | "conditional", string> = {
   yes: "可",
   no: "非",
   conditional: "条件付きで可",
-};
-
-type WeightLogRow = {
-  id: string;
-  date: string;
-  content: string;
-  type: TrainingType;
-  title: string | null;
-  start_time: string | null;
 };
 
 function toDateKey(d: Date) {
@@ -170,73 +145,7 @@ export default function MemberHome({
   const [activeExemption, setActiveExemption] = useState<ExemptionRow | null>(
     null
   );
-  const [loadingTodo, setLoadingTodo] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushLoading, setPushLoading] = useState(false);
-
-  const [weightMaxTodo, setWeightMaxTodo] = useState<{
-    eventId: string;
-    deadline: string;
-    createdAt: string;
-  } | null>(null);
-  const [weightMaxTodoOpen, setWeightMaxTodoOpen] = useState(false);
-  const [weightMaxBench, setWeightMaxBench] = useState("");
-  const [weightMaxSquat, setWeightMaxSquat] = useState("");
-  const [weightMaxDeadlift, setWeightMaxDeadlift] = useState("");
-  const [savingWeightMaxTodo, setSavingWeightMaxTodo] = useState(false);
-
-  const [teamEventTodos, setTeamEventTodos] = useState<
-    {
-      eventId: string;
-      type: "match_reflection" | "body_composition";
-      title: string;
-      deadline: string;
-    }[]
-  >([]);
-  const [openTeamEventTodoId, setOpenTeamEventTodoId] = useState<
-    string | null
-  >(null);
-  const [matchResult, setMatchResult] = useState("");
-  const [matchTitle, setMatchTitle] = useState("");
-  const [matchCount, setMatchCount] = useState("");
-  const [matchWinCount, setMatchWinCount] = useState("");
-  const [matchLossCount, setMatchLossCount] = useState("");
-  const [matchReflection, setMatchReflection] = useState("");
-  const [matchGoodPoints, setMatchGoodPoints] = useState("");
-  const [matchChallenges, setMatchChallenges] = useState("");
-  const [matchImprovementPlan, setMatchImprovementPlan] = useState("");
-  const [matchTeamChallenges, setMatchTeamChallenges] = useState("");
-  const [teamEventMeasurementDate, setTeamEventMeasurementDate] =
-    useState("");
-  const [teamEventWeightKg, setTeamEventWeightKg] = useState("");
-  const [teamEventBodyFatPct, setTeamEventBodyFatPct] = useState("");
-  const [teamEventMuscleMassKg, setTeamEventMuscleMassKg] = useState("");
-  const [teamEventLeanBodyMassKg, setTeamEventLeanBodyMassKg] = useState("");
-  const [matchReflections, setMatchReflections] = useState<
-    {
-      eventId: string;
-      eventTitle: string;
-      submittedAt: string;
-      matchResult: string;
-      matchTitle: string;
-      matchCount: number | null;
-      winCount: number | null;
-      lossCount: number | null;
-      reflection: string;
-      goodPoints: string;
-      challenges: string;
-      improvementPlan: string;
-      teamChallenges: string;
-    }[]
-  >([]);
-  const [loadingMatchReflections, setLoadingMatchReflections] = useState(true);
-  const [openMatchReflectionId, setOpenMatchReflectionId] = useState<
-    string | null
-  >(null);
-  const [savingTeamEventTodo, setSavingTeamEventTodo] = useState(false);
 
   const [injuries, setInjuries] = useState<InjuryRow[]>([]);
   const [loadingInjuries, setLoadingInjuries] = useState(true);
@@ -272,7 +181,6 @@ export default function MemberHome({
 
   // 次の試合の登録・編集は設定ページに移設。マイページ側は表示用（カレンダーのハイライト等）に読み取りだけ行う。
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
-  const [loadingMatch, setLoadingMatch] = useState(true);
 
   // 種目（ラン/ウェイト/その他）ごとに、保存されているタイトルの候補一覧（最大10個ずつ）
   const [titleOptionsByType, setTitleOptionsByType] = useState<
@@ -352,13 +260,29 @@ export default function MemberHome({
     return () => clearTimeout(timeoutId);
   }, []);
 
+  // 日報タブで表示している日付と、提出後に日報・集計を読み直すためのカウンタ
+  // 練習予定表の「日報を書く」から来た場合は、その日の日報を開く
+  const [reportDate, setReportDate] = useState<string>(() => {
+    if (typeof window === "undefined") return todayStr;
+    try {
+      const jump = sessionStorage.getItem("dailyReportDate");
+      if (jump) {
+        sessionStorage.removeItem("dailyReportDate");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(jump) && jump <= todayStr) return jump;
+      }
+    } catch {
+      // 読めなくても今日の日報を開く
+    }
+    return todayStr;
+  });
+  const [reportRefreshKey, setReportRefreshKey] = useState(0);
+  const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>("daily");
+
   useEffect(() => {
     if (isManager) {
-      setLoadingTodo(false);
       return;
     }
     if (effectiveHomeLocation) loadTodo();
-    else setLoadingTodo(false);
     loadSelfTrainingTodo();
     loadActiveExemption();
     loadNextMatch();
@@ -367,10 +291,13 @@ export default function MemberHome({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // カレンダーは「振り返り」タブ（とマネージャー表示）でしか使わないので、開いたときだけ読み込む
+  const calendarVisible = isManager || homeSubTab === "training";
   useEffect(() => {
+    if (!calendarVisible) return;
     loadCalendarData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarCursor]);
+  }, [calendarCursor, calendarVisible, reportRefreshKey]);
 
   useEffect(() => {
     if (isFirstRefresh.current) {
@@ -380,7 +307,7 @@ export default function MemberHome({
     if (effectiveHomeLocation) loadTodo();
     loadSelfTrainingTodo();
     loadActiveExemption();
-    loadCalendarData();
+    if (calendarVisible) loadCalendarData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
@@ -397,7 +324,6 @@ export default function MemberHome({
   }
 
   async function loadTodo() {
-    setLoadingTodo(true);
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
     const joinedDate = toDateKey(new Date(profile.created_at));
@@ -408,7 +334,7 @@ export default function MemberHome({
 
     const { data: ownMenuData, error: ownMenuError } = await supabase
       .from("menus")
-      .select("id, date, title, content, location, start_time, is_off")
+      .select("id, date, location, start_time, is_off")
       .eq("team_id", profile.team_id)
       .eq("location", effectiveHomeLocation)
       .eq("is_off", false)
@@ -417,13 +343,12 @@ export default function MemberHome({
 
     if (ownMenuError) {
       setErrorMsg(ownMenuError.message);
-      setLoadingTodo(false);
       return;
     }
 
     const { data: jointMenuData, error: jointMenuError } = await supabase
       .from("menus")
-      .select("id, date, title, content, location, start_time, is_off")
+      .select("id, date, location, start_time, is_off")
       .eq("team_id", profile.team_id)
       .eq("is_joint", true)
       .eq("is_off", false)
@@ -432,7 +357,6 @@ export default function MemberHome({
 
     if (jointMenuError) {
       setErrorMsg(jointMenuError.message);
-      setLoadingTodo(false);
       return;
     }
 
@@ -458,7 +382,6 @@ export default function MemberHome({
 
     if (openMenus.length === 0) {
       setTodoMenus([]);
-      setLoadingTodo(false);
       return;
     }
 
@@ -474,7 +397,6 @@ export default function MemberHome({
 
     if (commentError) {
       setErrorMsg(commentError.message);
-      setLoadingTodo(false);
       return;
     }
 
@@ -482,7 +404,6 @@ export default function MemberHome({
       ((commentData ?? []) as { menu_id: string }[]).map((c) => c.menu_id)
     );
     setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
-    setLoadingTodo(false);
   }
 
   // マット以外のセッション(ラン・ウェイトなど)が組まれている日のうち、
@@ -563,7 +484,6 @@ export default function MemberHome({
   }
 
   async function loadNextMatch() {
-    setLoadingMatch(true);
     const { data, error } = await supabase
       .from("matches")
       .select("id, name, date, member_id")
@@ -579,416 +499,6 @@ export default function MemberHome({
     } else {
       setNextMatch((data as MatchRow | null) ?? null);
     }
-    setLoadingMatch(false);
-  }
-
-  async function loadWeightMaxTodo() {
-    if (profile.role === "coach") return;
-
-    const { data: eventData, error: eventError } = await supabase
-      .from("weight_max_events")
-      .select("id, deadline, created_at")
-      .eq("team_id", profile.team_id)
-      .is("closed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (eventError) {
-      setErrorMsg(eventError.message);
-      return;
-    }
-    if (!eventData) {
-      setWeightMaxTodo(null);
-      return;
-    }
-    const event = eventData as {
-      id: string;
-      deadline: string;
-      created_at: string;
-    };
-
-    const { data: targetData, error: targetError } = await supabase
-      .from("weight_max_event_targets")
-      .select("member_id")
-      .eq("event_id", event.id);
-    if (targetError) {
-      setErrorMsg(targetError.message);
-      return;
-    }
-    const targetRows = (targetData ?? []) as { member_id: string }[];
-    if (
-      targetRows.length > 0 &&
-      !targetRows.some((r) => r.member_id === profile.id)
-    ) {
-      setWeightMaxTodo(null);
-      return;
-    }
-
-    const { data: maxData, error: maxError } = await supabase
-      .from("weight_maxes")
-      .select("id")
-      .eq("author_id", profile.id)
-      .eq("event_id", event.id)
-      .maybeSingle();
-
-    if (maxError) {
-      setErrorMsg(maxError.message);
-      return;
-    }
-
-    setWeightMaxTodo(
-      maxData
-        ? null
-        : {
-            eventId: event.id,
-            deadline: event.deadline,
-            createdAt: event.created_at,
-          }
-    );
-  }
-
-  async function loadMatchReflections() {
-    setLoadingMatchReflections(true);
-    const { data, error } = await supabase
-      .from("team_event_submissions")
-      .select(
-        "event_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges, event:team_events!team_event_submissions_event_id_fkey(title, type)"
-      )
-      .eq("author_id", profile.id);
-
-    if (error) {
-      setErrorMsg(error.message);
-      setLoadingMatchReflections(false);
-      return;
-    }
-
-    const rows = (data ?? []) as unknown as {
-      event_id: string;
-      updated_at: string;
-      match_result: string | null;
-      match_title: string | null;
-      match_count: number | null;
-      win_count: number | null;
-      loss_count: number | null;
-      reflection: string | null;
-      good_points: string | null;
-      challenges: string | null;
-      improvement_plan: string | null;
-      team_challenges: string | null;
-      event: { title: string; type: string } | null;
-    }[];
-
-    const reflections = rows
-      .filter((r) => r.event?.type === "match_reflection")
-      .map((r) => ({
-        eventId: r.event_id,
-        eventTitle: r.event?.title || r.match_title || "試合の振り返り",
-        submittedAt: r.updated_at,
-        matchResult: r.match_result ?? "",
-        matchTitle: r.match_title ?? "",
-        matchCount: r.match_count,
-        winCount: r.win_count,
-        lossCount: r.loss_count,
-        reflection: r.reflection ?? "",
-        goodPoints: r.good_points ?? "",
-        challenges: r.challenges ?? "",
-        improvementPlan: r.improvement_plan ?? "",
-        teamChallenges: r.team_challenges ?? "",
-      }))
-      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-
-    setMatchReflections(reflections);
-    setLoadingMatchReflections(false);
-  }
-
-  async function loadTeamEventTodos() {
-    if (profile.role === "coach") return;
-
-    const { data: eventData, error: eventError } = await supabase
-      .from("team_events")
-      .select("id, type, title, deadline")
-      .eq("team_id", profile.team_id)
-      .is("closed_at", null);
-
-    if (eventError) {
-      setErrorMsg(eventError.message);
-      return;
-    }
-    const events = (eventData ?? []) as {
-      id: string;
-      type: "match_reflection" | "body_composition";
-      title: string;
-      deadline: string;
-    }[];
-    if (events.length === 0) {
-      setTeamEventTodos([]);
-      return;
-    }
-
-    const { data: subData, error: subError } = await supabase
-      .from("team_event_submissions")
-      .select("event_id")
-      .eq("author_id", profile.id)
-      .in(
-        "event_id",
-        events.map((e) => e.id)
-      );
-
-    if (subError) {
-      setErrorMsg(subError.message);
-      return;
-    }
-    const submittedIds = new Set(
-      ((subData ?? []) as { event_id: string }[]).map((r) => r.event_id)
-    );
-
-    const { data: targetData, error: targetError } = await supabase
-      .from("team_event_targets")
-      .select("event_id, member_id")
-      .in(
-        "event_id",
-        events.map((e) => e.id)
-      );
-    if (targetError) {
-      setErrorMsg(targetError.message);
-      return;
-    }
-    const targetRows = (targetData ?? []) as {
-      event_id: string;
-      member_id: string;
-    }[];
-    const eventsWithTargets = new Set(targetRows.map((r) => r.event_id));
-    const myTargetedEventIds = new Set(
-      targetRows.filter((r) => r.member_id === profile.id).map((r) => r.event_id)
-    );
-
-    setTeamEventTodos(
-      events
-        .filter((e) => !submittedIds.has(e.id))
-        .filter(
-          (e) => !eventsWithTargets.has(e.id) || myTargetedEventIds.has(e.id)
-        )
-        .map((e) => ({
-          eventId: e.id,
-          type: e.type,
-          title: e.title,
-          deadline: e.deadline,
-        }))
-    );
-  }
-
-  async function handleSaveTeamEventTodo(todo: {
-    eventId: string;
-    type: "match_reflection" | "body_composition";
-  }) {
-    setSavingTeamEventTodo(true);
-    const payload: {
-      team_id: string;
-      event_id: string;
-      author_id: string;
-      updated_at: string;
-      content?: string;
-      weight_kg?: number | null;
-      body_fat_pct?: number | null;
-      measurement_date?: string | null;
-      muscle_mass_kg?: number | null;
-      lean_body_mass_kg?: number | null;
-      match_result?: string;
-      match_title?: string;
-      match_count?: number | null;
-      win_count?: number | null;
-      loss_count?: number | null;
-      reflection?: string;
-      good_points?: string;
-      challenges?: string;
-      improvement_plan?: string;
-      team_challenges?: string;
-    } = {
-      team_id: profile.team_id,
-      event_id: todo.eventId,
-      author_id: profile.id,
-      updated_at: new Date().toISOString(),
-    };
-    if (todo.type === "match_reflection") {
-      payload.content = "";
-      payload.match_result = matchResult;
-      payload.match_title = matchTitle;
-      payload.match_count = matchCount ? Number(matchCount) : null;
-      payload.win_count = matchWinCount ? Number(matchWinCount) : null;
-      payload.loss_count = matchLossCount ? Number(matchLossCount) : null;
-      payload.reflection = matchReflection;
-      payload.good_points = matchGoodPoints;
-      payload.challenges = matchChallenges;
-      payload.improvement_plan = matchImprovementPlan;
-      payload.team_challenges = matchTeamChallenges;
-    } else {
-      payload.content = "";
-      payload.measurement_date = teamEventMeasurementDate || null;
-      payload.weight_kg = teamEventWeightKg ? Number(teamEventWeightKg) : null;
-      payload.body_fat_pct = teamEventBodyFatPct
-        ? Number(teamEventBodyFatPct)
-        : null;
-      payload.muscle_mass_kg = teamEventMuscleMassKg
-        ? Number(teamEventMuscleMassKg)
-        : null;
-      payload.lean_body_mass_kg = teamEventLeanBodyMassKg
-        ? Number(teamEventLeanBodyMassKg)
-        : null;
-    }
-
-    const { error } = await supabase
-      .from("team_event_submissions")
-      .upsert(payload, { onConflict: "event_id,author_id" });
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setOpenTeamEventTodoId(null);
-      setMatchResult("");
-      setMatchTitle("");
-      setMatchCount("");
-      setMatchWinCount("");
-      setMatchLossCount("");
-      setMatchReflection("");
-      setMatchGoodPoints("");
-      setMatchChallenges("");
-      setMatchImprovementPlan("");
-      setMatchTeamChallenges("");
-      setTeamEventMeasurementDate("");
-      setTeamEventWeightKg("");
-      setTeamEventBodyFatPct("");
-      setTeamEventMuscleMassKg("");
-      setTeamEventLeanBodyMassKg("");
-      await loadTeamEventTodos();
-      await loadMatchReflections();
-    }
-    setSavingTeamEventTodo(false);
-  }
-
-  async function handleSaveWeightMaxTodo() {
-    if (!weightMaxTodo) return;
-    setSavingWeightMaxTodo(true);
-    const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
-
-    const { error } = await supabase.from("weight_maxes").upsert(
-      {
-        team_id: profile.team_id,
-        author_id: profile.id,
-        event_id: weightMaxTodo.eventId,
-        bench: toNum(weightMaxBench),
-        squat: toNum(weightMaxSquat),
-        deadlift: toNum(weightMaxDeadlift),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "author_id,event_id" }
-    );
-
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setWeightMaxTodo(null);
-      setWeightMaxTodoOpen(false);
-      setWeightMaxBench("");
-      setWeightMaxSquat("");
-      setWeightMaxDeadlift("");
-    }
-    setSavingWeightMaxTodo(false);
-  }
-
-  async function checkPushSubscription() {
-    if (!isPushSupported()) {
-      setPushSupported(false);
-      return;
-    }
-    setPushSupported(true);
-    try {
-      const registration =
-        await navigator.serviceWorker.getRegistration("/sw.js");
-      const existing = await registration?.pushManager.getSubscription();
-      setPushSubscribed(!!existing);
-    } catch {
-      setPushSubscribed(false);
-    }
-  }
-
-  async function handleEnablePush() {
-    if (!isPushSupported()) return;
-    setPushLoading(true);
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setErrorMsg(
-          "通知が許可されませんでした。端末の設定から通知を許可してください。"
-        );
-        setPushLoading(false);
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
-
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
-        setErrorMsg("通知の設定が未完了です(コーチ・管理者に連絡してください)。");
-        setPushLoading(false);
-        return;
-      }
-
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
-
-      const json = subscription.toJSON();
-      const { error } = await supabase.from("push_subscriptions").upsert(
-        {
-          author_id: profile.id,
-          endpoint: json.endpoint!,
-          p256dh: json.keys!.p256dh,
-          auth: json.keys!.auth,
-        },
-        { onConflict: "endpoint" }
-      );
-
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        setPushSubscribed(true);
-      }
-    } catch (e) {
-      setErrorMsg(
-        e instanceof Error ? e.message : "通知の設定中にエラーが発生しました。"
-      );
-    }
-    setPushLoading(false);
-  }
-
-  async function handleDisablePush() {
-    setPushLoading(true);
-    try {
-      const registration =
-        await navigator.serviceWorker.getRegistration("/sw.js");
-      const subscription = await registration?.pushManager.getSubscription();
-
-      if (subscription) {
-        const endpoint = subscription.endpoint;
-        await subscription.unsubscribe();
-        const { error } = await supabase
-          .from("push_subscriptions")
-          .delete()
-          .eq("endpoint", endpoint);
-        if (error) {
-          setErrorMsg(error.message);
-        }
-      }
-      setPushSubscribed(false);
-    } catch (e) {
-      setErrorMsg(
-        e instanceof Error ? e.message : "通知の解除中にエラーが発生しました。"
-      );
-    }
-    setPushLoading(false);
   }
 
   async function loadInjuries() {
@@ -1449,22 +959,6 @@ export default function MemberHome({
   }
 
 
-  // 日報タブで表示している日付と、提出後に日報・集計を読み直すためのカウンタ
-  // 練習予定表の「日報を書く」から来た場合は、その日の日報を開く
-  const [reportDate, setReportDate] = useState<string>(() => {
-    if (typeof window === "undefined") return todayStr;
-    try {
-      const jump = sessionStorage.getItem("dailyReportDate");
-      if (jump) {
-        sessionStorage.removeItem("dailyReportDate");
-        if (/^\d{4}-\d{2}-\d{2}$/.test(jump) && jump <= todayStr) return jump;
-      }
-    } catch {
-      // 読めなくても今日の日報を開く
-    }
-    return todayStr;
-  });
-  const [reportRefreshKey, setReportRefreshKey] = useState(0);
 
   // 振り返りのカレンダーで日付を押したら、カレンダーの下にその日の記録を出す（もう一度押すと閉じる）
   function handleSelectCalendarDate(dateStr: string) {
@@ -1484,7 +978,6 @@ export default function MemberHome({
       effectiveHomeLocation ? loadTodo() : Promise.resolve(),
       loadSelfTrainingTodo(),
       loadTitleOptions(),
-      loadCalendarData(),
     ]);
     setReportRefreshKey((n) => n + 1);
   }
@@ -1494,7 +987,6 @@ export default function MemberHome({
     new Set([...todoMenus.map((m) => m.date), ...selfTrainingPending])
   ).sort();
 
-  const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>("daily");
   // 年間目標・月間目標が未設定なら、タスクとして出す
   const missingGoals = useGoalTasks(profile);
 

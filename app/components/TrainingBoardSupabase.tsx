@@ -154,7 +154,6 @@ export default function TrainingBoardSupabase({
   const [comments, setComments] = useState<CommentRow[]>([]);
   // 日報（実施報告・未実施報告）に付いたリアクション
   const [reactions, setReactions] = useState<ReactionRow[]>([]);
-  const [loadingMenus, setLoadingMenus] = useState(true);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
     day_type: DayType;
@@ -177,10 +176,8 @@ export default function TrainingBoardSupabase({
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [taskRefreshSignal, setTaskRefreshSignal] = useState(0);
   const [showCommentForm, setShowCommentForm] = useState(false);
   // 実施報告・未実施報告を送信中かどうか（二重送信防止）
-  const [submittingReport, setSubmittingReport] = useState(false);
   const reportSubmitLock = useRef(false);
   // 「◯人/◯人 提出済み」を押すと出る未提出者ポップアップ
   const [showMissingPopup, setShowMissingPopup] = useState(false);
@@ -514,7 +511,6 @@ export default function TrainingBoardSupabase({
   }
 
   async function loadMenus(): Promise<MenuRow[]> {
-    setLoadingMenus(true);
     const { data, error } = await supabase
       .from("menus")
       .select(
@@ -531,7 +527,6 @@ export default function TrainingBoardSupabase({
       setMenus(rows);
       await loadSubmissionSummary(rows.map((r) => r.id));
     }
-    setLoadingMenus(false);
     return rows;
   }
 
@@ -805,7 +800,6 @@ export default function TrainingBoardSupabase({
     if (isReport) {
       if (reportSubmitLock.current) return false;
       reportSubmitLock.current = true;
-      setSubmittingReport(true);
     }
     try {
       if (isReport) {
@@ -841,13 +835,11 @@ export default function TrainingBoardSupabase({
       await loadComments(selectedId);
       if (kind === "report" || kind === "absent") {
         await loadSubmissionSummary(menus.map((m) => m.id));
-        setTaskRefreshSignal((n) => n + 1);
       }
       return true;
     } finally {
       if (isReport) {
         reportSubmitLock.current = false;
-        setSubmittingReport(false);
       }
     }
   }
@@ -880,7 +872,6 @@ export default function TrainingBoardSupabase({
     }
     if (selectedId) await loadComments(selectedId);
     await loadSubmissionSummary(menus.map((m) => m.id));
-    setTaskRefreshSignal((n) => n + 1);
   }
 
   async function handleAddComment(e: React.FormEvent) {
@@ -1795,8 +1786,6 @@ export default function TrainingBoardSupabase({
             menus={menus}
             viewDate={viewDate}
             onSelect={selectMenu}
-            submissionMap={submissionMap}
-            memberCounts={memberCounts}
             jointElsewhere={jointElsewhere}
             onSelectJoint={(date) =>
               applySelectionForDate(date, menus, jointElsewhere)
@@ -2106,8 +2095,6 @@ function MenuCalendar({
   menus,
   viewDate,
   onSelect,
-  submissionMap,
-  memberCounts,
   jointElsewhere,
   onSelectJoint,
   onSelectEmpty,
@@ -2118,11 +2105,6 @@ function MenuCalendar({
   menus: MenuRow[];
   viewDate: string;
   onSelect: (id: string) => void;
-  submissionMap: Record<
-    string,
-    { reportAuthors: Set<string>; respondedAuthors: Set<string> }
-  >;
-  memberCounts: { tama: number; otsuka: number; all: number };
   jointElsewhere: Map<string, { menuId: string; location: Location }>;
   onSelectJoint: (date: string) => void;
   onSelectEmpty: (date: string) => void;

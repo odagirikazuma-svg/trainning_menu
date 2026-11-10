@@ -176,8 +176,6 @@ export default function TeamPage({
   const [submissionCountsByLoc, setSubmissionCountsByLoc] = useState<
     Map<string, Record<Location, { submitted: number; total: number } | null>>
   >(new Map());
-  const [loadingSubmissionCounts, setLoadingSubmissionCounts] =
-    useState(true);
   const [daySubmissionDetail, setDaySubmissionDetail] = useState<
     {
       memberId: string;
@@ -472,7 +470,6 @@ export default function TeamPage({
 
   // カレンダー全体（表示中の月・拠点）の日ごとの提出状況（◯人／◯人）を集計する
   async function loadMonthSubmissionCounts() {
-    setLoadingSubmissionCounts(true);
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
     const rangeStart = toDateKey(new Date(year, month, 1));
@@ -490,7 +487,6 @@ export default function TeamPage({
     if (requiredByLoc.tama.length === 0 && requiredByLoc.otsuka.length === 0) {
       setSubmissionCounts(new Map());
       setSubmissionCountsByLoc(new Map());
-      setLoadingSubmissionCounts(false);
       return;
     }
 
@@ -506,7 +502,6 @@ export default function TeamPage({
 
     if (scheduleErrorAll) {
       setErrorMsg(scheduleErrorAll.message);
-      setLoadingSubmissionCounts(false);
       return;
     }
 
@@ -538,7 +533,6 @@ export default function TeamPage({
 
     if (menuError) {
       setErrorMsg(menuError.message);
-      setLoadingSubmissionCounts(false);
       return;
     }
 
@@ -567,7 +561,6 @@ export default function TeamPage({
         .is("parent_id", null);
       if (commentError) {
         setErrorMsg(commentError.message);
-        setLoadingSubmissionCounts(false);
         return;
       }
       for (const row of (commentData ?? []) as {
@@ -602,7 +595,6 @@ export default function TeamPage({
         .lte("date", rangeEnd);
       if (logError) {
         setErrorMsg(logError.message);
-        setLoadingSubmissionCounts(false);
         return;
       }
       for (const row of (logData ?? []) as {
@@ -652,7 +644,6 @@ export default function TeamPage({
     }
     setSubmissionCounts(counts);
     setSubmissionCountsByLoc(countsByLoc);
-    setLoadingSubmissionCounts(false);
   }
 
   // 選択した日の、部員ごとの提出状況の詳細一覧を読み込む
@@ -760,7 +751,7 @@ export default function TeamPage({
       dateStr,
       dateStr
     );
-    let selfLogByAuthor = new Map<string, string>();
+    const selfLogByAuthor = new Map<string, string>();
     if (allRealIds.length > 0) {
       const { data: logData } = await supabase
         .from("weight_logs")
