@@ -8,7 +8,7 @@ type Template = { id: string; name: string; purpose: string | null; items: Recor
 
 // メニュー作成・編集フォームの「テンプレートから入力」。
 // 選ぶと、メニュー本文（自由記述）にテンプレートの内容を入れ、
-// 保存したときに計算用メニュー（予定）にも同じ項目を入れる。
+// 保存したときにメニュー項目（予定）にも同じ項目を入れる。
 export default function TemplatePicker({
   teamId,
   selected,
@@ -63,7 +63,7 @@ export default function TemplatePicker({
       </div>
       {selected && (
         <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-          本文は自由に書き足せます。保存すると、計算用メニュー（予定）にもテンプレートの項目が入ります。
+          本文は自由に書き足せます。保存すると、メニュー項目（予定）にもテンプレートの項目が入ります。
         </span>
       )}
     </div>

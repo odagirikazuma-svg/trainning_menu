@@ -17,7 +17,7 @@ import type { Profile } from "../AuthGate";
 import MenuItemsEditor from "./MenuItemsEditor";
 import { notifyBoardTasksChanged } from "../shell/useBoardTasks";
 
-// 練習予定表：メニューの下に出す「計算用メニュー」と「練習後の実施報告」。
+// 練習予定表：メニューの下に出す「メニュー項目」と「練習後の実施報告」。
 // - 練習前：予定メニュー（plan）を、テンプレート・前回のメニューから作る
 // - 練習後：予定を引き継いで実績（actual）に直し、参加者が休みの報告と合っているかを確認する
 // メニューを作る人と実施報告をする人は、別の人でもよい（部員・マネージャー・管理者なら誰でも）
@@ -55,16 +55,14 @@ function ItemList({
           <span className="w-4 shrink-0 text-right text-xs text-neutral-400">{i + 1}</span>
           <span className="font-medium text-neutral-900 dark:text-neutral-100">{it.name || "（名前未入力）"}</span>
           <span className="text-xs text-neutral-500">
-            {describeAmount(it)}
+            {describeAmount(it, !!onConfirm)}
             {it.format !== "all" && `・${formatLabel[it.format]}`}
           </span>
-          {!amountMissing(it) && needsCheck(it) && (
-            <span className="rounded bg-sky-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
-              要確認・計算対象外
-            </span>
-          )}
           {onConfirm && !amountMissing(it) && needsCheck(it) && (
-            <span className="flex gap-1">
+            <span className="flex items-center gap-1">
+              <span className="rounded bg-sky-100 px-1 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+                要確認
+              </span>
               <button type="button" onClick={() => onConfirm(it.key, "total")} className="rounded border border-sky-400 px-1.5 text-[length:calc(10px+var(--fs-add))] text-sky-800 dark:text-sky-300">
                 全体の本数
               </button>
@@ -324,7 +322,7 @@ export default function StructuredMenuCard({
     const { data: rows } = await supabase.from("menu_items").select("*").in("menu_id", ids).eq("phase", "plan").order("sort_order");
     const list = (rows ?? []) as Record<string, unknown>[];
     const first = ids.find((id) => list.some((r) => r.menu_id === id));
-    if (!first) return setMsg({ ok: false, text: "前回までのメニューに、計算用の項目がありませんでした。" });
+    if (!first) return setMsg({ ok: false, text: "前回までのメニューに、項目が入っていませんでした。" });
     if (draft.length > 0 && !window.confirm("今の項目を、前回のメニューに置き換えますか？")) return;
     setDraft(list.filter((r) => r.menu_id === first).map((r) => ({ ...toDraft(r), key: newKey() })));
   }
@@ -372,7 +370,7 @@ export default function StructuredMenuCard({
   if (mode === "plan") {
     return (
       <section className={box}>
-        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">📋 計算用メニュー（予定）を編集</span>
+        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">📋 メニュー項目（予定）を編集</span>
         {templateChips}
         <MenuItemsEditor items={draft} onChange={setDraft} canConfirm={canConfirm} />
         {msg && <p className={`text-xs ${msg.ok ? "text-emerald-600" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>}
@@ -536,7 +534,7 @@ export default function StructuredMenuCard({
       .eq("item_key", key);
     if (error) return setMsg({ ok: false, text: `確定できませんでした：${error.message}` });
     await load();
-    setMsg({ ok: true, text: "本数の数え方を確定しました。計算に含めます。" });
+    setMsg({ ok: true, text: "本数の数え方を確定しました。" });
   }
 
   // ---------- 表示 ----------
@@ -545,7 +543,7 @@ export default function StructuredMenuCard({
     <section className={box}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-          📋 計算用メニュー（{report ? "実績" : "予定"}）
+          📋 メニュー項目（{report ? "実績" : "予定"}）
         </span>
         {report ? (
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
@@ -565,7 +563,7 @@ export default function StructuredMenuCard({
             {new Date(report.reported_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}）
             ・参加者は{report.attendance_matches ? "予定どおり" : "予定と違いあり"}
           </span>
-          {diffs.map((d) => (
+          {canConfirm && diffs.map((d) => (
             <span key={d.member_id} className="text-neutral-800 dark:text-neutral-200">
               ・{nameOf(d.member_id)}：{diffLabel[d.kind]}
               {d.kind === "left_early" && d.permission && `（${d.permission === "confirmed" ? "許可あり" : "許可を確認できていない"}）`}

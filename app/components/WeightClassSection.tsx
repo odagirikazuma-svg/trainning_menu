@@ -75,7 +75,7 @@ export default function WeightClassSection() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-        試合に出る階級を選んでください（kg）。ウェイトの負荷を、階級に応じて評価するために使います。
+        試合に出る階級を選んでください（kg）。
         {value !== null && (
           <span className="ml-1 font-semibold text-foreground">現在：{value}kg級</span>
         )}

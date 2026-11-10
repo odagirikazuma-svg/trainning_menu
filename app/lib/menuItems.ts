@@ -1,5 +1,5 @@
-// マット練習メニューの構造化（計算用）の型と表示用のことば
-// 既存の menus.content（自由記述）は残し、計算用にこちらを追加で持つ
+// マット練習メニューの項目（種別・量）の型と表示用のことば
+// 既存の menus.content（自由記述）は残し、こちらを追加で持つ。量は監督向けの負荷の試算に使う
 
 export type MenuPhase = "plan" | "actual";
 export type MenuCategory =
@@ -198,14 +198,15 @@ export function formatDuration(sec: number) {
 }
 
 // 例：「3分×10セット（全体30分）」「4人組6分（2人ずつ交代）」「シコ50回×1」
-export function describeAmount(d: MenuItemDraft) {
+// showUnconfirmed：「全体か個人か未確認」を書くか（監督・管理者の画面だけ）
+export function describeAmount(d: MenuItemDraft, showUnconfirmed = false) {
   let main = "";
   if (d.amount_type === "distance") {
     const dist = d.distance_m ? (d.distance_m >= 1000 && d.distance_m % 100 === 0 ? `${d.distance_m / 1000}km` : `${d.distance_m}m`) : "";
     main = `${dist}${d.sets && d.sets > 1 ? `×${d.sets}本` : ""}`;
   } else if (d.amount_type === "timed") {
     if (d.unit_seconds && d.sets) {
-      const basis = d.sets_basis === "per_person" ? "（1人あたり）" : d.sets_basis === "unknown" ? "（全体か個人か未確認）" : "";
+      const basis = d.sets_basis === "per_person" ? "（1人あたり）" : d.sets_basis === "unknown" && showUnconfirmed ? "（全体か個人か未確認）" : "";
       main = `${formatDuration(d.unit_seconds)}×${d.sets}本${basis}`;
       if (d.sets_basis === "total") main += `（全体${formatDuration(d.unit_seconds * d.sets)}）`;
     } else if (d.unit_seconds) {
@@ -293,7 +294,7 @@ export function itemsToText(items: MenuItemDraft[]) {
   return items
     .filter((i) => i.name.trim())
     .map((i) => {
-      const amount = describeAmount(i).replace(/（全体か個人か未確認）/, "");
+      const amount = describeAmount(i);
       const fmt = i.format === "free" ? "（自由参加）" : i.format === "rotation" ? "（交代制）" : "";
       return `・${i.name}${amount ? ` ${amount}` : ""}${fmt}${i.note ? `\n　${i.note}` : ""}`;
     })

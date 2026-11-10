@@ -18,11 +18,14 @@ import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { fatigueColor } from "./FatigueSelector";
 import AbsenceReviewSection from "./AbsenceReviewSection";
+import PracticeCheckSection from "./PracticeCheckSection";
 
 type AdminSubTab = "submissions" | "reports" | "training" | "injuries";
-const adminSubTabItems: { value: AdminSubTab; label: string }[] = [
+// 「練習」（要確認・負荷の試算）は監督（coach）だけに出す
+const adminSubTabItems: { value: AdminSubTab; label: string; coachOnly?: boolean }[] = [
   { value: "submissions", label: "日報" },
   { value: "reports", label: "報告" },
+  { value: "training", label: "練習", coachOnly: true },
   { value: "injuries", label: "怪我の管理" },
 ];
 
@@ -933,6 +936,7 @@ export default function CoachAdminPage({
     if (typeof window === "undefined") return "submissions";
     const tab = new URLSearchParams(window.location.search).get("tab");
     if (tab === "injuries") return "injuries";
+    if (tab === "training" && profile.role === "coach") return "training";
     if (tab === "reports" || window.location.hash === "#absence") return "reports";
     return "submissions";
   });
@@ -957,13 +961,16 @@ export default function CoachAdminPage({
   const adminSubNav = useMemo(
     () => (
       <SubTabBar
-        items={adminSubTabItems.map((it) =>
-          it.value === "reports" ? { ...it, badge: pendingAbsences } : it
-        )}
+        items={adminSubTabItems
+          .filter((it) => !it.coachOnly || profile.role === "coach")
+          .map(({ coachOnly: _c, ...it }) =>
+            it.value === "reports" ? { ...it, badge: pendingAbsences } : it
+          )}
         active={adminSubTab}
         onChange={setAdminSubTab}
       />
     ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [adminSubTab, pendingAbsences]
   );
   useSubNav(adminSubNav);
@@ -984,6 +991,10 @@ export default function CoachAdminPage({
             canReview={profile.role === "coach"}
             onChanged={setPendingAbsences}
           />
+        )}
+
+        {adminSubTab === "training" && profile.role === "coach" && (
+          <PracticeCheckSection teamId={profile.team_id} coachId={profile.id} />
         )}
 
         {adminSubTab === "submissions" && (

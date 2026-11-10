@@ -134,7 +134,7 @@ export default function TrainingBoardSupabase({
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
   const [newContent, setNewContent] = useState("");
-  // テンプレートから入力したとき：保存時に計算用メニュー（予定）にも入れる
+  // テンプレートから入力したとき：保存時にメニュー項目（予定）にも入れる
   const [newTemplate, setNewTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
   const [editTemplate, setEditTemplate] = useState<{ id: string; items: MenuItemDraft[] } | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -592,7 +592,7 @@ export default function TrainingBoardSupabase({
     router.push("/mypage");
   }
 
-  // テンプレートの項目を、そのメニューの計算用メニュー（予定）として保存する
+  // テンプレートの項目を、そのメニューのメニュー項目（予定）として保存する
   async function writePlanItems(menuIds: string[], items: MenuItemDraft[]) {
     for (const id of menuIds) {
       await supabase.from("menu_items").delete().eq("menu_id", id).eq("phase", "plan");
@@ -608,7 +608,7 @@ export default function TrainingBoardSupabase({
         }));
       if (rows.length > 0) {
         const { error } = await supabase.from("menu_items").insert(rows);
-        if (error) setErrorMsg(`計算用メニューを保存できませんでした：${error.message}`);
+        if (error) setErrorMsg(`メニュー項目を保存できませんでした：${error.message}`);
       }
     }
   }
@@ -1404,7 +1404,7 @@ export default function TrainingBoardSupabase({
               )}
             </section>
 
-            {/* 計算用メニュー（予定）と練習後の実施報告 */}
+            {/* メニュー項目（予定）と練習後の実施報告 */}
             {selected && !selected.is_off && (
               <StructuredMenuCard
                 // メニューを保存し直したら読み込み直す（テンプレートから予定が入る場合がある）

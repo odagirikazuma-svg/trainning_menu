@@ -19,7 +19,7 @@ import {
   type MenuItemDraft,
 } from "../../lib/menuItems";
 
-// メニュー項目（計算用）の入力欄。項目は親が持ち、変更は onChange で返す。
+// メニュー項目の入力欄。項目は親が持ち、変更は onChange で返す。
 // 1行は普段は「名前・量」の要約で、押すと詳しい入力欄が開く。
 
 const inputCls =
@@ -159,10 +159,10 @@ export default function MenuItemsEditor({
                 </span>
                 <span className="truncate text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                   {categoryLabel[it.category]}・{formatLabel[it.format]}
-                  {describeAmount(it) ? `・${describeAmount(it)}` : ""}
+                  {describeAmount(it, canConfirm) ? `・${describeAmount(it, canConfirm)}` : ""}
                 </span>
               </span>
-              {!missing && needsCheck(it) && (
+              {canConfirm && !missing && needsCheck(it) && (
                 <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
                   要確認
                 </span>
@@ -263,13 +263,9 @@ export default function MenuItemsEditor({
                     <>
                       <MinSec label="1本の時間" value={it.unit_seconds} onChange={(v) => update(it.key, { unit_seconds: v })} />
                       <NumField label="本数・セット数" unit="本" value={it.sets} onChange={(v) => update(it.key, { sets: v })} />
+                      {canConfirm && (
                       <div className="flex flex-col gap-0.5">
                         <span className={smallLabel}>本数の数え方</span>
-                        {!canConfirm && it.category !== "spar" ? (
-                          <span className="rounded-lg bg-neutral-100 px-2 py-1.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                            {it.sets_basis === "total" ? "全体で" : it.sets_basis === "per_person" ? "1人あたり" : "未確認（監督・管理者が確認します）"}
-                          </span>
-                        ) : (
                         <div className="flex gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
                           {(["total", "per_person", "unknown"] as const).map((b) => (
                             <button
@@ -284,8 +280,8 @@ export default function MenuItemsEditor({
                             </button>
                           ))}
                         </div>
-                        )}
                       </div>
+                      )}
                     </>
                   )}
                   {it.amount_type === "total" && (
@@ -306,7 +302,8 @@ export default function MenuItemsEditor({
                 </div>
                 {it.amount_type === "timed" && (
                   <span className={smallLabel}>
-                    例：「3分スパー10本」は 1本3分×10本（全体30分）。「3分×2×10」とは数えません。「25秒×5セット」などで全体か個人か分からないときは「未確認」のままにしてください（監督・管理者が確認するまで、計算には入りません）。
+                    例：「3分スパー10本」は 1本3分×10本。「3分×2×10」とは数えません。
+                    {canConfirm && "「25秒×5セット」などで全体か個人か分からないときは「未確認」のまま（確定するまで試算に入りません）。"}
                   </span>
                 )}
 
@@ -320,7 +317,7 @@ export default function MenuItemsEditor({
                       onChange={(v) => update(it.key, { active_per_group: v })}
                     />
                     <span className={`${smallLabel} basis-full`}>
-                      例：4人組で2人ずつ攻防 → 1人の実施時間は全体の約1/2として概算します（交代・説明の時間も含むため実測ではありません）。
+                      例：4人組で2人ずつ攻防 → 組の人数4・同時に実施する人数2
                     </span>
                   </div>
                 )}
@@ -345,7 +342,7 @@ export default function MenuItemsEditor({
                   </div>
                   {it.target_group !== "all" && (
                     <span className={smallLabel}>
-                      例：ラン「通常5km」「重量級3km」は、2つの項目に分けて入れてください（誰が重量級にあたるかは、まだ自動では決めません）。
+                      例：ラン「通常5km」「重量級3km」は、2つの項目に分けて入れてください。
                     </span>
                   )}
                 </div>

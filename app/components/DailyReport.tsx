@@ -1514,7 +1514,7 @@ export default function DailyReport({
           ) : (
             renderMatForm(m.id)
           )}
-          {/* 参加したメニュー・自由参加スパーの参加量（計算用メニューがある練習だけ） */}
+          {/* 参加したメニュー・自由参加スパーの参加量（メニュー項目がある練習だけ） */}
           {((r && r.kind === "report") || (!r && !readOnly && draftOf(m.id).mode === "report")) && (
             <ParticipationForm
               menuId={m.id}
