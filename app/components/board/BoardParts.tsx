@@ -69,9 +69,9 @@ function formatDateTime(iso: string) {
 
 export function CommentItem({ c }: { c: CommentRow }) {
   return (
-    <li className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+    <li className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3">
       <CommentMeta c={c} />
-      <p className="whitespace-pre-wrap text-sm text-neutral-100">{c.text}</p>
+      <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{c.text}</p>
     </li>
   );
 }
@@ -79,7 +79,7 @@ export function CommentItem({ c }: { c: CommentRow }) {
 export function CommentMeta({ c }: { c: CommentRow }) {
   return (
     <div className="mb-1 flex flex-wrap items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-      <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-medium text-neutral-300">
+      <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 font-medium text-neutral-700 dark:text-neutral-300">
         {c.author ? roleLabel[c.author.role] : "?"}
       </span>
       <span>{c.author?.display_name ?? "不明"}</span>
@@ -146,18 +146,18 @@ export function ReportThread({
   const colors =
     tone === "emerald"
       ? {
-          border: "border-emerald-900/60",
-          bg: "bg-emerald-950/40",
+          border: "border-emerald-200 dark:border-emerald-900/60",
+          bg: "bg-emerald-50 dark:bg-emerald-950/40",
           tag: "bg-emerald-600 text-white",
-          replyBorder: "border-emerald-900/60",
-          link: "text-emerald-400 active:text-emerald-300",
+          replyBorder: "border-emerald-200 dark:border-emerald-900/60",
+          link: "text-emerald-700 dark:text-emerald-400 active:text-emerald-700 dark:active:text-emerald-300",
         }
       : {
-          border: "border-neutral-700",
-          bg: "bg-neutral-800",
+          border: "border-neutral-300 dark:border-neutral-700",
+          bg: "bg-neutral-100 dark:bg-neutral-800",
           tag: "bg-neutral-600 text-white",
-          replyBorder: "border-neutral-700",
-          link: "text-neutral-200 active:text-white",
+          replyBorder: "border-neutral-300 dark:border-neutral-700",
+          link: "text-neutral-800 dark:text-neutral-200 active:text-white",
         };
 
   return (
@@ -167,7 +167,7 @@ export function ReportThread({
           <span className={`rounded px-1.5 py-0.5 font-medium ${colors.tag}`}>
             {commentKindLabel[report.kind]}
           </span>
-          <span className="rounded bg-neutral-800 px-1.5 py-0.5 font-medium text-neutral-300">
+          <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 font-medium text-neutral-700 dark:text-neutral-300">
             {report.author ? roleLabel[report.author.role] : "?"}
           </span>
           <span>{report.author?.display_name ?? "不明"}</span>
@@ -187,7 +187,7 @@ export function ReportThread({
             </button>
             <button
               onClick={handleDeleteClick}
-              className="font-medium text-red-400 active:text-red-800"
+              className="font-medium text-red-700 dark:text-red-400 active:text-red-800"
             >
               削除
             </button>
@@ -198,7 +198,7 @@ export function ReportThread({
       {isEditing ? (
         <div className="flex flex-col gap-2">
           {editableAltType && (
-            <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               代替メニュー
               <select
                 value={editAltType}
@@ -207,7 +207,7 @@ export function ReportThread({
                     e.target.value as "running" | "weight" | "other"
                   )
                 }
-                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+                className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
               >
                 <option value="running">ランニング</option>
                 <option value="weight">ウェイト</option>
@@ -219,7 +219,7 @@ export function ReportThread({
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             rows={5}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
           />
           <div className="flex gap-2">
             <button
@@ -231,14 +231,14 @@ export function ReportThread({
             </button>
             <button
               onClick={() => setIsEditing(false)}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-xs text-neutral-300"
+              className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
             >
               キャンセル
             </button>
           </div>
         </div>
       ) : (
-        <p className="whitespace-pre-wrap text-sm text-neutral-100">
+        <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">
           {report.text}
         </p>
       )}
@@ -248,9 +248,9 @@ export function ReportThread({
       {replies.length > 0 && (
         <ul className={`mt-3 flex flex-col gap-2 border-l-2 ${colors.replyBorder} pl-3`}>
           {replies.map((r) => (
-            <li key={r.id} className="rounded-lg bg-neutral-900 p-2.5">
+            <li key={r.id} className="rounded-lg bg-neutral-50 dark:bg-neutral-900 p-2.5">
               <CommentMeta c={r} />
-              <p className="whitespace-pre-wrap text-sm text-neutral-100">
+              <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">
                 {r.text}
               </p>
             </li>
@@ -265,7 +265,7 @@ export function ReportThread({
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="この報告にコメントする"
             rows={2}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
             autoFocus
           />
           <div className="flex gap-2">
@@ -278,7 +278,7 @@ export function ReportThread({
             <button
               type="button"
               onClick={() => setShowReplyForm(false)}
-              className="rounded-lg border border-neutral-700 px-3 py-2 text-xs text-neutral-300"
+              className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
             >
               閉じる
             </button>
@@ -707,7 +707,7 @@ export function TimeSelect({
       <select
         value={hour}
         onChange={(e) => update(e.target.value, minute || "00")}
-        className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2.5 text-sm text-neutral-100"
+        className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
       >
         <option value="">--</option>
         {hours.map((h) => (
@@ -719,7 +719,7 @@ export function TimeSelect({
       <select
         value={minute}
         onChange={(e) => update(hour || "00", e.target.value)}
-        className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2.5 text-sm text-neutral-100"
+        className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
       >
         <option value="">--</option>
         {minutes.map((m) => (

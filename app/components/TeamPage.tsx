@@ -828,10 +828,10 @@ export default function TeamPage({
 
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-800 dark:text-neutral-200">
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
-          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+          <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
             {errorMsg}
           </p>
         )}
@@ -851,7 +851,7 @@ export default function TeamPage({
                   className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
                     scheduleLocation === loc
                       ? "border-red-600 bg-red-600 text-white"
-                      : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                      : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
                   }`}
                 >
                   {locationLabel[loc]}
@@ -862,15 +862,15 @@ export default function TeamPage({
           {isCoach && (
             <button
               onClick={handleOpenBulk}
-              className="self-start text-xs font-medium text-neutral-400 underline"
+              className="self-start text-xs font-medium text-neutral-600 dark:text-neutral-400 underline"
             >
               期間でまとめて設定する（オフ・合宿・試合）
             </button>
           )}
           {bulkOpen && (
-            <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3">
+            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 dark:border-neutral-800 p-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-neutral-300">
+                <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                   {locationLabel[scheduleLocation]}の期間をまとめて設定
                 </p>
                 <button
@@ -917,13 +917,13 @@ export default function TeamPage({
                 onClick={handleCloseScheduleDetail}
               >
                 <div
-                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-lg"
+                  className="relative max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-4 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     onClick={handleCloseScheduleDetail}
                     aria-label="閉じる"
-                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-neutral-500 shadow active:bg-neutral-800"
+                    className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-50 dark:bg-neutral-900 text-neutral-500 shadow active:bg-neutral-100 dark:active:bg-neutral-800"
                   >
                     ✕
                   </button>
@@ -932,14 +932,14 @@ export default function TeamPage({
                       <button
                         onClick={() => handleShiftScheduleDate(-1)}
                         aria-label="前の日"
-                        className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
+                        className="absolute left-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-sm text-neutral-600 dark:text-neutral-400 shadow active:bg-neutral-100 dark:active:bg-neutral-800"
                       >
                         ◀
                       </button>
                       <button
                         onClick={() => handleShiftScheduleDate(1)}
                         aria-label="次の日"
-                        className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 text-sm text-neutral-400 shadow active:bg-neutral-800"
+                        className="absolute right-[-14px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-sm text-neutral-600 dark:text-neutral-400 shadow active:bg-neutral-100 dark:active:bg-neutral-800"
                       >
                         ▶
                       </button>
@@ -948,7 +948,7 @@ export default function TeamPage({
 
                   {editingSchedule ? (
                     <div className="flex flex-col gap-3 pr-5">
-                      <h3 className="text-sm font-bold text-neutral-100">
+                      <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                         {locationLabel[scheduleLocation]}・
                         {formatMonthDay(selectedScheduleDate)}の時間割
                       </h3>
@@ -1017,7 +1017,7 @@ export default function TeamPage({
                             dayDetail.day_type === "away") && (
                             <button
                               onClick={handleDeleteAwayLikeSchedule}
-                              className="rounded px-2 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-red-400 underline"
+                              className="rounded px-2 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-red-700 dark:text-red-400 underline"
                             >
                               この予定を削除する
                             </button>
@@ -1031,7 +1031,7 @@ export default function TeamPage({
                           </p>
                           <button
                             onClick={handleStartEditSchedule}
-                            className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                            className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                           >
                             時間割を編集する
                           </button>
@@ -1040,9 +1040,9 @@ export default function TeamPage({
                       {dayDetail.sessions.map((s) => (
                         <div
                           key={s.id}
-                          className="rounded-lg border border-neutral-800 p-3"
+                          className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3"
                         >
-                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-400">
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                             <span
                               className={`inline-block h-2 w-2 rounded-full ${sessionTypeDotColor[s.session_type]}`}
                             />
@@ -1091,7 +1091,7 @@ export default function TeamPage({
                                 <h4 className="mb-1 text-sm font-bold">
                                   {matMenuDetail.title || "練習メニュー"}
                                 </h4>
-                                <p className="whitespace-pre-wrap text-sm text-neutral-100">
+                                <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">
                                   {matMenuDetail.content || (
                                     <span className="text-neutral-500">
                                       メニューはまだ書かれていません。
@@ -1105,7 +1105,7 @@ export default function TeamPage({
                                   ) && (
                                     <button
                                       onClick={() => handleGoToMatMenu()}
-                                      className="mt-2 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                                      className="mt-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                                     >
                                       練習予定表で編集する
                                     </button>
@@ -1113,7 +1113,7 @@ export default function TeamPage({
                               </div>
                             )
                           ) : (
-                            <p className="text-xs text-neutral-400">
+                            <p className="text-xs text-neutral-600 dark:text-neutral-400">
                               各自申告制です。実施状況はマイページの「今日のトレーニングメニュー」から記録できます。
                             </p>
                           )}
@@ -1121,7 +1121,7 @@ export default function TeamPage({
                       ))}
                       <button
                         onClick={handleStartEditSchedule}
-                        className="self-start text-xs font-medium text-neutral-400 underline"
+                        className="self-start text-xs font-medium text-neutral-600 dark:text-neutral-400 underline"
                       >
                         時間割を編集する
                       </button>
@@ -1136,17 +1136,17 @@ export default function TeamPage({
                         return (
                           <div
                             key={loc}
-                            className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm"
+                            className="flex items-center justify-between rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2 text-sm"
                           >
-                            <span className="font-medium text-neutral-200">
+                            <span className="font-medium text-neutral-800 dark:text-neutral-200">
                               {locationLabel[loc]}
                             </span>
                             {c ? (
                               <span
                                 className={`font-semibold ${
                                   c.total > 0 && c.submitted === c.total
-                                    ? "text-emerald-400"
-                                    : "text-neutral-300"
+                                    ? "text-emerald-700 dark:text-emerald-400"
+                                    : "text-neutral-700 dark:text-neutral-300"
                                 }`}
                               >
                                 {c.submitted}/{c.total}人提出
@@ -1166,7 +1166,7 @@ export default function TeamPage({
         </section>
 
         {/* 日別の提出状況 */}
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             {selectedScheduleDate
@@ -1179,11 +1179,11 @@ export default function TeamPage({
           {loadingMembers || loadingDaySubmissionDetail ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : !selectedScheduleDate ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
               カレンダーから日付を選んでください。
             </p>
           ) : daySubmissionDetail.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
@@ -1203,7 +1203,7 @@ export default function TeamPage({
                 );
                 return (["tama", "otsuka"] as Location[]).map((loc) => (
                 <div key={loc} className="flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-neutral-400">
+                  <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                     {locationLabel[loc]}
                   </p>
                   {gradeGroups.map((group) => {
@@ -1250,14 +1250,14 @@ export default function TeamPage({
                               }
                               className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
                                 d.isPending
-                                  ? "border-neutral-800 bg-neutral-900 text-neutral-600"
+                                  ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-600"
                                   : d.isExempt
-                                    ? "border-amber-900/50 bg-amber-950/20 text-neutral-300 active:bg-amber-950/40"
+                                    ? "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-neutral-700 dark:text-neutral-300 active:bg-amber-50 dark:active:bg-amber-950/40"
                                     : notStarted
-                                    ? "border-neutral-800 bg-neutral-900 text-neutral-400"
+                                    ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400"
                                     : allDone
-                                      ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
-                                      : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
+                                      ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/20 text-neutral-900 dark:text-neutral-100 active:bg-emerald-50 dark:active:bg-emerald-950/40"
+                                      : "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 active:bg-neutral-100 dark:active:bg-neutral-800"
                               }`}
                             >
                               <span className="truncate">{d.displayName}</span>
@@ -1266,7 +1266,7 @@ export default function TeamPage({
                                   未登録
                                 </span>
                               ) : d.isExempt ? (
-                                <span className="shrink-0 rounded bg-amber-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-amber-400">
+                                <span className="shrink-0 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-amber-700 dark:text-amber-400">
                                   免除
                                 </span>
                               ) : notStarted ? (
@@ -1277,8 +1277,8 @@ export default function TeamPage({
                                 <span
                                   className={`shrink-0 rounded px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${
                                     allDone
-                                      ? "bg-emerald-950/40 text-emerald-400"
-                                      : "bg-red-950/40 text-red-400"
+                                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                                      : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400"
                                   }`}
                                 >
                                   {allDone ? "済" : "未"}

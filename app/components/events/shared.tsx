@@ -179,7 +179,7 @@ export function CommentThread({
         </div>
       )}
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -470,7 +470,7 @@ export function buildEventQueueTask(
     urgent: task.overdue,
     content: (close: () => void) => (
       <div className="flex flex-col gap-2">
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400">
           締切：{formatMonthDay(task.deadline)}
         </p>
         <button

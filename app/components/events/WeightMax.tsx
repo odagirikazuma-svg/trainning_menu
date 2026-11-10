@@ -144,8 +144,8 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
               diff.zero
                 ? "text-neutral-500"
                 : diff.positive
-                  ? "text-emerald-400"
-                  : "text-red-400"
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-red-700 dark:text-red-400"
             }`}
           >
             ({diff.text})
@@ -158,7 +158,7 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
   return (
     <div className="flex flex-col gap-3">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -189,7 +189,7 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                 測定会（〜{formatMonthDay(ev.deadline)}）
               </span>
               {submitted ? (
-                <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-300">
+                <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
@@ -197,13 +197,13 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                   className={`rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
-                      : "bg-amber-800/60 text-amber-300"
+                      : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
                   }`}
                 >
                   未提出
                 </span>
               ) : (
-                <span className="rounded bg-neutral-700 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] text-neutral-300">
+                <span className="rounded bg-neutral-200 dark:bg-neutral-700 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300">
                   締切済み
                 </span>
               )}
@@ -285,14 +285,14 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                       key={r.id}
                       className={`flex flex-col gap-0.5 rounded-lg border p-2 text-xs ${
                         r.id === profile.id
-                          ? "border-red-600/60 bg-red-950/10"
+                          ? "border-red-600/60 bg-red-50 dark:bg-red-950/10"
                           : "border-border-color bg-background"
                       }`}
                     >
                       <span className="font-medium text-foreground">
                         {r.display_name}
                         {r.id === profile.id && (
-                          <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-400">
+                          <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-700 dark:text-red-400">
                             (自分)
                           </span>
                         )}
@@ -478,7 +478,7 @@ export function WeightMaxCoachManagement({
   return (
     <div className="flex flex-col gap-2">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}

@@ -170,7 +170,7 @@ export function TeamEventTab({
   return (
     <div className="flex flex-col gap-3">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -195,7 +195,7 @@ export function TeamEventTab({
                 </span>
               </span>
               {submitted ? (
-                <span className="shrink-0 rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-300">
+                <span className="shrink-0 rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
@@ -203,13 +203,13 @@ export function TeamEventTab({
                   className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
-                      : "bg-amber-800/60 text-amber-300"
+                      : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
                   }`}
                 >
                   未提出
                 </span>
               ) : (
-                <span className="shrink-0 rounded bg-neutral-700 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] text-neutral-300">
+                <span className="shrink-0 rounded bg-neutral-200 dark:bg-neutral-700 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300">
                   締切済み
                 </span>
               )}
@@ -793,7 +793,7 @@ export function TeamEventCoachManagement({
   return (
     <div className="flex flex-col gap-2">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}

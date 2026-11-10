@@ -252,12 +252,12 @@ export default function MemberExemptionSection({
       </form>
 
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
       {noticeMsg && (
-        <p className="rounded bg-amber-950/30 p-2 text-xs text-amber-300">
+        <p className="rounded bg-amber-50 dark:bg-amber-950/30 p-2 text-xs text-amber-700 dark:text-amber-300">
           {noticeMsg}
         </p>
       )}
@@ -286,7 +286,7 @@ export default function MemberExemptionSection({
                     <span
                       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                         active
-                          ? "bg-amber-950/40 text-amber-400"
+                          ? "bg-amber-50 dark:bg-amber-950/40 text-amber-400"
                           : "bg-surface-2 text-neutral-500 dark:text-neutral-400"
                       }`}
                     >

@@ -989,13 +989,13 @@ export default function CoachAdminPage({
             </div>
           )}
 
-          <h3 className="text-xs font-semibold text-neutral-300">
+          <h3 className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
             {formatMonthDay(selectedReportDate)}の提出状況
           </h3>
           {loadingDaySubmissionDetail ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : daySubmissionDetail.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
@@ -1015,7 +1015,7 @@ export default function CoachAdminPage({
                 );
                 return (["tama", "otsuka"] as Location[]).map((loc) => (
                 <div key={loc} className="flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-neutral-400">
+                  <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                     {locationLabel[loc]}
                   </p>
                   {gradeGroups.map((group) => {
@@ -1062,14 +1062,14 @@ export default function CoachAdminPage({
                               }
                               className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
                                 d.isPending
-                                  ? "border-neutral-800 bg-neutral-900 text-neutral-600"
+                                  ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-600"
                                   : d.isExempt
-                                    ? "border-amber-900/50 bg-amber-950/20 text-neutral-300 active:bg-amber-950/40"
+                                    ? "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-neutral-700 dark:text-neutral-300 active:bg-amber-50 dark:active:bg-amber-950/40"
                                     : notStarted
-                                    ? "border-neutral-800 bg-neutral-900 text-neutral-400"
+                                    ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400"
                                     : allDone
-                                      ? "border-emerald-900/60 bg-emerald-950/20 text-neutral-100 active:bg-emerald-950/40"
-                                      : "border-neutral-800 bg-neutral-900 text-neutral-100 active:bg-neutral-800"
+                                      ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/20 text-neutral-900 dark:text-neutral-100 active:bg-emerald-50 dark:active:bg-emerald-950/40"
+                                      : "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 active:bg-neutral-100 dark:active:bg-neutral-800"
                               }`}
                             >
                               <span className="truncate">
@@ -1080,7 +1080,7 @@ export default function CoachAdminPage({
                                   未登録
                                 </span>
                               ) : d.isExempt ? (
-                                <span className="shrink-0 rounded bg-amber-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-amber-400">
+                                <span className="shrink-0 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold text-amber-700 dark:text-amber-400">
                                   免除
                                 </span>
                               ) : notStarted ? (
@@ -1091,8 +1091,8 @@ export default function CoachAdminPage({
                                 <span
                                   className={`shrink-0 rounded px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${
                                     allDone
-                                      ? "bg-emerald-950/40 text-emerald-400"
-                                      : "bg-red-950/40 text-red-400"
+                                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                                      : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400"
                                   }`}
                                 >
                                   {allDone ? "済" : "未"}
@@ -1138,7 +1138,7 @@ export default function CoachAdminPage({
           {loadingInjuries ? (
             <p className="text-xs text-neutral-500">読み込み中…</p>
           ) : injuries.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+            <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
               報告されている怪我はありません。
             </p>
           ) : (
@@ -1154,7 +1154,7 @@ export default function CoachAdminPage({
 
                 if (activeInjuries.length === 0) {
                   return (
-                    <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+                    <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
                       現在対応中の怪我はありません。
                     </p>
                   );
@@ -1179,7 +1179,7 @@ export default function CoachAdminPage({
               })()}
               <button
                 onClick={() => setShowPastInjuries(true)}
-                className="self-end text-xs font-medium text-neutral-400 underline"
+                className="self-end text-xs font-medium text-neutral-600 dark:text-neutral-400 underline"
               >
                 過去の怪我情報を見る
               </button>
@@ -1193,17 +1193,17 @@ export default function CoachAdminPage({
             onClick={() => setShowPastInjuries(false)}
           >
             <div
-              className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-lg bg-neutral-900 p-4 shadow-xl"
+              className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-2 overflow-y-auto rounded-lg bg-neutral-50 dark:bg-neutral-900 p-4 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => setShowPastInjuries(false)}
                 aria-label="閉じる"
-                className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-neutral-500 shadow active:bg-neutral-800"
+                className="sticky top-0 float-right -mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-50 dark:bg-neutral-900 text-neutral-500 shadow active:bg-neutral-100 dark:active:bg-neutral-800"
               >
                 ✕
               </button>
-              <h3 className="text-sm font-semibold text-neutral-200">
+              <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
                 過去の怪我情報
               </h3>
               {injuries.length === 0 ? (
@@ -1249,8 +1249,8 @@ function InjuryListItem({
     <li
       className={`rounded-lg border ${
         inj.is_recovered
-          ? "border-emerald-900/60 bg-emerald-950/40"
-          : "border-neutral-800"
+          ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40"
+          : "border-neutral-200 dark:border-neutral-800"
       }`}
     >
       <button
@@ -1261,10 +1261,10 @@ function InjuryListItem({
           <span className="font-medium text-foreground">
             {inj.author?.display_name ?? "不明"}
           </span>
-          <span className="text-neutral-400">
+          <span className="text-neutral-600 dark:text-neutral-400">
             {inj.symptom_name}（{inj.body_part}）
             {inj.is_recovered && (
-              <span className="ml-1.5 rounded bg-emerald-900/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-emerald-400">
+              <span className="ml-1.5 rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-400">
                 完治
               </span>
             )}
@@ -1273,7 +1273,7 @@ function InjuryListItem({
         <span className="text-neutral-600">{isOpen ? "︿" : "﹀"}</span>
       </button>
       {isOpen && (
-        <div className="flex flex-col gap-1 border-t border-neutral-800 px-3 py-2.5 text-xs text-foreground">
+        <div className="flex flex-col gap-1 border-t border-neutral-200 dark:border-neutral-800 px-3 py-2.5 text-xs text-foreground">
           {inj.detail && <p className="whitespace-pre-wrap">{inj.detail}</p>}
           <p>
             完治見込み日:{" "}
@@ -1303,7 +1303,7 @@ function InjuryListItem({
               <p>条件: {inj.mat_participation_detail}</p>
             )}
           {inj.progress_note && (
-            <p className="rounded bg-neutral-900/60 p-2">
+            <p className="rounded bg-neutral-50 dark:bg-neutral-900/60 p-2">
               最新の経過報告: {inj.progress_note}
             </p>
           )}

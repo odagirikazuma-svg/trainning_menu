@@ -1008,7 +1008,7 @@ export default function MemberHome({
   return (
     <>
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -1017,24 +1017,24 @@ export default function MemberHome({
         <>
       {/* 免除期間中のお知らせ（管理者が登録した期間。理由は部員には表示しない） */}
       {activeExemption && (
-        <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-amber-300">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-3 text-[length:calc(12px+var(--fs-add))] text-amber-700 dark:text-amber-300">
           <p className="font-semibold">
             管理者により免除されています（
             {formatExemptionDate(activeExemption.start_date)}〜
             {formatExemptionDate(activeExemption.end_date)}）
           </p>
-          <p className="mt-1 text-amber-300/80">
+          <p className="mt-1 text-amber-700 dark:text-amber-300/80">
             この期間の練習の実施報告・自主トレの記録は不要です。怪我の経過報告やイベントの提出は、これまで通りお願いします。
           </p>
         </div>
       )}
       {/* タスク一覧（練習タスク・怪我タスク） */}
       {isOb && (
-        <div className="flex items-center justify-end border-t border-neutral-800 pt-4">
+        <div className="flex items-center justify-end border-t border-neutral-200 dark:border-neutral-800 pt-4">
           <button
             onClick={handleToggleTaskListPref}
             disabled={savingTaskListPref}
-            className="shrink-0 rounded border border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800 disabled:opacity-50"
+            className="shrink-0 rounded border border-neutral-300 dark:border-neutral-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
           >
             {showTaskListPref
               ? "タスクのポップアップを非表示にする"
@@ -1069,15 +1069,15 @@ export default function MemberHome({
                   </button>
                 )}
                 {isOpen && (
-                  <div className="flex flex-col gap-2 rounded-lg bg-neutral-800 p-3">
-                    <div className="flex gap-2 rounded-lg bg-neutral-900 p-1 text-xs">
+                  <div className="flex flex-col gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-3">
+                    <div className="flex gap-2 rounded-lg bg-neutral-50 dark:bg-neutral-900 p-1 text-xs">
                       <button
                         type="button"
                         onClick={() => setProgressIsRecovered(true)}
                         className={`flex-1 rounded-md py-2 font-medium ${
                           progressIsRecovered
                             ? "bg-red-600 text-white shadow"
-                            : "text-neutral-400"
+                            : "text-neutral-600 dark:text-neutral-400"
                         }`}
                       >
                         完治した
@@ -1088,7 +1088,7 @@ export default function MemberHome({
                         className={`flex-1 rounded-md py-2 font-medium ${
                           !progressIsRecovered
                             ? "bg-red-600 text-white shadow"
-                            : "text-neutral-400"
+                            : "text-neutral-600 dark:text-neutral-400"
                         }`}
                       >
                         まだ完治していない
@@ -1096,7 +1096,7 @@ export default function MemberHome({
                     </div>
                     {!progressIsRecovered && (
                       <>
-                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                           新しい完治見込み日
                           <input
                             type="date"
@@ -1104,10 +1104,10 @@ export default function MemberHome({
                             onChange={(e) =>
                               setProgressRecoveryDate(e.target.value)
                             }
-                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                            className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                           />
                         </label>
-                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                           マット参加の可否
                           <select
                             value={progressMatParticipation}
@@ -1116,7 +1116,7 @@ export default function MemberHome({
                                 e.target.value as "yes" | "no" | "conditional"
                               )
                             }
-                            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                            className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                           >
                             <option value="no">非</option>
                             <option value="yes">可</option>
@@ -1124,7 +1124,7 @@ export default function MemberHome({
                           </select>
                         </label>
                         {progressMatParticipation === "conditional" && (
-                          <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                          <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                             条件の詳細
                             <textarea
                               value={progressMatDetail}
@@ -1132,13 +1132,13 @@ export default function MemberHome({
                                 setProgressMatDetail(e.target.value)
                               }
                               rows={2}
-                              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                              className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                             />
                           </label>
                         )}
                       </>
                     )}
-                    <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                    <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                       理由・経過（自由記述）
                       <textarea
                         value={progressNote}
@@ -1149,7 +1149,7 @@ export default function MemberHome({
                             ? "任意で記入できます"
                             : "完治していない理由や現在の状態など"
                         }
-                        className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                        className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                       />
                     </label>
                     <button
@@ -1268,7 +1268,7 @@ export default function MemberHome({
       {!isManager && (
         <>
       {homeSubTab === "daily" && (
-        <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+        <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
           <DailyReport
             profile={profile}
             date={reportDate}
@@ -1284,7 +1284,7 @@ export default function MemberHome({
       )}
 
       {homeSubTab === "injury" && (
-      <section className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+      <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
           怪我の記録・復帰計画
@@ -1300,64 +1300,64 @@ export default function MemberHome({
         {showInjuryForm && (
           <form
             onSubmit={handleSubmitInjury}
-            className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+            className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3"
           >
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               怪我の症状名
               <input
                 type="text"
                 value={injurySymptom}
                 onChange={(e) => setInjurySymptom(e.target.value)}
                 disabled={!!editingInjuryId}
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 disabled:opacity-60"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100 disabled:opacity-60"
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               部位
               <input
                 type="text"
                 value={injuryBodyPart}
                 onChange={(e) => setInjuryBodyPart(e.target.value)}
                 disabled={!!editingInjuryId}
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 disabled:opacity-60"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100 disabled:opacity-60"
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               詳細（任意）
               <textarea
                 value={injuryDetail}
                 onChange={(e) => setInjuryDetail(e.target.value)}
                 disabled={!!editingInjuryId}
                 rows={3}
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 disabled:opacity-60"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100 disabled:opacity-60"
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               完治見込み日（任意）
               <input
                 type="date"
                 value={injuryRecoveryDate}
                 onChange={(e) => setInjuryRecoveryDate(e.target.value)}
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
               />
             </label>
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               手術の可能性
               <select
                 value={injurySurgery}
                 onChange={(e) =>
                   setInjurySurgery(e.target.value as "yes" | "no" | "unknown")
                 }
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
               >
                 <option value="unknown">未定</option>
                 <option value="no">なし</option>
                 <option value="yes">あり</option>
               </select>
             </label>
-            <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               <input
                 type="checkbox"
                 checked={injuryNextHospitalUndetermined}
@@ -1369,17 +1369,17 @@ export default function MemberHome({
               次回通院日は未定
             </label>
             {!injuryNextHospitalUndetermined && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                 次回通院日
                 <input
                   type="date"
                   value={injuryNextHospital}
                   onChange={(e) => setInjuryNextHospital(e.target.value)}
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                  className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                 />
               </label>
             )}
-            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+            <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
               マット参加の可否
               <select
                 value={injuryMatParticipation}
@@ -1388,7 +1388,7 @@ export default function MemberHome({
                     e.target.value as "yes" | "no" | "conditional"
                   )
                 }
-                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
               >
                 <option value="no">非</option>
                 <option value="yes">可</option>
@@ -1396,13 +1396,13 @@ export default function MemberHome({
               </select>
             </label>
             {injuryMatParticipation === "conditional" && (
-              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+              <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                 条件の詳細
                 <textarea
                   value={injuryMatDetail}
                   onChange={(e) => setInjuryMatDetail(e.target.value)}
                   rows={2}
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+                  className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100"
                 />
               </label>
             )}
@@ -1413,7 +1413,7 @@ export default function MemberHome({
                   resetInjuryForm();
                   setShowInjuryForm(false);
                 }}
-                className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
+                className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-2.5 text-sm text-neutral-700 dark:text-neutral-300"
               >
                 キャンセル
               </button>
@@ -1431,7 +1431,7 @@ export default function MemberHome({
         {loadingInjuries ? (
           <p className="text-xs text-neutral-500">読み込み中…</p>
         ) : injuries.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-xs text-neutral-500">
+          <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-xs text-neutral-500">
             報告されている怪我はありません。
           </p>
         ) : (
@@ -1441,15 +1441,15 @@ export default function MemberHome({
               .map((inj) => (
                 <div
                   key={inj.id}
-                  className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm"
+                  className="flex flex-col gap-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-sm"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-neutral-100">
+                    <span className="font-medium text-neutral-900 dark:text-neutral-100">
                       {inj.symptom_name}（{inj.body_part}）
                     </span>
                     <button
                       onClick={() => handleStartEditInjury(inj)}
-                      className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+                      className="shrink-0 rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                     >
                       編集
                     </button>
@@ -1471,31 +1471,31 @@ export default function MemberHome({
                     </p>
                   )}
                   {inj.progress_note && (
-                    <p className="whitespace-pre-wrap text-xs text-neutral-300">
+                    <p className="whitespace-pre-wrap text-xs text-neutral-700 dark:text-neutral-300">
                       {inj.progress_note}
                     </p>
                   )}
                   <button
                     onClick={() => handleMarkRecovered(inj.id)}
-                    className="self-start rounded border border-emerald-800 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-emerald-400 active:bg-emerald-900/40"
+                    className="self-start rounded border border-emerald-300 dark:border-emerald-800 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-emerald-700 dark:text-emerald-400 active:bg-emerald-100 dark:active:bg-emerald-900/40"
                   >
                     完治として報告する
                   </button>
                 </div>
               ))}
             {injuries.filter((inj) => inj.is_recovered).length > 0 && (
-              <details className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-400">
+              <details className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-xs text-neutral-600 dark:text-neutral-400">
                 <summary className="cursor-pointer">過去の怪我情報を見る</summary>
                 <div className="mt-2 flex flex-col gap-2">
                   {injuries
                     .filter((inj) => inj.is_recovered)
                     .map((inj) => (
-                      <div key={inj.id} className="rounded border border-neutral-800 p-2">
-                        <p className="font-medium text-neutral-200">
+                      <div key={inj.id} className="rounded border border-neutral-200 dark:border-neutral-800 p-2">
+                        <p className="font-medium text-neutral-800 dark:text-neutral-200">
                           {inj.symptom_name}（{inj.body_part}）
                         </p>
                         {inj.progress_note && (
-                          <p className="whitespace-pre-wrap text-neutral-400">
+                          <p className="whitespace-pre-wrap text-neutral-600 dark:text-neutral-400">
                             {inj.progress_note}
                           </p>
                         )}

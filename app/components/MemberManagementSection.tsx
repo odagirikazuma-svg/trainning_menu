@@ -358,7 +358,7 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
   return (
     <div className="flex flex-col gap-2">
       {s.errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {s.errorMsg}
         </p>
       )}
@@ -504,7 +504,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
   return (
     <div className="flex flex-col gap-2">
       {s.errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {s.errorMsg}
         </p>
       )}

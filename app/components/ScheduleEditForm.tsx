@@ -618,7 +618,7 @@ export default function ScheduleEditForm({
   return (
     <div className="flex flex-col gap-3">
       {allowModeToggle && (
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
           {(
             [
               { v: "single", label: "単日で設定" },
@@ -632,7 +632,7 @@ export default function ScheduleEditForm({
               className={`rounded-md py-2 font-medium ${
                 mode === opt.v
                   ? "bg-red-600 text-white shadow"
-                  : "text-neutral-400"
+                  : "text-neutral-600 dark:text-neutral-400"
               }`}
             >
               {opt.label}
@@ -643,31 +643,31 @@ export default function ScheduleEditForm({
 
       {mode === "range" && (
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+          <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
             開始日
             <input
               type="date"
               value={rangeStartDate}
               onChange={(e) => setRangeStartDate(e.target.value)}
-              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+              className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
             />
           </label>
-          <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+          <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
             終了日
             <input
               type="date"
               value={rangeEndDate}
               onChange={(e) => setRangeEndDate(e.target.value)}
-              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+              className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
             />
           </label>
         </div>
       )}
 
       <div className="flex flex-col gap-1">
-        <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">区分</span>
+        <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">区分</span>
         <div
-          className={`grid gap-1 rounded-lg bg-neutral-800 p-1 text-[length:calc(11px+var(--fs-add))] ${
+          className={`grid gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-[length:calc(11px+var(--fs-add))] ${
             mode === "single" ? "grid-cols-3" : "grid-cols-4"
           }`}
         >
@@ -694,7 +694,7 @@ export default function ScheduleEditForm({
               className={`rounded-md py-2 font-medium ${
                 category === opt.v
                   ? "bg-red-600 text-white shadow"
-                  : "text-neutral-400"
+                  : "text-neutral-600 dark:text-neutral-400"
               }`}
             >
               {opt.label}
@@ -704,7 +704,7 @@ export default function ScheduleEditForm({
       </div>
 
       {category === "off" && (
-        <label className="flex items-center gap-2 text-xs text-neutral-300">
+        <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300">
           <input
             type="checkbox"
             checked={offBothLocations}
@@ -726,12 +726,12 @@ export default function ScheduleEditForm({
                 ? "出稽古先（例：◯◯大学、◯◯高校）"
                 : "試合名（例：インカレ・県大会）"
           }
-          className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+          className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
         />
       )}
 
       {(category === "camp" || category === "match" || category === "away") && (
-        <label className="flex items-center gap-2 text-xs text-neutral-300">
+        <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300">
           <input
             type="checkbox"
             checked={shareBothLocations}
@@ -742,7 +742,7 @@ export default function ScheduleEditForm({
       )}
 
       {(category === "camp" || category === "match" || category === "away") && (
-        <label className="flex items-center gap-2 text-xs text-neutral-300">
+        <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300">
           <input
             type="checkbox"
             checked={includeSessions}
@@ -759,10 +759,10 @@ export default function ScheduleEditForm({
           {sessions.map((s, idx) => (
             <div
               key={idx}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2.5"
+              className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 p-2.5"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-400">
+                <span className="text-[length:calc(11px+var(--fs-add))] font-semibold text-neutral-600 dark:text-neutral-400">
                   第{idx + 1}セッション
                 </span>
                 {(mode === "range" ? sessions.length > 1 : true) && (
@@ -788,14 +788,14 @@ export default function ScheduleEditForm({
                           : s.isFlexibleTime,
                     })
                   }
-                  className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                  className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
                 >
                   <option value="mat">マット</option>
                   <option value="running">ラン</option>
                   <option value="weight">ウェイト</option>
                 </select>
                 {mode === "single" && s.isFlexibleTime ? (
-                  <div className="flex items-center rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-500">
+                  <div className="flex items-center rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-500">
                     時間は各自
                   </div>
                 ) : (
@@ -806,7 +806,7 @@ export default function ScheduleEditForm({
                 )}
               </div>
               {mode === "single" && s.type !== "mat" && (
-                <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                   <input
                     type="checkbox"
                     checked={s.isFlexibleTime}
@@ -818,7 +818,7 @@ export default function ScheduleEditForm({
                 </label>
               )}
               {category === "camp" || category === "away" ? (
-                <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                   練習場所（任意）
                   <input
                     type="text"
@@ -827,12 +827,12 @@ export default function ScheduleEditForm({
                       updateSession(idx, { locationNote: e.target.value })
                     }
                     placeholder="例：山梨県立武道館、◯◯大学 など"
-                    className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                    className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
                   />
                 </label>
               ) : mode === "single" ? (
                 <>
-                  <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                  <label className="flex items-center gap-2 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                     <input
                       type="checkbox"
                       checked={s.isJoint}
@@ -850,7 +850,7 @@ export default function ScheduleEditForm({
                           jointLocation: e.target.value as Location,
                         })
                       }
-                      className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100"
+                      className="rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
                     >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
@@ -866,7 +866,7 @@ export default function ScheduleEditForm({
           {sessions.length < 2 && (
             <button
               onClick={addSession}
-              className="self-start text-xs font-medium text-neutral-300"
+              className="self-start text-xs font-medium text-neutral-700 dark:text-neutral-300"
             >
               ＋ セッションを追加
             </button>
@@ -875,18 +875,18 @@ export default function ScheduleEditForm({
       )}
 
       {mode === "single" && (
-        <div className="flex flex-col gap-2 rounded-lg border border-neutral-800 p-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 p-2">
           <button
             onClick={() => {
               setCopyResult(null);
               setShowCopyToDates(true);
             }}
-            className="self-start text-xs font-medium text-neutral-300 underline"
+            className="self-start text-xs font-medium text-neutral-700 dark:text-neutral-300 underline"
           >
             この内容を他の日にもコピーする
           </button>
           {copyResult && (
-            <p className="rounded bg-emerald-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-emerald-400">
+            <p className="rounded bg-emerald-50 dark:bg-emerald-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
               {copyResult}
             </p>
           )}
@@ -896,11 +896,11 @@ export default function ScheduleEditForm({
               onClick={() => !savingCopyToDates && setShowCopyToDates(false)}
             >
               <div
-                className="flex max-h-[90vh] w-full max-w-sm flex-col gap-3 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-lg"
+                className="flex max-h-[90vh] w-full max-w-sm flex-col gap-3 overflow-y-auto rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-4 shadow-lg"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-100">
+                  <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                     コピー先の日を選択
                   </h3>
                   <button
@@ -928,7 +928,7 @@ export default function ScheduleEditForm({
                       <button
                         key={d}
                         onClick={() => handleToggleCopyDate(d)}
-                        className="flex items-center gap-1 rounded bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                        className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-950/40 px-2 py-1 text-xs text-red-700 dark:text-red-400"
                       >
                         {formatMonthDay(d)}
                         <span className="text-red-500">✕</span>
@@ -937,7 +937,7 @@ export default function ScheduleEditForm({
                   </div>
                 )}
                 {errorMsg && (
-                  <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">
+                  <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-700 dark:text-red-400">
                     {errorMsg}
                   </p>
                 )}
@@ -954,7 +954,7 @@ export default function ScheduleEditForm({
                   <button
                     onClick={() => setShowCopyToDates(false)}
                     disabled={savingCopyToDates}
-                    className="flex-1 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-300"
+                    className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-2 text-xs text-neutral-700 dark:text-neutral-300"
                   >
                     キャンセル
                   </button>
@@ -966,10 +966,10 @@ export default function ScheduleEditForm({
       )}
 
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-400">{errorMsg}</p>
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
       {rangeResult && (
-        <p className="rounded bg-emerald-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-emerald-400">
+        <p className="rounded bg-emerald-50 dark:bg-emerald-950/40 p-2 text-[length:calc(11px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
           {rangeResult}
         </p>
       )}
@@ -988,7 +988,7 @@ export default function ScheduleEditForm({
         </button>
         <button
           onClick={onCancel}
-          className="flex-1 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-300"
+          className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-2 text-xs text-neutral-700 dark:text-neutral-300"
         >
           キャンセル
         </button>
@@ -1013,7 +1013,7 @@ export function ScheduleTimeSelect({
       <select
         value={hour}
         onChange={(e) => onChange(`${e.target.value}:${minute || "00"}`)}
-        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
+        className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
       >
         {hours.map((h) => (
           <option key={h} value={h}>
@@ -1024,7 +1024,7 @@ export function ScheduleTimeSelect({
       <select
         value={minute}
         onChange={(e) => onChange(`${hour || "10"}:${e.target.value}`)}
-        className="flex-1 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-100"
+        className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-1.5 py-1.5 text-xs text-neutral-900 dark:text-neutral-100"
       >
         {minutes.map((m) => (
           <option key={m} value={m}>
@@ -1068,18 +1068,18 @@ function CopyDatePicker({
           type="button"
           onClick={() => onCursorChange(new Date(year, month - 1, 1))}
           aria-label="前の月"
-          className="px-3 py-1 text-sm text-neutral-300"
+          className="px-3 py-1 text-sm text-neutral-700 dark:text-neutral-300"
         >
           ＜
         </button>
-        <span className="text-sm font-semibold text-neutral-100">
+        <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
           {year}年{month + 1}月
         </span>
         <button
           type="button"
           onClick={() => onCursorChange(new Date(year, month + 1, 1))}
           aria-label="次の月"
-          className="px-3 py-1 text-sm text-neutral-300"
+          className="px-3 py-1 text-sm text-neutral-700 dark:text-neutral-300"
         >
           ＞
         </button>
@@ -1090,7 +1090,7 @@ function CopyDatePicker({
             key={w}
             className={
               i === 0
-                ? "text-red-400"
+                ? "text-red-700 dark:text-red-400"
                 : i === 6
                   ? "text-blue-400"
                   : "text-neutral-500"
@@ -1112,10 +1112,10 @@ function CopyDatePicker({
               onClick={() => onToggle(key)}
               className={`flex h-9 items-center justify-center rounded text-xs ${
                 isSource
-                  ? "border border-neutral-600 text-neutral-600"
+                  ? "border border-neutral-300 dark:border-neutral-600 text-neutral-600"
                   : isSelected
                     ? "bg-red-600 font-semibold text-white"
-                    : "border border-neutral-800 text-neutral-200 active:bg-neutral-800"
+                    : "border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-800"
               }`}
             >
               {day}

@@ -161,7 +161,7 @@ export function BodyCompositionTab({
   return (
     <div className="flex flex-col gap-3">
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -179,7 +179,7 @@ export function BodyCompositionTab({
               className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                 new Date().toISOString().slice(0, 10) > openEvent.deadline
                   ? "bg-red-600 text-white"
-                  : "bg-amber-800/60 text-amber-300"
+                  : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
               }`}
             >
               未提出
@@ -306,14 +306,14 @@ export function BodyCompositionTab({
                             key={r.id}
                             className={`flex flex-col gap-0.5 rounded-lg border p-2 text-xs ${
                               r.id === profile.id
-                                ? "border-red-600/60 bg-red-950/10"
+                                ? "border-red-600/60 bg-red-50 dark:bg-red-950/10"
                                 : "border-border-color bg-background"
                             }`}
                           >
                             <span className="font-medium text-foreground">
                               {r.display_name}
                               {r.id === profile.id && (
-                                <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-400">
+                                <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-red-700 dark:text-red-400">
                                   (自分)
                                 </span>
                               )}

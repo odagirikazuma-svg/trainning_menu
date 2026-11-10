@@ -374,8 +374,8 @@ function NextMatchSection() {
       {loading ? (
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : nextMatch ? (
-        <div className="relative rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-center">
-          <p className="text-xs text-red-400">次の試合【{nextMatch.name}】まで</p>
+        <div className="relative rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-4 text-center">
+          <p className="text-xs text-red-700 dark:text-red-400">次の試合【{nextMatch.name}】まで</p>
           <p className="text-3xl font-bold text-red-500">あと{matchDays}日</p>
           <p className="text-[length:calc(11px+var(--fs-add))] text-red-500">{formatMonthDay(nextMatch.date)}</p>
 
@@ -388,7 +388,7 @@ function NextMatchSection() {
                 type="date"
                 value={editDate}
                 onChange={(e) => setEditDate(e.target.value)}
-                className="rounded-lg border border-red-800 bg-neutral-900 px-3 py-2 text-sm"
+                className="rounded-lg border border-red-300 dark:border-red-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm"
                 required
               />
               <div className="flex gap-2">
@@ -401,14 +401,14 @@ function NextMatchSection() {
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="rounded-lg border border-red-800 px-3 py-1.5 text-xs text-red-400 active:bg-red-900/40"
+                  className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 active:bg-red-100 dark:active:bg-red-900/40"
                 >
                   削除する
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
-                  className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 active:bg-neutral-800"
+                  className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                 >
                   閉じる
                 </button>
@@ -417,42 +417,42 @@ function NextMatchSection() {
           ) : (
             <button
               onClick={startEditing}
-              className="absolute bottom-2 right-2 rounded border border-red-900/60 bg-neutral-900 px-2 py-1 text-[length:calc(10px+var(--fs-add))] text-red-500 active:bg-red-900/40"
+              className="absolute bottom-2 right-2 rounded border border-red-200 dark:border-red-900/60 bg-neutral-50 dark:bg-neutral-900 px-2 py-1 text-[length:calc(10px+var(--fs-add))] text-red-500 active:bg-red-100 dark:active:bg-red-900/40"
             >
               編集
             </button>
           )}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-neutral-700 p-4 text-center text-xs text-neutral-500">
+        <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-4 text-center text-xs text-neutral-500">
           次の試合はまだ登録されていません。
         </p>
       )}
 
       <button
         onClick={() => setShowForm((v) => !v)}
-        className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-400 active:text-red-900"
+        className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-700 dark:text-red-400 active:text-red-900"
       >
         {showForm ? "キャンセル" : "＋ 試合を登録する"}
       </button>
       {showForm && (
         <form
           onSubmit={handleAddMatch}
-          className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+          className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3"
         >
           <input
             type="text"
             placeholder="試合名（例：全日本学生選手権）"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
             required
           />
           <input
             type="date"
             value={newDate}
             onChange={(e) => setNewDate(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+            className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
             required
           />
           <button
@@ -465,7 +465,7 @@ function NextMatchSection() {
       )}
 
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">{errorMsg}</p>
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
     </>
   );
@@ -599,7 +599,7 @@ function NotificationSection() {
         )}
       </div>
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -685,7 +685,7 @@ function IconSection() {
         </div>
       </div>
       {errorMsg && (
-        <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+        <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
           {errorMsg}
         </p>
       )}
@@ -771,7 +771,7 @@ function SectionRegistrationSection({
             className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
               location === loc
                 ? "border-red-600 bg-red-600 text-white"
-                : "border-neutral-700 text-neutral-400 active:bg-neutral-800"
+                : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 active:bg-neutral-100 dark:active:bg-neutral-800"
             }`}
           >
             {locationLabel[loc]}
@@ -796,7 +796,7 @@ function SectionRegistrationSection({
           </p>
           <button
             onClick={() => setSelectedDate(null)}
-            className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 underline"
+            className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 underline"
           >
             日付選択を解除
           </button>

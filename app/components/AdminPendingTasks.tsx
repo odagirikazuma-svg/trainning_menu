@@ -323,7 +323,7 @@ export default function AdminPendingTasks({
                     {kindLabel[i.kind]}
                   </span>
                   <span className="flex-1 text-foreground">{i.label}</span>
-                  {i.date && <span className="text-neutral-400">›</span>}
+                  {i.date && <span className="text-neutral-600 dark:text-neutral-400">›</span>}
                 </button>
               </li>
             ))}

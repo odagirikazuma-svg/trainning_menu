@@ -897,9 +897,9 @@ export default function TrainingBoardSupabase({
   const practiceSection = (
     <div ref={practiceSectionRef}>
         {isCoachView && (
-          <section className="mb-3 flex flex-col gap-2 rounded-lg border border-neutral-800 p-3">
+          <section className="mb-3 flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-neutral-400">
+              <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                 {locationLabel[activeLocation]}・{formatMonthDay(viewDate)}の時間割
                 {viewDateSchedule && !viewDateSchedule.is_off && (
                   <span className="ml-1 font-normal text-neutral-500">
@@ -923,7 +923,7 @@ export default function TrainingBoardSupabase({
                   setShowBulkScheduleForm(false);
                   setEditingViewDateSchedule((v) => !v);
                 }}
-                className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-300 underline"
+                className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-700 dark:text-neutral-300 underline"
               >
                 {editingViewDateSchedule
                   ? "閉じる"
@@ -960,7 +960,7 @@ export default function TrainingBoardSupabase({
                 setEditingViewDateSchedule(false);
                 setShowBulkScheduleForm((v) => !v);
               }}
-              className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-400 underline"
+              className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 underline"
             >
               {showBulkScheduleForm
                 ? "期間まとめて設定を閉じる"
@@ -988,7 +988,7 @@ export default function TrainingBoardSupabase({
           {showNewForm && canCreateMenu(profile.role) && (
             <form
               onSubmit={handleCreateMenu}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+              className="flex flex-col gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3"
             >
               {confirmingNew ? (
                 <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-950/40 p-3 text-sm">
@@ -1013,7 +1013,7 @@ export default function TrainingBoardSupabase({
                             }`
                           : newMenuType === "joint" && "・全体練習"}
                       </p>
-                      <p className="whitespace-pre-wrap text-neutral-100">
+                      <p className="whitespace-pre-wrap text-neutral-900 dark:text-neutral-100">
                         {newContent}
                       </p>
                     </>
@@ -1025,12 +1025,12 @@ export default function TrainingBoardSupabase({
                     type="date"
                     value={newDate}
                     onChange={(e) => setNewDate(e.target.value)}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
                     required
                   />
 
                   {isAwayLikeForViewDate ? (
-                    <p className="rounded-lg bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-400">
+                    <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-700 dark:text-red-400">
                       {dayTypeLabel[viewDateSchedule!.day_type]}
                       {matSessionForViewDate?.location_note
                         ? `（${matSessionForViewDate.location_note}）`
@@ -1043,7 +1043,7 @@ export default function TrainingBoardSupabase({
                         : `このメニューは${locationLabel[activeLocation]}メンバーのみに登録されます`}
                     </p>
                   ) : (
-                    <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                    <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
                       {(
                         [
                           { v: "normal", label: "通常" },
@@ -1058,7 +1058,7 @@ export default function TrainingBoardSupabase({
                           className={`flex-1 rounded-md py-2 font-medium ${
                             newMenuType === opt.v
                               ? "bg-red-600 shadow text-white"
-                              : "text-neutral-400"
+                              : "text-neutral-600 dark:text-neutral-400"
                           }`}
                         >
                           {opt.label}
@@ -1068,7 +1068,7 @@ export default function TrainingBoardSupabase({
                   )}
 
                   {newMenuType === "off" ? (
-                    <label className="flex items-center gap-2 text-sm text-neutral-200">
+                    <label className="flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
                       <input
                         type="checkbox"
                         checked={newOffBothLocations}
@@ -1081,7 +1081,7 @@ export default function TrainingBoardSupabase({
                     </label>
                   ) : (
                     <>
-                      <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                      <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                         開始時刻
                         <TimeSelect
                           value={newStartTime}
@@ -1089,9 +1089,9 @@ export default function TrainingBoardSupabase({
                         />
                       </label>
                       {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                        <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                           開催拠点
-                          <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-xs">
+                          <div className="flex gap-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs">
                             {locations.map((loc) => (
                               <button
                                 key={loc}
@@ -1100,7 +1100,7 @@ export default function TrainingBoardSupabase({
                                 className={`flex-1 rounded-md py-2 font-medium ${
                                   newJointLocation === loc
                                     ? "bg-red-600 text-white shadow"
-                                    : "text-neutral-400"
+                                    : "text-neutral-600 dark:text-neutral-400"
                                 }`}
                               >
                                 {locationLabel[loc]}
@@ -1114,11 +1114,11 @@ export default function TrainingBoardSupabase({
                         value={newContent}
                         onChange={(e) => setNewContent(e.target.value)}
                         rows={4}
-                        className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                        className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
                         required
                       />
                       {newMenuType === "joint" && !isAwayLikeForViewDate && (
-                        <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                        <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                           {newJointLocation === activeLocation
                             ? "もう一方の拠点はこの練習に合流します"
                             : `${locationLabel[newJointLocation]}で開催され、${locationLabel[activeLocation]}の部員もこの練習に合流します`}
@@ -1134,7 +1134,7 @@ export default function TrainingBoardSupabase({
                   <button
                     type="button"
                     onClick={() => setConfirmingNew(false)}
-                    className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
+                    className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-2.5 text-sm text-neutral-700 dark:text-neutral-300"
                   >
                     戻って修正
                   </button>
@@ -1150,7 +1150,7 @@ export default function TrainingBoardSupabase({
                   <button
                     type="button"
                     onClick={() => setShowNewForm(false)}
-                    className="flex-1 rounded-lg border border-neutral-700 py-3 text-sm text-neutral-300"
+                    className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-3 text-sm text-neutral-700 dark:text-neutral-300"
                   >
                     キャンセル
                   </button>
@@ -1174,7 +1174,7 @@ export default function TrainingBoardSupabase({
         </div>
 
       {isCoachView && (
-        <h3 className="text-xs font-semibold text-neutral-400">
+        <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
           {formatMonthDay(viewDate)}の練習メニュー
         </h3>
       )}
@@ -1202,18 +1202,18 @@ export default function TrainingBoardSupabase({
             </button>
           </div>
         ) : selected?.is_off ? (
-          <section className="rounded-lg border border-neutral-700 bg-neutral-800 p-4">
-            <div className="mb-2 text-xs text-neutral-400">
+          <section className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 p-4">
+            <div className="mb-2 text-xs text-neutral-600 dark:text-neutral-400">
               {locationLabel[selected.location]}・{selected.date}
               ・作成者: {selected.creator?.display_name ?? "不明"}
             </div>
-            <p className="mb-3 text-base font-bold text-neutral-200">
+            <p className="mb-3 text-base font-bold text-neutral-800 dark:text-neutral-200">
               {formatMonthDay(selected.date)}はオフです
             </p>
             {canCreateMenu(profile.role) && (
               <button
                 onClick={() => handleDeleteMenu(selected.id)}
-                className="rounded-lg border border-neutral-400 px-3 py-2 text-xs text-neutral-300 active:bg-neutral-800"
+                className="rounded-lg border border-neutral-400 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
               >
                 オフを取り消す
               </button>
@@ -1228,10 +1228,10 @@ export default function TrainingBoardSupabase({
                     type="date"
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
                     required
                   />
-                  <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+                  <label className="flex flex-col text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
                     開始時刻
                     <TimeSelect
                       value={editStartTime}
@@ -1242,14 +1242,14 @@ export default function TrainingBoardSupabase({
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                     rows={4}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
                     required
                   />
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setEditingMenu(false)}
-                      className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-300"
+                      className="flex-1 rounded-lg border border-neutral-300 dark:border-neutral-700 py-2.5 text-sm text-neutral-700 dark:text-neutral-300"
                     >
                       キャンセル
                     </button>
@@ -1285,7 +1285,7 @@ export default function TrainingBoardSupabase({
                       {selected.content}
                     </p>
                   ) : (
-                    <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-sm text-neutral-400">
+                    <p className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-sm text-neutral-600 dark:text-neutral-400">
                       このセッションのメニューはまだ書かれていません。
                       {!isCoachView && "練習後の実施報告・未実施報告は、このまま提出できます。"}
                     </p>
@@ -1297,7 +1297,7 @@ export default function TrainingBoardSupabase({
                         {selected.content ? (
                           <button
                             onClick={() => startEditingMenu(selected)}
-                            className="shrink-0 rounded border border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-300 active:bg-neutral-800"
+                            className="shrink-0 rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800"
                           >
                             編集する
                           </button>
@@ -1317,7 +1317,7 @@ export default function TrainingBoardSupabase({
 
             {/* 意見・コメント */}
             <section className="flex flex-col gap-3">
-              <h3 className="text-xs font-semibold text-neutral-400">
+              <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                 意見・コメント
               </h3>
               <ul className="flex flex-col gap-2">
@@ -1333,7 +1333,7 @@ export default function TrainingBoardSupabase({
               {!showCommentForm ? (
                 <button
                   onClick={() => setShowCommentForm(true)}
-                  className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-400 underline"
+                  className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-red-700 dark:text-red-400 underline"
                 >
                   意見・コメントする
                 </button>
@@ -1344,7 +1344,7 @@ export default function TrainingBoardSupabase({
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="意見・コメントを入力"
                     rows={3}
-                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+                    className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2.5 text-sm text-neutral-900 dark:text-neutral-100"
                   />
                   <button
                     type="submit"
@@ -1386,9 +1386,9 @@ export default function TrainingBoardSupabase({
               </section>
             )}
             {/* 実施報告 */}
-            <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
+            <section className="flex flex-col gap-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-neutral-400">
+                <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                   実施報告
                 </h3>
                 <button
@@ -1436,7 +1436,7 @@ export default function TrainingBoardSupabase({
                             return next;
                           })
                         }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-100 dark:active:bg-neutral-800"
                       >
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
@@ -1494,8 +1494,8 @@ export default function TrainingBoardSupabase({
             </section>
 
             {/* 未実施報告 */}
-            <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-              <h3 className="text-xs font-semibold text-neutral-400">
+            <section className="flex flex-col gap-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+              <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                 未実施報告（授業・通院などで参加できなかった場合）
               </h3>
               <div className="flex flex-col gap-1.5">
@@ -1535,7 +1535,7 @@ export default function TrainingBoardSupabase({
                             return next;
                           })
                         }
-                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-800"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-left text-xs active:bg-neutral-100 dark:active:bg-neutral-800"
                       >
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span className="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100">
@@ -1599,8 +1599,8 @@ export default function TrainingBoardSupabase({
               viewDateSchedule?.sessions.some(
                 (s) => s.session_type !== "mat"
               ) && (
-                <section className="flex flex-col gap-3 border-t border-neutral-800 pt-4">
-                  <h3 className="text-xs font-semibold text-neutral-400">
+                <section className="flex flex-col gap-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+                  <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                     トレ報（{locationLabel[activeLocation]}）
                   </h3>
                   {loadingDayWeightLogs ? (
@@ -1614,16 +1614,16 @@ export default function TrainingBoardSupabase({
                       {dayWeightLogs.map((log) => (
                         <div
                           key={log.author_id}
-                          className="rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm"
+                          className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-sm"
                         >
-                          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
+                          <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                             {log.display_name}
-                            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-400">
+                            <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400">
                               {trainingTypeLabel[log.type]}
                               {log.title && `・${log.title}`}
                             </span>
                           </p>
-                          <p className="whitespace-pre-wrap text-neutral-100">
+                          <p className="whitespace-pre-wrap text-neutral-900 dark:text-neutral-100">
                             {log.content}
                           </p>
                         </div>
@@ -1631,7 +1631,7 @@ export default function TrainingBoardSupabase({
                     </div>
                   )}
                   <div>
-                    <p className="mb-1.5 text-xs font-semibold text-neutral-400">
+                    <p className="mb-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
                       未提出者
                     </p>
                     {(() => {
@@ -1652,7 +1652,7 @@ export default function TrainingBoardSupabase({
                           {missing.map((m) => (
                             <span
                               key={m.id}
-                              className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                              className="rounded border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-2 py-1 text-xs text-red-700 dark:text-red-400"
                             >
                               {m.display_name}
                             </span>
@@ -1667,7 +1667,7 @@ export default function TrainingBoardSupabase({
             )}
           </>
         ) : (
-          <div className="rounded-lg border border-neutral-800 p-4">
+          <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4">
             <div className="mt-2 mb-1 text-xs text-neutral-500">
               {locationLabel[activeLocation]}・{viewDate}
               {matSessionForViewDate?.start_time &&
@@ -1675,7 +1675,7 @@ export default function TrainingBoardSupabase({
             </div>
             {matSessionForViewDate ? (
               <div>
-                <p className="mb-3 text-sm text-neutral-400">
+                <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
                   このセッションのメニューはまだ作成されていません
                 </p>
                 {canCreateMenu(profile.role) && (
@@ -1721,17 +1721,17 @@ export default function TrainingBoardSupabase({
   useSubNav(locationSubNav);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-800 dark:text-neutral-200">
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         {errorMsg && (
-          <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
+          <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
             {errorMsg}
           </p>
         )}
 
         {/* 練習スケジュール */}
         <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold text-neutral-400">
+          <h3 className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">
             練習スケジュール
           </h3>
           <MenuCalendar
@@ -1771,7 +1771,7 @@ export default function TrainingBoardSupabase({
                 type="button"
                 onClick={() => setShowMissingPopup(false)}
                 aria-label="閉じる"
-                className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 active:bg-neutral-800/50"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-500 active:bg-neutral-100 dark:active:bg-neutral-800/50"
               >
                 ✕
               </button>
@@ -1792,7 +1792,7 @@ export default function TrainingBoardSupabase({
                   {missing.map((m) => (
                     <span
                       key={m.id}
-                      className="rounded border border-red-900/60 bg-red-950/40 px-2 py-1 text-xs text-red-400"
+                      className="rounded border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-2 py-1 text-xs text-red-700 dark:text-red-400"
                     >
                       {m.display_name}
                     </span>
