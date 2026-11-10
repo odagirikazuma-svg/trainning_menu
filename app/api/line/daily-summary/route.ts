@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildDailySummary } from "../../../lib/dailySummary";
 import { lineConfigured, linePush } from "../../../lib/line";
+import { appButton } from "../../../lib/liffConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   for (const t of (teams ?? []) as { id: string }[]) {
     const text = await buildDailySummary(admin, t.id, appUrl(request));
     for (const dest of to) {
-      await linePush(dest, [{ type: "text", text }]);
+      await linePush(dest, [{ type: "text", text }, appButton("/admin#absence")]);
       sent++;
     }
   }
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     );
   }
   try {
-    for (const dest of to) await linePush(dest, [{ type: "text", text }]);
+    for (const dest of to) await linePush(dest, [{ type: "text", text }, appButton("/admin#absence")]);
   } catch (e) {
     return NextResponse.json(
       { text, error: e instanceof Error ? e.message : "送信に失敗しました" },

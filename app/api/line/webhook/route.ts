@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  coachLineUserIds,
-  lineConfigured,
-  lineReply,
-  verifyLineSignature,
-} from "../../../lib/line";
+import { lineConfigured, lineReply, verifyLineSignature, type LineMessage } from "../../../lib/line";
+import { approve, findStaff, replyInjuries, replyPending, replyStatus } from "../../../lib/lineCoach";
 import { buildDailySummary, buildTomorrowMenuText } from "../../../lib/dailySummary";
+import { appButton } from "../../../lib/liffConfig";
 
 // アプリのデータを読む（サービスロール。無い環境では null）
 async function adminContext() {
@@ -20,25 +17,54 @@ async function adminContext() {
 }
 
 const NOT_READY = "準備中です（アプリ側の設定がまだ終わっていません）。";
+const STAFF_ONLY = "このボタンは監督・コーチ専用です。設定の「LINE連携」で、アプリのアカウントとLINEを連携してください。";
 
-async function handleAction(action: string, userId: string | undefined, origin: string) {
+async function handleAction(
+  data: URLSearchParams,
+  userId: string | undefined,
+  origin: string
+): Promise<LineMessage[] | null> {
+  const action = data.get("action");
+  if (!action) return null;
+  const ctx = await adminContext();
+  if (!ctx) return [{ type: "text", text: NOT_READY }];
+  const { admin, teamId } = ctx;
+
   if (action === "menu_tomorrow") {
-    const ctx = await adminContext();
-    if (!ctx) return NOT_READY;
-    return buildTomorrowMenuText(ctx.admin, ctx.teamId);
+    return [{ type: "text", text: await buildTomorrowMenuText(admin, teamId) }, appButton("/board", "練習予定表はアプリで確認できます")];
   }
-  if (action === "summary") {
-    if (!userId || !coachLineUserIds().includes(userId)) {
-      return "このボタンは監督・コーチ専用です。";
-    }
-    const ctx = await adminContext();
-    if (!ctx) return NOT_READY;
-    return buildDailySummary(ctx.admin, ctx.teamId, process.env.APP_URL || origin);
+
+  // ここから下は監督・コーチ用
+  const staff = await findStaff(admin, userId);
+  if (!staff) return [{ type: "text", text: STAFF_ONLY }];
+  switch (action) {
+    case "summary":
+      return [
+        { type: "text", text: await buildDailySummary(admin, teamId, process.env.APP_URL || origin) },
+        appButton("/admin#absence"),
+      ];
+    case "pending":
+      return replyPending(admin, teamId, staff);
+    case "approve":
+      return approve(admin, teamId, staff, data.get("id"));
+    case "approve_all":
+      return approve(admin, teamId, staff, null);
+    case "status":
+      return replyStatus(admin, teamId);
+    case "injuries":
+      return replyInjuries(admin, teamId);
   }
   return null;
 }
 
-export const dynamic = "force-dynamic";
+// トークに直接打った言葉でも同じ返事をする
+const KEYWORDS: Record<string, string> = {
+  明日のメニュー: "menu_tomorrow",
+  今日のまとめ: "summary",
+  承認待ち: "pending",
+  提出状況: "status",
+  怪我の状況: "injuries",
+};
 
 type LineSource = { type: "user" | "group" | "room"; userId?: string; groupId?: string; roomId?: string };
 type LineEvent = {
@@ -77,17 +103,15 @@ export async function POST(request: NextRequest) {
       if (!ev.replyToken) return;
       try {
         // リッチメニューのボタン（返信なので通数にカウントされない）
-        const action =
+        const params =
           ev.type === "postback"
-            ? new URLSearchParams(ev.postback?.data ?? "").get("action")
-            : ev.type === "message" && ev.message?.text?.trim() === "明日のメニュー"
-              ? "menu_tomorrow"
-              : ev.type === "message" && ev.message?.text?.trim() === "今日のまとめ"
-                ? "summary"
-                : null;
-        if (action) {
-          const text = await handleAction(action, ev.source?.userId, request.nextUrl.origin);
-          if (text) await lineReply(ev.replyToken, [{ type: "text", text }]);
+            ? new URLSearchParams(ev.postback?.data ?? "")
+            : ev.type === "message" && KEYWORDS[ev.message?.text?.trim() ?? ""]
+              ? new URLSearchParams({ action: KEYWORDS[ev.message!.text!.trim()] })
+              : null;
+        if (params) {
+          const messages = await handleAction(params, ev.source?.userId, request.nextUrl.origin);
+          if (messages) await lineReply(ev.replyToken, messages);
           return;
         }
         if (ev.type === "join") {

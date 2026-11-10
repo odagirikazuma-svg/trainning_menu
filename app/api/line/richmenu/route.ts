@@ -43,13 +43,14 @@ export async function POST(request: NextRequest) {
     { type: "uri", label: "設定", uri: open("/settings") },
   ];
   const coachActions: RichMenuAction[] = [
-    { type: "uri", label: "承認待ち", uri: open("/admin", "#absence") },
+    { type: "postback", label: "承認待ち", data: "action=pending", displayText: "承認待ち" },
     { type: "postback", label: "今日のまとめ", data: "action=summary", displayText: "今日のまとめ" },
-    { type: "uri", label: "提出状況", uri: open("/admin") },
-    { type: "uri", label: "怪我の管理", uri: open("/admin?tab=injuries") },
+    { type: "postback", label: "提出状況", data: "action=status", displayText: "提出状況" },
+    { type: "postback", label: "怪我の状況", data: "action=injuries", displayText: "怪我の状況" },
     { type: "uri", label: "練習予定表", uri: open("/board") },
-    { type: "uri", label: "部員一覧", uri: open("/team") },
+    { type: "uri", label: "アプリを開く", uri: open("/admin") },
   ];
+
 
   try {
     const [memberImg, coachImg] = await Promise.all(

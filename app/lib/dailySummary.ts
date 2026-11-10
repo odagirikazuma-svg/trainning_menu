@@ -2,7 +2,6 @@
 // 管理者のトークンで作った Supabase クライアント（RLS で同じチームが見える）か、
 // サービスロールのクライアントのどちらでも動く。
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { liffUrl } from "./liffConfig";
 import {
   absencePlanLabel,
   absenceReasonText,
@@ -255,10 +254,7 @@ export async function buildDailySummary(
     )
   );
 
-  lines.push("");
-  // LINEの中でアプリを開き、LINEでログインしてから管理ページへ
   void appUrl;
-  lines.push(`▶ アプリで確認・承認\n${liffUrl("/admin#absence")}`);
 
   const text = lines.join("\n");
   return text.length > 4900 ? `${text.slice(0, 4890)}\n…（続きはアプリで）` : text;
