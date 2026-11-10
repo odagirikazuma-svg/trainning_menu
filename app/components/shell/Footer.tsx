@@ -6,6 +6,7 @@ import type { Profile } from "../AuthGate";
 import { isStaffRole } from "../../lib/types";
 import { useMyTaskCount } from "./useMyTaskCount";
 import { useMyEventTaskCount } from "./useMyEventTaskCount";
+import { useBoardTasks } from "./useBoardTasks";
 import { useGoalTasks } from "./useGoalTasks";
 
 type TabItem = {
@@ -59,6 +60,8 @@ export default function Footer({ profile }: { profile: Profile }) {
   const eventTaskCount = useMyEventTaskCount(profile);
   // 年間目標・月間目標が未設定なら、設定アイコンに赤丸を出す
   const goalTaskCount = useGoalTasks(profile).length;
+  // 練習予定表：メニュー未登録・練習後の実施報告がまだ
+  const boardTaskCount = useBoardTasks(profile).length;
   // 管理者・マネージャーは管理者用のタブ構成（マネージャーは閲覧のみ）
   const isStaff = isStaffRole(profile.role);
 
@@ -78,7 +81,7 @@ export default function Footer({ profile }: { profile: Profile }) {
           badge: taskCount,
         },
         { href: "/team", label: "チーム", icon: "/icons/nav-team-chuo.png" },
-        { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png" },
+        { href: "/board", label: "練習予定表", icon: "/icons/nav-board.png", badge: boardTaskCount },
         {
           href: "/events",
           label: "イベント",

@@ -27,6 +27,7 @@ import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
 import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
 import TemplatePicker from "./board/TemplatePicker";
+import { notifyBoardTasksChanged, useBoardTasks, type BoardTask } from "./shell/useBoardTasks";
 import { toRow, type MenuItemDraft } from "../lib/menuItems";
 import { CommentItem, ReportThread, toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
 
@@ -91,6 +92,8 @@ export default function TrainingBoardSupabase({
   });
   const usedInitialJump = useRef(false);
   const pendingJumpDateRef = useRef<string | null>(null);
+  // タスクから開いたときに選ぶメニュー
+  const pendingMenuIdRef = useRef<string | null>(null);
   const practiceSectionRef = useRef<HTMLDivElement>(null);
   // 管理者・マネージャーは管理者用の表示（時間割・未提出者・トレ報の一覧など）。
   // 時間割（セクション）の登録・編集ができるのは管理者だけ。
@@ -299,6 +302,10 @@ export default function TrainingBoardSupabase({
         : (pendingDate ?? toDateKey(new Date()));
       usedInitialJump.current = true;
       await applySelectionForDate(targetDate, rows, jointMap);
+      if (pendingMenuIdRef.current && rows.some((m) => m.id === pendingMenuIdRef.current)) {
+        setSelectedId(pendingMenuIdRef.current);
+      }
+      pendingMenuIdRef.current = null;
 
       if (isInitialJump) {
         const hasMenu = rows.some((m) => m.date === targetDate);
@@ -705,6 +712,7 @@ export default function TrainingBoardSupabase({
       await writePlanItems(createdIds, newTemplate.items);
     }
     setNewTemplate(null);
+    notifyBoardTasksChanged();
     setNewDate("");
     setNewStartTime("");
     setNewContent("");
@@ -777,6 +785,7 @@ export default function TrainingBoardSupabase({
       await writePlanItems([selectedId], editTemplate.items);
       setEditTemplate(null);
     }
+    notifyBoardTasksChanged();
     const rows = await loadMenus();
     applySelectionForDate(editDate, rows, jointElsewhere);
   }
@@ -913,6 +922,25 @@ export default function TrainingBoardSupabase({
     return Math.max(0, base - exempt);
   }
   const selectedMemberTotal = selected ? totalFor(selected) : 0;
+
+  const boardTasks = useBoardTasks(profile);
+  function openTask(t: BoardTask) {
+    if (!t.isJoint && t.location !== activeLocation) {
+      // 拠点を切り替えて、読み込み終わったらそのメニューを選ぶ
+      pendingJumpDateRef.current = t.date;
+      pendingMenuIdRef.current = t.menuId;
+      setActiveLocation(t.location);
+      return;
+    }
+    if (menus.some((m) => m.id === t.menuId)) {
+      selectMenu(t.menuId);
+    } else {
+      pendingJumpDateRef.current = t.date;
+      pendingMenuIdRef.current = t.menuId;
+      setActiveLocation(t.location);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function selectMenu(id: string) {
     const m = menus.find((mm) => mm.id === id);
@@ -1817,6 +1845,42 @@ export default function TrainingBoardSupabase({
           <p className="rounded bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
             {errorMsg}
           </p>
+        )}
+
+        {/* 自分のタスク（メニュー未登録・練習後の実施報告がまだ） */}
+        {boardTasks.length > 0 && (
+          <section className="flex flex-col gap-1.5 rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-900/60 dark:bg-red-950/20">
+            <h3 className="flex items-center gap-2 text-xs font-semibold text-red-800 dark:text-red-300">
+              やること
+              <span className="rounded-full bg-red-600 px-1.5 text-[length:calc(10px+var(--fs-add))] font-bold text-white">
+                {boardTasks.length}
+              </span>
+            </h3>
+            {boardTasks.map((t) => {
+              const [, mm, dd] = t.date.split("-").map(Number);
+              return (
+                <button
+                  key={`${t.kind}-${t.menuId}`}
+                  type="button"
+                  onClick={() => openTask(t)}
+                  className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-left text-xs active:bg-neutral-100 dark:bg-neutral-900 dark:active:bg-neutral-800"
+                >
+                  <span className="shrink-0 font-semibold text-neutral-800 dark:text-neutral-200">
+                    {mm}/{dd}
+                    {t.startTime ? ` ${t.startTime.slice(0, 5)}` : ""}
+                  </span>
+                  <span className="shrink-0 text-neutral-500">{t.isJoint ? "合同" : locationLabel[t.location]}</span>
+                  <span className="flex-1 text-neutral-900 dark:text-neutral-100">
+                    {t.kind === "menu" ? "練習メニューがまだ登録されていません" : "練習後の実施報告がまだです"}
+                  </span>
+                  <span className="text-neutral-400">›</span>
+                </button>
+              );
+            })}
+            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+              参加する人なら誰が登録・報告してもかまいません。
+            </span>
+          </section>
         )}
 
         {/* 練習スケジュール */}

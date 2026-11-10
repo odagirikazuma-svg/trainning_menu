@@ -15,6 +15,7 @@ import {
 import { currentGrade, type Location } from "../../lib/types";
 import type { Profile } from "../AuthGate";
 import MenuItemsEditor from "./MenuItemsEditor";
+import { notifyBoardTasksChanged } from "../shell/useBoardTasks";
 
 // 練習予定表：メニューの下に出す「計算用メニュー」と「練習後の実施報告」。
 // - 練習前：予定メニュー（plan）を、テンプレート・前回のメニューから作る
@@ -276,6 +277,7 @@ export default function StructuredMenuCard({
       await load();
       setMode("view");
       setMsg({ ok: true, text: "実施報告を保存しました。" });
+      notifyBoardTasksChanged();
     } catch (e) {
       setMsg({ ok: false, text: `保存できませんでした：${e instanceof Error ? e.message : ""}` });
     }
