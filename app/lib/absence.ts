@@ -110,3 +110,40 @@ export function absencePlanText(r: Pick<AbsenceRequest, "plan_type" | "plan">) {
   const base = absencePlanLabel[r.plan_type];
   return r.plan.trim() ? `${base}：${r.plan.trim()}` : base;
 }
+
+// ---------- 体調不良の病院の報告：続けて休んだ日はまとめて1回 ----------
+// 体調不良の休みが続いた（間が1日以内：オフの日をはさんでもよい）ときは、
+// 最初の日の病院の報告でまとめて済ませる。戻り値：休みのid → その続きの最初の日の休み
+export const SICK_STREAK_GAP_DAYS = 1;
+
+function dayDiff(a: string, b: string) {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400_000);
+}
+
+export function sickStreakHeads<T extends Pick<AbsenceRequest, "id" | "author_id" | "date" | "reason_type" | "status">>(
+  list: T[]
+): Map<string, T> {
+  const out = new Map<string, T>();
+  const byAuthor = new Map<string, T[]>();
+  for (const r of list) {
+    if (r.reason_type !== "sick" || r.status === "rejected") continue;
+    const l = byAuthor.get(r.author_id) ?? [];
+    l.push(r);
+    byAuthor.set(r.author_id, l);
+  }
+  for (const l of byAuthor.values()) {
+    l.sort((a, b) => a.date.localeCompare(b.date));
+    let head: T | null = null;
+    let prev: T | null = null;
+    for (const r of l) {
+      if (!prev || dayDiff(prev.date, r.date) > SICK_STREAK_GAP_DAYS + 1) head = r;
+      out.set(r.id, head!);
+      prev = r;
+    }
+  }
+  return out;
+}
+
+export function hasHospitalReport(r: Pick<AbsenceRequest, "hospital_name" | "hospital_result">) {
+  return !!(r.hospital_name || r.hospital_result);
+}

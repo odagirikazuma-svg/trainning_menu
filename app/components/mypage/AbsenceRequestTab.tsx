@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { Profile } from "../AuthGate";
 import AbsenceRequestPanel from "../AbsenceRequestPanel";
-import { absenceReasonLabel, absenceStatusCls, type AbsenceRequest } from "../../lib/absence";
+import {
+  absenceReasonLabel,
+  absenceStatusCls,
+  hasHospitalReport,
+  sickStreakHeads,
+  type AbsenceRequest,
+} from "../../lib/absence";
 
 // マイページ「申請」タブの上半分：休みの申請。
 // 日付を選んで申請・確認する。下に、前後2週間の自分の休みの一覧（病院の報告がまだのものも分かる）
@@ -55,6 +61,8 @@ export default function AbsenceRequestTab({
   }, [date]);
 
   const byDate = new Map(list.map((r) => [r.date, r]));
+  // 続けて休んだ体調不良は、最初の日の病院の報告でまとめて済む
+  const heads = sickStreakHeads(list);
 
   return (
     <section className="flex flex-col gap-3 border-t border-neutral-200 pt-4 dark:border-neutral-800">
@@ -114,7 +122,9 @@ export default function AbsenceRequestTab({
           <span className="text-xs font-semibold text-neutral-500">前後の休み</span>
           {list.map((r) => {
             const { m, d, w } = md(r.date);
-            const needHospital = r.reason_type === "sick" && r.status !== "rejected" && !r.hospital_name && !r.hospital_result;
+            const head = heads.get(r.id);
+            const needHospital = !!head && head.id === r.id && !hasHospitalReport(r);
+            const continued = !!head && head.id !== r.id;
             return (
               <button
                 key={r.id}
@@ -124,6 +134,7 @@ export default function AbsenceRequestTab({
               >
                 <span className="text-neutral-800 dark:text-neutral-200">
                   {m}/{d}（{w}） {absenceReasonLabel[r.reason_type]}
+                  {continued && <span className="ml-1 text-neutral-500">（続き）</span>}
                 </span>
                 <span className="flex items-center gap-1.5">
                   {needHospital && (

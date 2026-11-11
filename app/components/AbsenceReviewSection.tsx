@@ -9,6 +9,8 @@ import {
   absenceStateText,
   absenceStatusCls,
   type AbsenceRequest,
+  sickStreakHeads,
+  hasHospitalReport,
 } from "../lib/absence";
 
 type Loc = "tama" | "otsuka";
@@ -114,6 +116,8 @@ export default function AbsenceReviewSection({
     }
   }, [loaded]);
 
+  // 続けて休んだ体調不良は、最初の日の病院の報告でまとめて済む
+  const sickHeads = useMemo(() => sickStreakHeads([...sickPast, ...rows]), [sickPast, rows]);
   const rowsOf = (l: Loc) => rows.filter((r) => (r.author?.home_location ?? "tama") === l);
   const byDate = useMemo(() => {
     const m = new Map<string, Row[]>();
@@ -246,7 +250,7 @@ export default function AbsenceReviewSection({
                       <span className="text-neutral-500">代替：</span>
                       {absencePlanText(r)}
                     </p>
-                    {r.reason_type === "sick" && r.status !== "rejected" && <HospitalLine r={r} />}
+                    {r.reason_type === "sick" && r.status !== "rejected" && <HospitalLine r={r} head={sickHeads.get(r.id)} />}
                     {r.review_comment && (
                       <p className="text-xs text-neutral-500">💬 {r.review_comment}</p>
                     )}
@@ -330,7 +334,7 @@ export default function AbsenceReviewSection({
                     <b>{r.author?.display_name ?? "（不明）"}</b>
                     <span className="ml-1.5 text-neutral-500">{dateLabel(r.date, todayStr, tomorrowStr)}休み・{absenceReasonText(r)}</span>
                   </span>
-                  <HospitalLine r={r} />
+                  <HospitalLine r={r} head={sickHeads.get(r.id)} />
                 </li>
               ))}
           </ul>
@@ -340,13 +344,20 @@ export default function AbsenceReviewSection({
   );
 }
 
-function HospitalLine({ r }: { r: AbsenceRequest }) {
-  if (!r.hospital_name && !r.hospital_result)
-    return <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">🏥 病院の報告：まだ</p>;
+function HospitalLine({ r, head }: { r: AbsenceRequest; head?: AbsenceRequest }) {
+  const target = head ?? r;
+  const cont = head && head.id !== r.id ? `${Number(head.date.slice(5, 7))}/${Number(head.date.slice(8, 10))}からの続き` : "";
+  if (!hasHospitalReport(target))
+    return (
+      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+        🏥 病院の報告：まだ{cont && <span className="ml-1 font-normal text-neutral-500">（{cont}）</span>}
+      </p>
+    );
   return (
     <p className="whitespace-pre-wrap text-xs text-sky-900 dark:text-sky-200">
-      🏥 {r.hospital_name}
-      {r.hospital_result && <span className="text-neutral-700 dark:text-neutral-300">：{r.hospital_result}</span>}
+      🏥 {cont && <span className="text-neutral-500">{cont}・</span>}
+      {target.hospital_name}
+      {target.hospital_result && <span className="text-neutral-700 dark:text-neutral-300">：{target.hospital_result}</span>}
     </p>
   );
 }

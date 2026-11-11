@@ -6,6 +6,7 @@ import {
   absencePlanLabel,
   absenceReasonText,
   type AbsenceRequest,
+  sickStreakHeads,
 } from "./absence";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
@@ -244,13 +245,16 @@ export async function buildDailySummary(
     const since = new Date(Date.parse(`${today}T00:00:00Z`) - 14 * 86400_000).toISOString().slice(0, 10);
     const { data: sick, error: sickErr } = await supabase
       .from("absence_requests")
-      .select("author_id, date, hospital_name, hospital_result, hospital_reported_at")
+      .select("id, author_id, date, reason_type, status, hospital_name, hospital_result, hospital_reported_at")
       .eq("team_id", teamId)
       .eq("reason_type", "sick")
       .neq("status", "rejected")
       .gte("date", since)
       .lte("date", today);
     const list = (sickErr ? [] : sick ?? []) as {
+      id: string;
+      reason_type: "sick";
+      status: "approved" | "pending";
       author_id: string;
       date: string;
       hospital_name: string | null;
@@ -260,7 +264,9 @@ export async function buildDailySummary(
     const reportedToday = list.filter(
       (r) => r.hospital_reported_at && new Date(Date.parse(r.hospital_reported_at) + 9 * 3600_000).toISOString().slice(0, 10) === today
     );
-    const notYet = list.filter((r) => !r.hospital_name && !r.hospital_result);
+    // 続けて休んだ体調不良は最初の日の報告でまとめて済むので、最初の日だけ見る
+    const heads = sickStreakHeads(list);
+    const notYet = list.filter((r) => heads.get(r.id)?.id === r.id && !r.hospital_name && !r.hospital_result);
     if (reportedToday.length > 0 || notYet.length > 0) {
       lines.push("");
       lines.push("▪️体調不良の病院の報告");

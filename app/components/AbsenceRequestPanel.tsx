@@ -5,6 +5,8 @@ import { createClient } from "../lib/supabase/client";
 import type { Profile } from "./AuthGate";
 import SetLogger, { blocksHaveData, SetSummary, type ExerciseBlock } from "./SetLogger";
 import {
+  sickStreakHeads,
+  hasHospitalReport,
   blocksToPlan,
   planToBlocks,
   absencePlanLabel,
@@ -431,7 +433,28 @@ function HospitalReport({
   onSaved: (r: AbsenceRequest) => void;
 }) {
   const supabase = createClient();
-  const done = !!(req.hospital_name || req.hospital_result);
+  // 前日から続く体調不良なら、最初の日の休みに病院の報告をまとめて書く
+  const [head, setHead] = useState<AbsenceRequest | null>(null);
+  const [checked, setChecked] = useState(false);
+  useEffect(() => {
+    const from = new Date(Date.parse(`${req.date}T00:00:00Z`) - 14 * 86400_000).toISOString().slice(0, 10);
+    supabase
+      .from("absence_requests")
+      .select("*")
+      .eq("author_id", req.author_id)
+      .eq("reason_type", "sick")
+      .gte("date", from)
+      .lte("date", req.date)
+      .then(({ data }) => {
+        const list = (data ?? []) as AbsenceRequest[];
+        const h = sickStreakHeads(list.some((r) => r.id === req.id) ? list : [...list, req]).get(req.id);
+        setHead(h && h.id !== req.id ? h : null);
+        setChecked(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [req.id]);
+  const target = head ?? req;
+  const done = hasHospitalReport(target);
   const [editing, setEditing] = useState(false);
   const [hospital, setHospital] = useState(req.hospital_name ?? "");
   const [result, setResult] = useState(req.hospital_result ?? "");
@@ -443,15 +466,32 @@ function HospitalReport({
     setSaving(true);
     setError(null);
     const { error: e } = await supabase.rpc("report_absence_hospital", {
-      p_id: req.id,
+      p_id: target.id,
       p_hospital: hospital,
       p_result: result,
     });
     setSaving(false);
     if (e) return setError(`保存できませんでした：${e.message}`);
     setEditing(false);
-    onSaved({ ...req, hospital_name: hospital.trim(), hospital_result: result.trim(), hospital_reported_at: new Date().toISOString() });
+    const saved = { ...target, hospital_name: hospital.trim(), hospital_result: result.trim(), hospital_reported_at: new Date().toISOString() };
+    if (head) {
+      setHead(saved);
+      onSaved(req);
+    } else onSaved(saved);
   }
+
+  function startEditing() {
+    setHospital(target.hospital_name ?? "");
+    setResult(target.hospital_result ?? "");
+    setEditing(true);
+  }
+  const fmt = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  const streakNote = head ? (
+    <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+      {fmt(head.date)}から続いている体調不良なので、病院の報告は{fmt(head.date)}の分でまとめて済みます。
+    </span>
+  ) : null;
+  if (!checked) return null;
 
   const input =
     "rounded-lg border border-neutral-300 bg-white px-2.5 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100";
@@ -459,7 +499,7 @@ function HospitalReport({
   if (editing && !readOnly) {
     return (
       <div className="flex flex-col gap-1.5 rounded-lg bg-white p-2.5 ring-1 ring-sky-200 dark:bg-neutral-950 dark:ring-sky-900">
-        <span className="text-xs font-semibold text-sky-800 dark:text-sky-300">🏥 病院の報告</span>
+        <span className="text-xs font-semibold text-sky-800 dark:text-sky-300">🏥 病院の報告{head ? `（${fmt(head.date)}の分）` : ""}</span>
         <input value={hospital} onChange={(e) => setHospital(e.target.value)} maxLength={60} placeholder="行った病院（例：○○クリニック 内科）" className={input} />
         <textarea
           value={result}
@@ -485,10 +525,11 @@ function HospitalReport({
   if (done) {
     return (
       <div className="flex flex-col gap-0.5 rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-sky-200 dark:bg-neutral-950 dark:ring-sky-900">
-        <span className="font-semibold text-sky-800 dark:text-sky-300">🏥 {req.hospital_name}</span>
-        <span className="whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">{req.hospital_result}</span>
+        <span className="font-semibold text-sky-800 dark:text-sky-300">🏥 {target.hospital_name}</span>
+        <span className="whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">{target.hospital_result}</span>
+        {streakNote}
         {!readOnly && (
-          <button type="button" onClick={() => setEditing(true)} className="self-start pt-0.5 text-[length:calc(10px+var(--fs-add))] text-neutral-500 underline">
+          <button type="button" onClick={startEditing} className="self-start pt-0.5 text-[length:calc(10px+var(--fs-add))] text-neutral-500 underline">
             直す
           </button>
         )}
@@ -500,11 +541,13 @@ function HospitalReport({
   return (
     <button
       type="button"
-      onClick={() => setEditing(true)}
+      onClick={startEditing}
       className="flex items-center justify-between rounded-lg bg-sky-50 px-2.5 py-2 text-left text-xs text-sky-900 ring-1 ring-sky-200 dark:bg-sky-950/30 dark:text-sky-200 dark:ring-sky-900"
     >
       <span>
-        🏥 病院に行ったら、病院と結果を報告してください
+        {head
+          ? `🏥 ${fmt(head.date)}からの体調不良です。病院の報告は1回でOK（まだです）`
+          : "🏥 病院に行ったら、病院と結果を報告してください"}
       </span>
       <span className="font-bold">報告する ›</span>
     </button>
