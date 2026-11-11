@@ -36,6 +36,7 @@ import {
 } from "../../components/MemberManagementSection";
 import CollapsibleSection from "../../components/shell/CollapsibleSection";
 import MemberExemptionSection from "../../components/MemberExemptionSection";
+import MenuTemplatesSection from "../../components/MenuTemplatesSection";
 import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
@@ -929,14 +930,19 @@ export default function SettingsPage() {
               <LineSummarySection />
             </CollapsibleSection>
           </SettingsGroup>
-
-          <SettingsGroup icon="/icons/nav-board.png" iconAlt="練習予定表" title="練習予定表">
-            <CollapsibleSection title="セクション登録">
-              <SectionRegistrationSection profile={profile} />
-            </CollapsibleSection>
-          </SettingsGroup>
           </>
           )}
+
+          <SettingsGroup icon="/icons/nav-board.png" iconAlt="練習予定表" title="練習予定表">
+            {canEdit && (
+              <CollapsibleSection title="セクション登録">
+                <SectionRegistrationSection profile={profile} />
+              </CollapsibleSection>
+            )}
+            <CollapsibleSection title="メニューのテンプレート">
+              <MenuTemplatesSection />
+            </CollapsibleSection>
+          </SettingsGroup>
 
           <SettingsGroup
             icon="/icons/nav-events.png"
@@ -999,7 +1005,11 @@ export default function SettingsPage() {
             icon="/icons/nav-board.png"
             iconAlt="練習予定表"
             title="練習予定表"
-          />
+          >
+            <CollapsibleSection title="メニューのテンプレート">
+              <MenuTemplatesSection />
+            </CollapsibleSection>
+          </SettingsGroup>
 
           <SettingsGroup icon="/icons/nav-events.png" iconAlt="イベント" title="イベント">
             <CollapsibleSection title="結果の表示">

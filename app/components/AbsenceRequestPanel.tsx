@@ -340,6 +340,9 @@ export default function AbsenceRequestPanel({
           💬 {req.review_comment}
         </p>
       )}
+      {req.reason_type === "sick" && req.status !== "rejected" && (
+        <HospitalReport req={req} readOnly={readOnly} onSaved={(r) => setReq(r)} />
+      )}
       {req.status === "approved" && !readOnly && (
         <p className="text-[length:calc(10px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
           休みでも日報の提出は必要です。当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。
@@ -383,5 +386,97 @@ export default function AbsenceRequestPanel({
         </div>
       )}
     </section>
+  );
+}
+
+
+// 体調不良のときの病院の報告（行った病院と結果）。休みの日を過ぎてからでも書ける
+function HospitalReport({
+  req,
+  readOnly,
+  onSaved,
+}: {
+  req: AbsenceRequest;
+  readOnly?: boolean;
+  onSaved: (r: AbsenceRequest) => void;
+}) {
+  const supabase = createClient();
+  const done = !!(req.hospital_name || req.hospital_result);
+  const [editing, setEditing] = useState(false);
+  const [hospital, setHospital] = useState(req.hospital_name ?? "");
+  const [result, setResult] = useState(req.hospital_result ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!hospital.trim() || !result.trim()) return setError("病院の名前と結果を入れてください。");
+    setSaving(true);
+    setError(null);
+    const { error: e } = await supabase.rpc("report_absence_hospital", {
+      p_id: req.id,
+      p_hospital: hospital,
+      p_result: result,
+    });
+    setSaving(false);
+    if (e) return setError(`保存できませんでした：${e.message}`);
+    setEditing(false);
+    onSaved({ ...req, hospital_name: hospital.trim(), hospital_result: result.trim(), hospital_reported_at: new Date().toISOString() });
+  }
+
+  const input =
+    "rounded-lg border border-neutral-300 bg-white px-2.5 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100";
+
+  if (editing && !readOnly) {
+    return (
+      <div className="flex flex-col gap-1.5 rounded-lg bg-white p-2.5 ring-1 ring-sky-200 dark:bg-neutral-950 dark:ring-sky-900">
+        <span className="text-xs font-semibold text-sky-800 dark:text-sky-300">🏥 病院の報告</span>
+        <input value={hospital} onChange={(e) => setHospital(e.target.value)} maxLength={60} placeholder="行った病院（例：○○クリニック 内科）" className={input} />
+        <textarea
+          value={result}
+          onChange={(e) => setResult(e.target.value)}
+          maxLength={300}
+          rows={3}
+          placeholder="結果（診断・医師に言われたこと・いつから練習できそうか）"
+          className={input}
+        />
+        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
+            やめる
+          </button>
+          <button type="button" onClick={save} disabled={saving} className="ml-auto rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+            {saving ? "保存中…" : "報告する"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="flex flex-col gap-0.5 rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-sky-200 dark:bg-neutral-950 dark:ring-sky-900">
+        <span className="font-semibold text-sky-800 dark:text-sky-300">🏥 {req.hospital_name}</span>
+        <span className="whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">{req.hospital_result}</span>
+        {!readOnly && (
+          <button type="button" onClick={() => setEditing(true)} className="self-start pt-0.5 text-[length:calc(10px+var(--fs-add))] text-neutral-500 underline">
+            直す
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (readOnly) return <p className="text-xs text-amber-700 dark:text-amber-400">🏥 病院の報告：まだ</p>;
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="flex items-center justify-between rounded-lg bg-sky-50 px-2.5 py-2 text-left text-xs text-sky-900 ring-1 ring-sky-200 dark:bg-sky-950/30 dark:text-sky-200 dark:ring-sky-900"
+    >
+      <span>
+        🏥 病院に行ったら、病院と結果を報告してください
+      </span>
+      <span className="font-bold">報告する ›</span>
+    </button>
   );
 }

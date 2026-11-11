@@ -239,6 +239,36 @@ export async function buildDailySummary(
     }
   }
 
+  // ---------- 3-2) 体調不良の病院の報告（今日届いたもの・まだの人） ----------
+  {
+    const since = new Date(Date.parse(`${today}T00:00:00Z`) - 14 * 86400_000).toISOString().slice(0, 10);
+    const { data: sick, error: sickErr } = await supabase
+      .from("absence_requests")
+      .select("author_id, date, hospital_name, hospital_result, hospital_reported_at")
+      .eq("team_id", teamId)
+      .eq("reason_type", "sick")
+      .neq("status", "rejected")
+      .gte("date", since)
+      .lte("date", today);
+    const list = (sickErr ? [] : sick ?? []) as {
+      author_id: string;
+      date: string;
+      hospital_name: string | null;
+      hospital_result: string | null;
+      hospital_reported_at: string | null;
+    }[];
+    const reportedToday = list.filter(
+      (r) => r.hospital_reported_at && new Date(Date.parse(r.hospital_reported_at) + 9 * 3600_000).toISOString().slice(0, 10) === today
+    );
+    const notYet = list.filter((r) => !r.hospital_name && !r.hospital_result);
+    if (reportedToday.length > 0 || notYet.length > 0) {
+      lines.push("");
+      lines.push("▪️体調不良の病院の報告");
+      for (const r of reportedToday) lines.push(`🏥${nameOf(r.author_id)}：${r.hospital_name ?? ""}／${(r.hospital_result ?? "").slice(0, 60)}`);
+      if (notYet.length > 0) lines.push(`まだ：${joinNames([...new Set(notYet.map((r) => nameOf(r.author_id)))], 10)}`);
+    }
+  }
+
   // ---------- 4) 明日の休み（拠点別） ----------
   const tomorrowReqs = ((absTomorrowRes.error ? [] : absTomorrowRes.data) ?? []) as AbsenceRequest[];
   lines.push("");

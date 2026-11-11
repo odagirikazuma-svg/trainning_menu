@@ -46,6 +46,10 @@ export type AbsenceRequest = {
   // 直接許可をくれた監督・管理者と、その方法（授業・学業は不要）
   permitted_by?: string | null;
   approval_method?: ApprovalMethod | null;
+  // 体調不良のとき：行った病院と結果（あとから本人が書く）
+  hospital_name?: string | null;
+  hospital_result?: string | null;
+  hospital_reported_at?: string | null;
   review_comment: string | null;
   reviewed_at: string | null;
   created_at: string;

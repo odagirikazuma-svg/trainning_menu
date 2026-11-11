@@ -54,6 +54,8 @@ export default function AbsenceReviewSection({
   const router = useRouter();
   const supabase = createClient();
   const [rows, setRows] = useState<Row[]>([]);
+  // 直近2週間の体調不良（病院の報告を確認する）
+  const [sickPast, setSickPast] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -80,6 +82,17 @@ export default function AbsenceReviewSection({
       const list = (data ?? []) as unknown as Row[];
       setRows(list);
       onChanged?.(list.filter((r) => r.status === "pending").length);
+      const since = toDateKey(new Date(Date.now() - 14 * 86400_000));
+      const { data: past } = await supabase
+        .from("absence_requests")
+        .select("*, author:profiles!absence_requests_author_id_fkey(display_name, home_location), permitter:profiles!absence_requests_permitted_by_fkey(display_name)")
+        .eq("team_id", teamId)
+        .eq("reason_type", "sick")
+        .neq("status", "rejected")
+        .gte("date", since)
+        .lt("date", todayStr)
+        .order("date", { ascending: false });
+      setSickPast((past ?? []) as unknown as Row[]);
       // 最初は、承認待ちがある拠点を開く
       if (!locPicked) {
         const p = list.filter((r) => r.status === "pending");
@@ -233,6 +246,7 @@ export default function AbsenceReviewSection({
                       <span className="text-neutral-500">代替：</span>
                       {absencePlanText(r)}
                     </p>
+                    {r.reason_type === "sick" && r.status !== "rejected" && <HospitalLine r={r} />}
                     {r.review_comment && (
                       <p className="text-xs text-neutral-500">💬 {r.review_comment}</p>
                     )}
@@ -304,6 +318,35 @@ export default function AbsenceReviewSection({
           );
         })
       )}
+      {sickPast.filter((r) => (r.author?.home_location ?? "tama") === loc).length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900/70">
+          <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200">🏥 体調不良の病院の報告（直近2週間）</span>
+          <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
+            {sickPast
+              .filter((r) => (r.author?.home_location ?? "tama") === loc)
+              .map((r) => (
+                <li key={r.id} className="flex flex-col gap-0.5 py-1.5">
+                  <span className="text-xs text-neutral-800 dark:text-neutral-200">
+                    <b>{r.author?.display_name ?? "（不明）"}</b>
+                    <span className="ml-1.5 text-neutral-500">{dateLabel(r.date, todayStr, tomorrowStr)}休み・{absenceReasonText(r)}</span>
+                  </span>
+                  <HospitalLine r={r} />
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
     </section>
+  );
+}
+
+function HospitalLine({ r }: { r: AbsenceRequest }) {
+  if (!r.hospital_name && !r.hospital_result)
+    return <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">🏥 病院の報告：まだ</p>;
+  return (
+    <p className="whitespace-pre-wrap text-xs text-sky-900 dark:text-sky-200">
+      🏥 {r.hospital_name}
+      {r.hospital_result && <span className="text-neutral-700 dark:text-neutral-300">：{r.hospital_result}</span>}
+    </p>
   );
 }
