@@ -331,6 +331,9 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
         const today = acc.get(base) ?? 0;
         const prev28 = dates.slice(-29, -1).map((d) => acc.get(d) ?? 0);
         const avg = prev28.reduce((a, b) => a + b, 0) / (prev28.length || 1);
+        // 記録が始まって2週間たつまでは平均が小さすぎて比較にならないので出さない
+        const first = dates.find((d) => (daily.get(d) ?? 0) > 0);
+        const enough = !!first && first <= addDays(base, -14);
         const week7 = dates.slice(-7).reduce((a, d) => a + (daily.get(d) ?? 0), 0);
         const fat = data.fatigue
           .filter((f) => f.author_id === member.id)
@@ -340,7 +343,8 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
           day: daily.get(base) ?? 0,
           week7,
           acc: today,
-          ratio: avg > 0 ? today / avg : null,
+          ratio: enough && avg > 0 ? today / avg : null,
+          short: !enough,
           fatigue: fat ? { value: fat.fatigue, date: fat.date } : null,
         };
       });
@@ -522,7 +526,7 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
             </span>
           </h2>
           <p className={small}>
-            実測ではなく、メニューの量×係数で出した目安です。「いつもとの比較」は、その人の直近28日の平均を100%としたときの今日の蓄積です。
+            実測ではなく、メニューの量×係数で出した目安です。「いつもと」は、その人の直近28日の平均を100%としたときの今日の蓄積です（記録が2週間分たまるまでは出しません）。
           </p>
 
           {!hasCoef && !editing && (
@@ -561,7 +565,7 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
                                 : "text-neutral-800 dark:text-neutral-200"
                         }`}
                       >
-                        {r.ratio === null ? "-" : `${Math.round(r.ratio * 100)}%`}
+                        {r.ratio === null ? (r.short ? <span className="text-[length:calc(10px+var(--fs-add))] font-normal">記録不足</span> : "-") : `${Math.round(r.ratio * 100)}%`}
                       </span>
                       <span className="text-right">
                         {r.fatigue ? (
