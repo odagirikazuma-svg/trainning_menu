@@ -5,6 +5,7 @@ import { createClient } from "../lib/supabase/client";
 import type { Profile } from "./AuthGate";
 import SetLogger, { blocksHaveData, SetSummary, type ExerciseBlock } from "./SetLogger";
 import {
+  type AbsencePlanTemplate,
   sessionKey,
   sessionKeyLabel,
   absenceSessionsText,
@@ -68,6 +69,9 @@ export default function AbsenceRequestPanel({
   // その日の所属拠点のセクションと、休むセクション（全部選んでいれば「終日」）
   const [daySessions, setDaySessions] = useState<{ key: string; label: string }[]>([]);
   const [pickedSessions, setPickedSessions] = useState<string[]>([]);
+  // 代替メニューのテンプレート
+  const [planTemplates, setPlanTemplates] = useState<AbsencePlanTemplate[]>([]);
+  const [planTemplateId, setPlanTemplateId] = useState<string | null>(null);
   // 許可をくれる人の候補（監督・管理者）
   const [coaches, setCoaches] = useState<{ id: string; display_name: string }[]>([]);
 
@@ -139,6 +143,15 @@ export default function AbsenceRequestPanel({
     setPlanBlocks(planToBlocks(req?.plan_sets));
     setPermittedBy(req?.permitted_by ?? null);
     setMethod(req?.approval_method ?? null);
+    setPlanTemplateId(null);
+    supabase
+      .from("absence_plan_templates")
+      .select("id, name, plan_type, plan, plan_sets")
+      .eq("team_id", teamId)
+      .order("name")
+      .then(({ data, error: e }) => {
+        if (!e) setPlanTemplates((data ?? []) as AbsencePlanTemplate[]);
+      });
     setPickedSessions(req?.session_keys && req.session_keys.length > 0 ? req.session_keys : daySessions.map((x) => x.key));
     setError(null);
     setEditing(true);
@@ -314,6 +327,33 @@ export default function AbsenceRequestPanel({
         )}
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">代替メニュー（予定）</span>
+          {planTemplates.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">テンプレートから入れる</span>
+              <div className="flex flex-wrap gap-1.5">
+                {planTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => {
+                      if ((plan.trim() || blocksHaveData(planBlocks)) && planTemplateId !== t.id && !window.confirm(`今の代替メニューを「${t.name}」に置き換えますか？`)) return;
+                      setPlanTemplateId(t.id);
+                      setPlanType(t.plan_type);
+                      setPlan(t.plan);
+                      setPlanBlocks(planToBlocks(t.plan_sets));
+                    }}
+                    className={`rounded-full px-2.5 py-1 text-xs ${
+                      planTemplateId === t.id
+                        ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900"
+                        : "border border-dashed border-neutral-400 text-neutral-700 dark:border-neutral-600 dark:text-neutral-300"
+                    }`}
+                  >
+                    📄 {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(absencePlanLabel) as AbsencePlanType[]).map((t) => (
               <button key={t} type="button" onClick={() => setPlanType(t)} className={chip(planType === t)}>
@@ -331,6 +371,33 @@ export default function AbsenceRequestPanel({
                 onChange={setPlanBlocks}
               />
             </div>
+          )}
+          {planType && planType !== "none" && (plan.trim() || blocksHaveData(planBlocks)) && (
+            <button
+              type="button"
+              onClick={async () => {
+                const name = window.prompt("テンプレートの名前（例：上半身ウェイト、ジョグ30分）");
+                if (!name?.trim()) return;
+                const { error: e } = await supabase.from("absence_plan_templates").insert({
+                  team_id: teamId,
+                  name: name.trim().slice(0, 30),
+                  plan_type: planType,
+                  plan: plan.trim(),
+                  plan_sets: planType === "weight" && blocksHaveData(planBlocks) ? blocksToPlan(planBlocks) : null,
+                  created_by: profile.id,
+                });
+                if (e) return setError(`テンプレートを保存できませんでした：${e.message}`);
+                const { data } = await supabase
+                  .from("absence_plan_templates")
+                  .select("id, name, plan_type, plan, plan_sets")
+                  .eq("team_id", teamId)
+                  .order("name");
+                setPlanTemplates((data ?? []) as AbsencePlanTemplate[]);
+              }}
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline"
+            >
+              この代替メニューをテンプレートとして保存
+            </button>
           )}
           {planType !== "none" && (
             <textarea

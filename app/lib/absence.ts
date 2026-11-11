@@ -173,3 +173,12 @@ export function absenceCoversMat(keys: string[] | null | undefined, startTime: s
   if (!startTime) return true;
   return mats.includes(sessionKey("mat", startTime)) || mats.includes("mat@");
 }
+
+// ---------- 代替メニューのテンプレート ----------
+export type AbsencePlanTemplate = {
+  id: string;
+  name: string;
+  plan_type: Exclude<AbsencePlanType, "none">;
+  plan: string;
+  plan_sets: PlanBlock[] | null;
+};

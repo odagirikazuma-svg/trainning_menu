@@ -38,6 +38,7 @@ import CollapsibleSection from "../../components/shell/CollapsibleSection";
 import MemberExemptionSection from "../../components/MemberExemptionSection";
 import MenuTemplatesSection from "../../components/MenuTemplatesSection";
 import LoadSettingsSection from "../../components/LoadSettingsSection";
+import AbsencePlanTemplatesSection from "../../components/AbsencePlanTemplatesSection";
 import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
@@ -948,6 +949,9 @@ export default function SettingsPage() {
             <CollapsibleSection title="メニューのテンプレート">
               <MenuTemplatesSection />
             </CollapsibleSection>
+            <CollapsibleSection title="代替メニューのテンプレート（休み）">
+              <AbsencePlanTemplatesSection />
+            </CollapsibleSection>
           </SettingsGroup>
 
           <SettingsGroup
@@ -1012,6 +1016,9 @@ export default function SettingsPage() {
           >
             <CollapsibleSection title="メニューのテンプレート">
               <MenuTemplatesSection />
+            </CollapsibleSection>
+            <CollapsibleSection title="代替メニューのテンプレート（休み）">
+              <AbsencePlanTemplatesSection />
             </CollapsibleSection>
           </SettingsGroup>
 
