@@ -5,16 +5,18 @@ import { isExemptOn, type ExemptionRow } from "../../../lib/exemptions";
 
 export const dynamic = "force-dynamic";
 
+// サーバー（Vercel）はUTCで動くので、日付は日本時間で数える
 function toDateKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const j = new Date(d.getTime() + 9 * 3600_000);
+  const y = j.getUTCFullYear();
+  const m = String(j.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(j.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
 function isReportOpen(dateStr: string, startTime: string | null): boolean {
   if (!startTime) return true;
-  const threshold = new Date(`${dateStr}T${startTime}`);
+  const threshold = new Date(`${dateStr}T${startTime.slice(0, 8)}+09:00`);
   return new Date() >= threshold;
 }
 

@@ -501,7 +501,7 @@ export default function TrainingInsights({
       out.push(
         `マット以外のトレーニングは週平均${perWeek}回${
           s.prevTrainingTotal > 0 && diff !== 0
-            ? `（前の4週間より${diff > 0 ? "+" : ""}${diff}回）`
+            ? `（4週間で${total}回・前の4週間より${diff > 0 ? "+" : ""}${diff}回）`
             : ""
         }。`
       );
