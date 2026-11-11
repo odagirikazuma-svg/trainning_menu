@@ -355,7 +355,14 @@ export default function AbsenceRequestPanel({
         </p>
       )}
       {req.reason_type === "sick" && req.status !== "rejected" && (
-        <HospitalReport req={req} readOnly={readOnly} onSaved={(r) => setReq(r)} />
+        <HospitalReport
+          req={req}
+          readOnly={readOnly}
+          onSaved={(r) => {
+            setReq(r);
+            onChange?.(r);
+          }}
+        />
       )}
       {req.status === "approved" && !readOnly && (
         <p className="text-[length:calc(10px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
