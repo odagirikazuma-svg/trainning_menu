@@ -77,6 +77,8 @@ export default function AbsenceReviewSection({
       )
       .eq("team_id", teamId)
       .gte("date", todayStr)
+      // 1週間先まで（今日を含めて8日分）
+      .lte("date", toDateKey(new Date(Date.now() + 7 * 86400000)))
       .order("date", { ascending: true })
       .order("created_at", { ascending: true });
     if (error) {

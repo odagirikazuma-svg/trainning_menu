@@ -106,7 +106,7 @@ async function pendingRequests(admin: SupabaseClient, teamId: string) {
 export async function replyPending(admin: SupabaseClient, teamId: string, staff: Staff): Promise<LineMessage[]> {
   const rows = await pendingRequests(admin, teamId);
   if (rows.length === 0) {
-    // これから1週間の休みの報告を、日付・拠点別に見せる
+    // 今日と明日の休みの報告を、日付・拠点別に見せる（それより先はアプリで見る）
     const { data } = await admin
       .from("absence_requests")
       .select(
@@ -115,13 +115,13 @@ export async function replyPending(admin: SupabaseClient, teamId: string, staff:
       .eq("team_id", teamId)
       .eq("status", "approved")
       .gte("date", jstDateKey(0))
-      .lte("date", jstDateKey(7))
+      .lte("date", jstDateKey(1))
       .order("date", { ascending: true });
     const list = (data ?? []) as unknown as (Pick<AbsenceRequest, "date" | "reason_type" | "reason" | "approval_method" | "status" | "session_keys"> & {
       author: { display_name: string; home_location: string | null } | null;
       permitter: { display_name: string } | null;
     })[];
-    const lines = ["🙋 休みの報告（これから1週間）"];
+    const lines = ["🙋 休みの報告（今日・明日）"];
     if (list.length === 0) lines.push("", "報告はありません。");
     for (const d of Array.from(new Set(list.map((r) => r.date)))) {
       const day = list.filter((r) => r.date === d);
@@ -137,7 +137,7 @@ export async function replyPending(admin: SupabaseClient, teamId: string, staff:
         }
       }
     }
-    lines.push("", "身に覚えのない「直接許可済み」があれば、アプリの「報告」タブから取り消せます。");
+    lines.push("", "1週間先までの休みは、アプリの「報告」タブで見られます。身に覚えのない「直接許可済み」もそこから取り消せます。");
     return [{ type: "text", text: lines.join("\n") }, appButton("/admin#absence")];
   }
   const canApprove = staff.role === "coach";
