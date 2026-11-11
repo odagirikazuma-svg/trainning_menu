@@ -24,11 +24,6 @@ export type Exercise = {
   better?: Better;
 };
 
-export const betterLabel: Record<Better, string> = {
-  higher: "長いほど良い",
-  lower: "短いほど良い（タイム）",
-};
-
 // 名前から、時間の種目が「短いほど良い（走るタイム）」かを推測する
 export function guessBetter(name: string, measure: Measure): Better {
   if (measure !== "time") return "higher";
@@ -253,12 +248,6 @@ async function loadPreviousSets(
 }
 
 /** 前回のトレ報（weight_logs.id）のセット記録を、そのまま入力欄に写す */
-export async function copyBlocksFromLog(
-  supabase: SupabaseBrowserClient,
-  logId: string
-): Promise<ExerciseBlock[]> {
-  return loadSetsForLog(supabase, logId);
-}
 
 /** 1セットを文字にする（例：60kg×10、1:30、20kg×1:00） */
 function setText(measure: Measure, s: SetDraft) {

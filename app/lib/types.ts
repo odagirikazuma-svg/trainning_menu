@@ -33,13 +33,6 @@ export const teamEventTypeLabel: Record<TeamEventType, string> = {
   body_composition: "体組成の提出",
 };
 
-// カレンダー表示用の色（ウェイト=青、ラン=赤、その他=グレー）
-export const trainingTypeDotColor: Record<TrainingType, string> = {
-  running: "bg-red-500",
-  weight: "bg-blue-500",
-  other: "bg-neutral-400",
-};
-
 // 月間の時間割（コーチが設定するセッション）の種別
 export type SessionType = "mat" | "running" | "weight";
 
@@ -63,13 +56,6 @@ export const dayTypeLabel: Record<DayType, string> = {
   camp: "合宿",
   match: "試合",
   away: "出稽古",
-};
-
-export const dayTypeFillColor: Record<DayType, string> = {
-  practice: "",
-  camp: "bg-pink-100 text-pink-700",
-  match: "bg-red-100 text-red-700",
-  away: "bg-purple-100 text-purple-700",
 };
 
 // 入学年から現在の学年を計算する（4月1日で繰り上がる）
@@ -135,13 +121,4 @@ export type TitleColor = (typeof titleColorPalette)[number];
 // スロット番号（登録された順番を10で割った余り）から色を取得する
 export function getTitleColorBySlot(slot: number): TitleColor {
   return titleColorPalette[((slot % titleColorPalette.length) + titleColorPalette.length) % titleColorPalette.length];
-}
-
-// 互換用：文字列のハッシュ値から色を決める簡易版（登録順を持たない古い画面向け）
-export function getTitleColor(title: string): TitleColor {
-  let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = (hash * 31 + title.charCodeAt(i)) % 997;
-  }
-  return titleColorPalette[hash % titleColorPalette.length];
 }

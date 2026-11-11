@@ -10,6 +10,7 @@
 //    - 対象が「通常／重量級」の項目は入れない
 // ■ ラン：km × 階級ごとの係数（軽量級2・中量級3・重量級4）。メニューの距離と、トレ報の「○km」「○m」の種目から
 // ■ ウェイト：メインセット1セットにつき1（スクワット・デッドリフトは1.2）。アップのセットは0
+//    （アップの印がない種目は、その日の最高重量の70%未満をアップとみなす）
 // ■ 1日の負荷はセクションごとに足し算
 
 import { needsCheck, amountMissing, type MenuItemDraft } from "./menuItems";
@@ -58,7 +59,6 @@ export function resolveSettings(row: LoadSettingsRow): { coef: Coefficients; ret
 }
 
 export type WeightClassBand = "light" | "middle" | "heavy";
-export const bandLabel: Record<WeightClassBand, string> = { light: "軽量級", middle: "中量級", heavy: "重量級" };
 export function classBand(weightClass: number | null, coef: Coefficients): WeightClassBand | null {
   if (!weightClass) return null;
   if (weightClass <= (coef.class_light_max ?? 65)) return "light";
@@ -184,19 +184,30 @@ export type LoadSet = {
 
 const HEAVY_SET = /(スクワット|デッド)/;
 
-// トレ報1日ぶん：ウェイトはメインセットの数、ランは「○km」「○m」の種目の距離から
+// トレ報1日ぶん：ウェイトはメインセットの数、ランは「○km」「○m」の種目の距離から。
+// アップの印がない種目は、その日の最高重量の70%未満のセットをアップとみなす（振り返りと同じ）
 export function setsLoad(sets: LoadSet[], weightClass: number | null, coef: Coefficients): number {
-  let load = 0;
+  const byEx = new Map<string, LoadSet[]>();
   for (const s of sets) {
-    if (s.is_warmup) continue;
-    const km = distanceKmFromName(s.exercise_name);
+    const k = s.exercise_name ?? "";
+    byEx.set(k, [...(byEx.get(k) ?? []), s]);
+  }
+  let load = 0;
+  for (const [name, list] of byEx) {
+    const km = distanceKmFromName(name);
     if (km !== null) {
       // 記録がある（タイムや回数が入っている）セットだけ数える
-      if (s.seconds || s.reps || s.weight_kg) load += km * runCoef(weightClass, coef);
+      for (const s of list) if (!s.is_warmup && (s.seconds || s.reps || s.weight_kg)) load += km * runCoef(weightClass, coef);
       continue;
     }
-    if (!s.weight_kg && !s.reps && !s.seconds) continue;
-    load += HEAVY_SET.test(s.exercise_name ?? "") ? coef.weight_set_heavy ?? 0 : coef.weight_set ?? 0;
+    const marked = list.some((s) => s.is_warmup);
+    const top = Math.max(0, ...list.map((s) => Number(s.weight_kg ?? 0)));
+    const per = HEAVY_SET.test(name) ? coef.weight_set_heavy ?? 0 : coef.weight_set ?? 0;
+    for (const s of list) {
+      if (!s.weight_kg && !s.reps && !s.seconds) continue;
+      const warm = marked ? !!s.is_warmup : top > 0 && Number(s.weight_kg ?? 0) < top * 0.7;
+      if (!warm) load += per;
+    }
   }
   return load;
 }
@@ -319,6 +330,5 @@ export function fatigueState(
     avg,
     ratio: enough && avg > 0 ? today / avg : null,
     short: !enough,
-    week7: dates.slice(-7).reduce((a, d) => a + (daily.get(d) ?? 0), 0),
   };
 }

@@ -9,7 +9,7 @@ import ExerciseProgress from "./ExerciseProgress";
 import MatchReflectionList from "./MatchReflectionList";
 import InsightCard, { InsightJumpBar } from "./InsightCard";
 import BodyStateCard from "./BodyStateCard";
-import { computeDailyLoad, e1rm, type LoadSetRow } from "../lib/trainingLoad";
+import { pbExercisesByDate, e1rm, type LoadSetRow } from "../lib/trainingLoad";
 
 /**
  * マイページ「振り返り」タブの上半分。（目標は設定タブで編集し、ヘッダーに表示する）
@@ -395,7 +395,7 @@ export default function TrainingInsights({
     // 自己ベスト（推定MAX）を更新した回数（直近4週）
     const setRows = allSetRows;
     let pbCount4w = 0;
-    for (const [d, dl] of computeDailyLoad(setRows)) if (d >= recentStart) pbCount4w += dl.pbExerciseIds.length;
+    for (const [d, ids] of pbExercisesByDate(setRows)) if (d >= recentStart) pbCount4w += ids.length;
 
     // 伸びている種目：直近4週の推定MAXの最高 と それより前の最高 を比べる
     const bestBefore = new Map<string, number>();

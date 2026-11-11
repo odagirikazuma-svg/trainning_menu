@@ -74,12 +74,6 @@ export const absencePlanLabel: Record<AbsencePlanType, string> = {
   none: "なし（安静）",
 };
 
-export const absenceStatusLabel: Record<AbsenceStatus, string> = {
-  pending: "承認待ち",
-  approved: "報告済み",
-  rejected: "取り消し",
-};
-
 // 一覧に出す状態のことば（届け出／直接許可済み／取り消し）
 export function absenceStateText(
   r: Pick<AbsenceRequest, "status" | "reason_type" | "approval_method">,

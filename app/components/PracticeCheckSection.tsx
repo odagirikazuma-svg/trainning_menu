@@ -322,14 +322,12 @@ export default function PracticeCheckSection({
         const today = st.today;
         const enough = !st.short;
         const avg = st.avg;
-        const week7 = st.week7;
         const fat = data.fatigue
           .filter((f) => f.author_id === member.id)
           .sort((a, b) => b.date.localeCompare(a.date))[0];
         return {
           member,
           day: daily.get(base) ?? 0,
-          week7,
           acc: today,
           ratio: enough && avg > 0 ? today / avg : null,
           short: !enough,
@@ -482,68 +480,64 @@ export default function PracticeCheckSection({
             実測ではなく、実績のメニューの量×係数で出した目安です。0＝疲れなしで、練習するほど積み上がり、1日ごとに{Math.round(retention * 100)}%残り、オフの日はさらに{coef.off_minus ?? 0}減ります。「いつもと」は、その人の直近28日の平均を100%としたときの今日の値です（記録が2週間分たまるまでは出しません）。
           </p>
 
-          {(
-            <div className={card}>
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-baseline gap-x-3 gap-y-1.5 text-xs">
-                <span className={small}>名前</span>
-                <span className={`${small} text-right`}>疲労度</span>
-                <span className={`${small} text-right`}>今日の負荷</span>
-                <span className={`${small} text-right`}>いつもと</span>
-                <span className={`${small} text-right`}>自己評価</span>
-                {estimate.rows
-                  .filter((r) => r.member.home_location === loc)
-                  .sort((a, b) => b.acc - a.acc)
-                  .map((r) => (
-                    <div key={r.member.id} className="contents">
-                      <span className="truncate text-neutral-900 dark:text-neutral-100">
-                        {r.member.display_name}
-                        {r.member.entry_year && <span className="ml-1 text-neutral-400">{currentGrade(r.member.entry_year)}年</span>}
-                      </span>
-                      <span className="text-right font-bold tabular-nums text-neutral-900 dark:text-neutral-100">{Math.round(r.acc)}</span>
-                      <span className="text-right tabular-nums text-neutral-700 dark:text-neutral-300">{Math.round(r.day) || "-"}</span>
-                      <span
-                        className={`text-right font-bold tabular-nums ${
-                          r.ratio === null
-                            ? "text-neutral-400"
-                            : r.ratio >= 1.3
-                              ? "text-red-600 dark:text-red-400"
-                              : r.ratio <= 0.7
-                                ? "text-sky-600 dark:text-sky-400"
-                                : "text-neutral-800 dark:text-neutral-200"
-                        }`}
-                      >
-                        {r.ratio === null ? (r.short ? <span className="text-[length:calc(10px+var(--fs-add))] font-normal">記録不足</span> : "-") : `${Math.round(r.ratio * 100)}%`}
-                      </span>
-                      <span className="text-right">
-                        {r.fatigue ? (
-                          <span className={`rounded-full px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${fatigueColor(r.fatigue.value)}`}>
-                            {r.fatigue.value}
-                            {r.fatigue.date !== base && <span className="ml-0.5 font-normal opacity-70">{md(r.fatigue.date).replace(/（.）/, "")}</span>}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400">-</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-              </div>
+          <div className={card}>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-baseline gap-x-3 gap-y-1.5 text-xs">
+              <span className={small}>名前</span>
+              <span className={`${small} text-right`}>疲労度</span>
+              <span className={`${small} text-right`}>今日の負荷</span>
+              <span className={`${small} text-right`}>いつもと</span>
+              <span className={`${small} text-right`}>自己評価</span>
+              {estimate.rows
+                .filter((r) => r.member.home_location === loc)
+                .sort((a, b) => b.acc - a.acc)
+                .map((r) => (
+                  <div key={r.member.id} className="contents">
+                    <span className="truncate text-neutral-900 dark:text-neutral-100">
+                      {r.member.display_name}
+                      {r.member.entry_year && <span className="ml-1 text-neutral-400">{currentGrade(r.member.entry_year)}年</span>}
+                    </span>
+                    <span className="text-right font-bold tabular-nums text-neutral-900 dark:text-neutral-100">{Math.round(r.acc)}</span>
+                    <span className="text-right tabular-nums text-neutral-700 dark:text-neutral-300">{Math.round(r.day) || "-"}</span>
+                    <span
+                      className={`text-right font-bold tabular-nums ${
+                        r.ratio === null
+                          ? "text-neutral-400"
+                          : r.ratio >= 1.3
+                            ? "text-red-600 dark:text-red-400"
+                            : r.ratio <= 0.7
+                              ? "text-sky-600 dark:text-sky-400"
+                              : "text-neutral-800 dark:text-neutral-200"
+                      }`}
+                    >
+                      {r.ratio === null ? (r.short ? <span className="text-[length:calc(10px+var(--fs-add))] font-normal">記録不足</span> : "-") : `${Math.round(r.ratio * 100)}%`}
+                    </span>
+                    <span className="text-right">
+                      {r.fatigue ? (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${fatigueColor(r.fatigue.value)}`}>
+                          {r.fatigue.value}
+                          {r.fatigue.date !== base && <span className="ml-0.5 font-normal opacity-70">{md(r.fatigue.date).replace(/（.）/, "")}</span>}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400">-</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
             </div>
-          )}
+          </div>
 
-          {(
-            <ul className={`${small} flex flex-col gap-0.5`}>
-              <li>直近7日で計算に入っていないもの：</li>
-              {estimate.unreported > 0 && <li>・実施報告がない練習 {estimate.unreported}件</li>}
-              {(Object.keys(estimate.excluded) as ExcludeReason[]).map((k) => (
-                <li key={k}>
-                  ・{excludeReasonLabel[k]}：のべ{estimate.excluded[k]}項目
-                </li>
-              ))}
-              {estimate.noClass > 0 && <li>・階級が未登録の人 {estimate.noClass}人（ランは中量級の係数で計算しています）</li>}
-              {estimate.unanswered > 0 && <li>・参加範囲の未回答 のべ{estimate.unanswered}回（自由参加以外は全部参加とみなしています）</li>}
-              {estimate.unreported === 0 && Object.keys(estimate.excluded).length === 0 && estimate.noClass === 0 && estimate.unanswered === 0 && <li>・なし</li>}
-            </ul>
-          )}
+          <ul className={`${small} flex flex-col gap-0.5`}>
+            <li>直近7日で計算に入っていないもの：</li>
+            {estimate.unreported > 0 && <li>・実施報告がない練習 {estimate.unreported}件</li>}
+            {(Object.keys(estimate.excluded) as ExcludeReason[]).map((k) => (
+              <li key={k}>
+                ・{excludeReasonLabel[k]}：のべ{estimate.excluded[k]}項目
+              </li>
+            ))}
+            {estimate.noClass > 0 && <li>・階級が未登録の人 {estimate.noClass}人（ランは中量級の係数で計算しています）</li>}
+            {estimate.unanswered > 0 && <li>・参加範囲の未回答 のべ{estimate.unanswered}回（自由参加以外は全部参加とみなしています）</li>}
+            {estimate.unreported === 0 && Object.keys(estimate.excluded).length === 0 && estimate.noClass === 0 && estimate.unanswered === 0 && <li>・なし</li>}
+          </ul>
 
           <p className={small}>係数と残る割合は「設定 › 管理設定 › 疲労度の係数」で変えられます。</p>
         </section>

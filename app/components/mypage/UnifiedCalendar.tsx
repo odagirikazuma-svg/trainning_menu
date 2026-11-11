@@ -13,7 +13,6 @@ import {
   trainingTypeLabel,
 } from "../../lib/types";
 import { useCalendarViewPref } from "../shell/CalendarViewPrefProvider";
-import { useCalendarDisplayPref } from "../shell/CalendarDisplayPrefProvider";
 
 // マイページ「振り返り」タブのカレンダー。
 // 過ぎた日は実績（休み・マット・その日に記録したトレーニング）、これからの日は予定
@@ -79,7 +78,6 @@ export function UnifiedCalendar({
   titleColorByType: Record<TrainingType, Map<string, TitleColor>>;
 }) {
   const { defaultCalendarView } = useCalendarViewPref();
-  const { pref } = useCalendarDisplayPref();
   const [viewMode, setViewMode] = useState<"month" | "week">(
     defaultCalendarView
   );
@@ -276,7 +274,7 @@ export function UnifiedCalendar({
           const isHighlighted = key === highlightDate;
           const isToday = key === todayDate;
           const isMatchDay =
-            pref.highlightMatch && !!nextMatchDate && key === nextMatchDate;
+            !!nextMatchDate && key === nextMatchDate;
           const schedule = scheduleByDate.get(key);
           const isAway = schedule?.dayType === "away" && !schedule.isOff;
           const isCamp = schedule?.dayType === "camp" && !schedule.isOff;
