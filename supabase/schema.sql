@@ -1990,3 +1990,12 @@ create policy "team_featured_exercises_write_coach" on team_featured_exercises
   with check (team_id = get_my_team_id() and is_my_role_coach());
 
 notify pgrst, 'reload schema';
+drop policy if exists "absence_plan_templates_select" on absence_plan_templates;
+drop policy if exists "absence_plan_templates_write" on absence_plan_templates;
+drop policy if exists "absence_plan_templates_own" on absence_plan_templates;
+create policy "absence_plan_templates_own" on absence_plan_templates
+  for all
+  using (created_by = auth.uid())
+  with check (created_by = auth.uid() and team_id = get_my_team_id());
+
+notify pgrst, 'reload schema';

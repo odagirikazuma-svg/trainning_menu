@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { useProfile } from "./shell/AppShell";
-import { canCreateMenu } from "../lib/types";
 import SetLogger, { blocksHaveData, SetSummary, type ExerciseBlock } from "./SetLogger";
 import {
   absencePlanLabel,
@@ -12,7 +11,7 @@ import {
   type AbsencePlanTemplate,
 } from "../lib/absence";
 
-// 設定：休みの代替メニューのテンプレート（チームで共有）
+// 設定：休みの代替メニューのテンプレート（自分だけのもの。ほかの人には見えない）
 type PlanType = AbsencePlanTemplate["plan_type"];
 type Draft = { id: string | null; name: string; plan_type: PlanType; plan: string; blocks: ExerciseBlock[] };
 
@@ -27,13 +26,13 @@ export default function AbsencePlanTemplatesSection() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const editable = canCreateMenu(profile.role);
+  const editable = true; // 自分のテンプレートなので、誰でも作れる
 
   async function load() {
     const { data, error } = await supabase
       .from("absence_plan_templates")
       .select("id, name, plan_type, plan, plan_sets")
-      .eq("team_id", profile.team_id)
+      .eq("created_by", profile.id)
       .order("name");
     if (error) {
       setMsg({ ok: false, text: error.message });
@@ -151,7 +150,7 @@ export default function AbsencePlanTemplatesSection() {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-        休みの申請で、代替メニューを選ぶときに使えるテンプレートです。チームで共有されます。
+        休みの申請で、代替メニューを選ぶときに使える自分用のテンプレートです。ほかの人には見えません。
       </p>
       {list.length === 0 && <p className="text-xs text-neutral-500">まだテンプレートはありません。</p>}
       {list.map((t) => (

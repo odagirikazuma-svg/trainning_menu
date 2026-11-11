@@ -147,7 +147,7 @@ export default function AbsenceRequestPanel({
     supabase
       .from("absence_plan_templates")
       .select("id, name, plan_type, plan, plan_sets")
-      .eq("team_id", teamId)
+      .eq("created_by", profile.id)
       .order("name")
       .then(({ data, error: e }) => {
         if (!e) setPlanTemplates((data ?? []) as AbsencePlanTemplate[]);
@@ -390,7 +390,7 @@ export default function AbsenceRequestPanel({
                 const { data } = await supabase
                   .from("absence_plan_templates")
                   .select("id, name, plan_type, plan, plan_sets")
-                  .eq("team_id", teamId)
+                  .eq("created_by", profile.id)
                   .order("name");
                 setPlanTemplates((data ?? []) as AbsencePlanTemplate[]);
               }}

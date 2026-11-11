@@ -32,6 +32,7 @@ import CollapsibleSection from "../../components/shell/CollapsibleSection";
 import MemberExemptionSection from "../../components/MemberExemptionSection";
 import MenuTemplatesSection from "../../components/MenuTemplatesSection";
 import LoadSettingsSection from "../../components/LoadSettingsSection";
+import FeaturedExercisesSection from "../../components/FeaturedExercisesSection";
 import AbsencePlanTemplatesSection from "../../components/AbsencePlanTemplatesSection";
 import ScheduleEditForm, {
   type ScheduleDayPrefill,
@@ -868,6 +869,11 @@ export default function SettingsPage() {
                 <LoadSettingsSection />
               </CollapsibleSection>
             )}
+            {profile.role === "coach" && (
+              <CollapsibleSection title="代表種目（振り返り・ランキング用）">
+                <FeaturedExercisesSection />
+              </CollapsibleSection>
+            )}
           </SettingsGroup>
           </>
           )}
@@ -881,7 +887,7 @@ export default function SettingsPage() {
             <CollapsibleSection title="メニューのテンプレート">
               <MenuTemplatesSection />
             </CollapsibleSection>
-            <CollapsibleSection title="代替メニューのテンプレート（休み）">
+            <CollapsibleSection title="代替メニューのテンプレート（休み・自分用）">
               <AbsencePlanTemplatesSection />
             </CollapsibleSection>
           </SettingsGroup>
@@ -948,7 +954,7 @@ export default function SettingsPage() {
             <CollapsibleSection title="メニューのテンプレート">
               <MenuTemplatesSection />
             </CollapsibleSection>
-            <CollapsibleSection title="代替メニューのテンプレート（休み）">
+            <CollapsibleSection title="代替メニューのテンプレート（休み・自分用）">
               <AbsencePlanTemplatesSection />
             </CollapsibleSection>
           </SettingsGroup>

@@ -139,6 +139,9 @@ export default function TrainingInsights({
   // セット記録（1年分）。種目ごとの記録にもそのまま渡して、二重に読み込まない
   const [setRows, setSetRows] = useState<SetRowWithExercise[] | null>(null);
   const [maxRows, setMaxRows] = useState<MaxRow[]>([]);
+  // 代表種目（監督が設定で選ぶ）とチームの種目一覧
+  const [featuredIds, setFeaturedIds] = useState<string[]>([]);
+  const [exerciseList, setExerciseList] = useState<{ id: string; name: string; measure: "reps" | "time" }[]>([]);
   const [bodyRows, setBodyRows] = useState<BodyRow[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -211,6 +214,15 @@ export default function TrainingInsights({
     ]);
     // is_warmup 列がまだ無いDBでは、列なしで読み直す
     const setRes = setResFirst.error ? await setQuery(setBase) : setResFirst;
+    setExerciseList((exRes.data ?? []) as { id: string; name: string; measure: "reps" | "time" }[]);
+    supabase
+      .from("team_featured_exercises")
+      .select("exercise_id, sort_order")
+      .eq("team_id", profile.team_id)
+      .order("sort_order")
+      .then(({ data, error }) => {
+        if (!error) setFeaturedIds(((data ?? []) as { exercise_id: string }[]).map((r) => r.exercise_id));
+      });
     const exerciseById = new Map(
       ((exRes.data ?? []) as { id: string; name: string; measure: "reps" | "time"; better?: "higher" | "lower" }[]).map((e) => [
         e.id,
@@ -726,7 +738,7 @@ export default function TrainingInsights({
       </InsightCard>
 
       {/* 種目ごとの記録・自己ベスト（日報で入れた数値から） */}
-      <ExerciseProgress rows={setRows} />
+      <ExerciseProgress rows={setRows} featuredIds={featuredIds} exercises={exerciseList} big3={maxRows} />
 
       {/* 試合の振り返り（イベントで提出したもの） */}
       <MatchReflectionList profile={profile} />
