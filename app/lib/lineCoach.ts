@@ -85,7 +85,7 @@ export async function replyInjuries(admin: SupabaseClient, teamId: string): Prom
       );
     }
   }
-  return [{ type: "text", text: lines.join("\n") }, appButton("/admin?tab=injuries")];
+  return [{ type: "text", text: lines.join("\n") }, appButton("/admin?tab=condition")];
 }
 
 type PendingRow = AbsenceRequest & { author: { display_name: string; home_location: string | null } | null };

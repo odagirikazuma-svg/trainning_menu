@@ -459,7 +459,7 @@ export default function StructuredMenuCard({
                           {m.display_name}
                           {m.entry_year && <span className="ml-1 text-neutral-400">{currentGrade(m.entry_year)}年</span>}
                         </span>
-                        {(["absent_unplanned", "left_early"] as DiffKind[]).map((k) => (
+                        {(["absent_unplanned"] as DiffKind[]).map((k) => (
                           <button
                             key={k}
                             type="button"
@@ -468,28 +468,10 @@ export default function StructuredMenuCard({
                               d?.kind === k ? "bg-red-600 text-white" : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
                             }`}
                           >
-                            {k === "absent_unplanned" ? "欠席" : "途中退出・中抜け"}
+                            欠席
                           </button>
                         ))}
                       </div>
-                      {d?.kind === "left_early" && (
-                        <div className="flex gap-1.5 pl-24 text-xs">
-                          {(["confirmed", "unconfirmed"] as const).map((p) => (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() =>
-                                setDraftDiffs((prev) => new Map(prev).set(m.id, { ...d, permission: p }))
-                              }
-                              className={`rounded-full px-2 py-0.5 ${
-                                d.permission === p ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-                              }`}
-                            >
-                              {p === "confirmed" ? "許可あり" : "許可を確認できていない"}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </li>
                   );
                 })}

@@ -44,9 +44,9 @@ type SetRow = { author_id: string; date: string; weight_kg: number | null; reps:
 
 const reviewKindLabel: Record<ReviewKind, string> = {
   absent_unplanned: "休みの報告なしで欠席",
-  left_early: "途中退出・中抜け（許可を確認できていない）",
+  left_early: "途中退出・中抜け",
   present_unplanned: "休みの報告があったが参加",
-  mismatch: "本人の報告と出欠確認が合わない",
+  mismatch: "本人の日報と出欠確認が合わない",
 };
 const decisionLabel: Record<ReviewKind, { ok: string; ng?: string }> = {
   absent_unplanned: { ok: "連絡あり", ng: "無断" },
@@ -91,7 +91,16 @@ type Data = {
   settings: { coefficients: Coefficients; retention: number; calc_version: string } | null;
 };
 
-export default function PracticeCheckSection({ teamId, coachId }: { teamId: string; coachId: string }) {
+// part：checks＝「報告」タブの練習の確認事項／load＝「体調」タブの負荷の試算
+export default function PracticeCheckSection({
+  teamId,
+  coachId,
+  part,
+}: {
+  teamId: string;
+  coachId: string;
+  part: "checks" | "load";
+}) {
   const supabase = createClient();
   const [base, setBase] = useState(jstToday());
   const [data, setData] = useState<Data | null>(null);
@@ -172,7 +181,8 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
         menus,
         items,
         reported: new Set(per.flatMap((p) => (p.rep as { menu_id: string }[]).map((r) => r.menu_id))),
-        diffs: per.flatMap((p) => p.df as Diff[]),
+        // 途中退出・中抜けは扱わない（以前のデータが残っていても無視する）
+        diffs: per.flatMap((p) => p.df as Diff[]).filter((d) => d.kind !== "left_early"),
         parts: per.flatMap((p) => p.pt),
         absences: (absRes.data ?? []) as { author_id: string; date: string }[],
         sets: setRows,
@@ -217,7 +227,6 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
       for (const d of diffs) {
         const member = memberById.get(d.member_id);
         if (!member) continue;
-        if (d.kind === "left_early" && d.permission === "confirmed") continue;
         rows.push({ key: `${menu.id}:${d.member_id}:${d.kind}`, menu, member, kind: d.kind, detail: "", review: review(d.member_id, d.kind) });
       }
       for (const member of targetsOf(menu)) {
@@ -227,7 +236,6 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
         if (p && d?.kind === "absent_unplanned") detail = `出欠確認は「欠席」、本人は「${scopeText(p)}」と報告`;
         else if (p && absentSet.has(`${member.id}:${menu.date}`) && d?.kind !== "present_unplanned")
           detail = `休みの報告あり、本人は「${scopeText(p)}」と報告`;
-        else if (p && d?.kind === "left_early" && p.scope === "full") detail = "出欠確認は「途中退出」、本人は「全メニュー参加」と報告";
         if (detail)
           rows.push({ key: `${menu.id}:${member.id}:mismatch`, menu, member, kind: "mismatch", detail, review: review(member.id, "mismatch") });
       }
@@ -390,13 +398,13 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
   const small = "text-[length:calc(10px+var(--fs-add))] text-neutral-500";
   const btn = "rounded-lg border px-2.5 py-1 text-xs disabled:opacity-50";
 
-  const rowsShown = checks.rows.filter((r) => (showReviewed ? true : !r.review) && (r.menu.is_joint || r.member.home_location === loc || r.menu.location === loc));
-  const openCount = (l: Loc) => checks.rows.filter((r) => !r.review && (r.menu.location === l || r.member.home_location === l)).length;
-  const basisShown = checks.basis.filter((b) => b.menu.is_joint || b.menu.location === loc);
+  const rowsShown = checks.rows.filter((r) => (showReviewed ? true : !r.review));
+  const basisShown = checks.basis;
 
   return (
     <div className="flex flex-col gap-5">
-      <LegacyMenuConvert teamId={teamId} coachId={coachId} />
+      {part === "checks" && <LegacyMenuConvert teamId={teamId} coachId={coachId} />}
+      {part === "load" && (
       <div className="flex items-center justify-between gap-2">
         <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-neutral-800">
           {(["tama", "otsuka"] as Loc[]).map((l) => (
@@ -409,9 +417,6 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
               }`}
             >
               {LOC_LABEL[l]}
-              {data && openCount(l) > 0 && (
-                <span className="rounded-full bg-amber-500 px-1.5 text-[length:calc(10px+var(--fs-add))] font-bold text-white">{openCount(l)}</span>
-              )}
             </button>
           ))}
         </div>
@@ -423,19 +428,20 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
           className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
         />
       </div>
+      )}
 
       {error && <p className="rounded bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400">{error}</p>}
       {!data && !error && <p className="text-xs text-neutral-500">読み込み中…</p>}
 
-      {data && (
+      {data && part === "checks" && (
         <section className="flex flex-col gap-2">
           <h2 className={h2}>
             <span className="inline-block h-3.5 w-1 rounded-full bg-amber-500" />
-            要確認（直近2週間）
+            練習の確認事項（直近2週間）
           </h2>
           {rowsShown.length === 0 && basisShown.length === 0 && (
             <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs text-neutral-500 dark:border-neutral-700">
-              確認が必要なものはありません。
+              練習の実施報告から出た確認事項はありません。
             </p>
           )}
           {rowsShown.map((r) => (
@@ -516,11 +522,11 @@ export default function PracticeCheckSection({ teamId, coachId }: { teamId: stri
         </section>
       )}
 
-      {data && estimate && (
+      {data && estimate && part === "load" && (
         <section className="flex flex-col gap-2">
           <h2 className={h2}>
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
-            負荷の試算
+            疲労度（負荷の試算）
             <span className="text-xs font-normal text-neutral-500">
               {md(base)}・計算式 {data.settings?.calc_version ?? CALC_VERSION}・残る割合{Math.round(retention * 100)}%
             </span>

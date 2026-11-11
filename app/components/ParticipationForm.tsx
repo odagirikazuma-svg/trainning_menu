@@ -142,66 +142,14 @@ export default function ParticipationForm({
     );
   }
 
+  // 途中退出・中抜けは扱わない（参加範囲は「全メニュー参加」のみ）。聞くのは自由参加の量だけ
+  if (free.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 dark:border-neutral-800 dark:bg-neutral-900/60">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">参加したメニュー</span>
+        <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">自由参加のメニュー</span>
         <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">{saving ? "保存中…" : "選ぶとすぐ保存されます"}</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {(Object.keys(scopeLabel) as ParticipationScope[]).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => change({ ...(p ?? { boundary_key: null, item_keys: [], free_amounts: {} }), scope: s })}
-            className={chip(p?.scope === s)}
-          >
-            {scopeLabel[s]}
-          </button>
-        ))}
-      </div>
-
-      {p && p.scope !== "full" && (
-        <div className="flex flex-col gap-1">
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            {p.scope === "until"
-              ? "最後に参加したメニューを選んでください"
-              : p.scope === "from"
-                ? "最初に参加したメニューを選んでください"
-                : "参加したメニューをすべて選んでください"}
-          </span>
-          <div className="flex flex-col gap-1">
-            {items.map((i) => {
-              const on =
-                p.scope === "partial" ? p.item_keys.includes(i.key) : p.boundary_key === i.key;
-              return (
-                <button
-                  key={i.key}
-                  type="button"
-                  onClick={() =>
-                    change(
-                      p.scope === "partial"
-                        ? {
-                            ...p,
-                            item_keys: on ? p.item_keys.filter((k) => k !== i.key) : [...p.item_keys, i.key],
-                          }
-                        : { ...p, boundary_key: i.key }
-                    )
-                  }
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
-                    on ? "bg-red-50 ring-1 ring-red-400 dark:bg-red-950/30" : joined.has(i.key) ? "bg-white dark:bg-neutral-900" : "bg-white opacity-60 dark:bg-neutral-900"
-                  }`}
-                >
-                  <span className="w-4 text-center">{p.scope === "partial" ? (on ? "☑" : "☐") : on ? "●" : "○"}</span>
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">{i.name}</span>
-                  <span className="text-neutral-500">{describeAmount(i)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {free.map((i) => (
         <div key={i.key} className="flex flex-col gap-1">
           <span className="text-xs text-neutral-800 dark:text-neutral-200">

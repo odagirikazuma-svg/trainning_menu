@@ -20,13 +20,13 @@ import { fatigueColor } from "./FatigueSelector";
 import AbsenceReviewSection from "./AbsenceReviewSection";
 import PracticeCheckSection from "./PracticeCheckSection";
 
-type AdminSubTab = "submissions" | "reports" | "training" | "injuries";
-// 「練習」（要確認・負荷の試算）は監督（coach）だけに出す
-const adminSubTabItems: { value: AdminSubTab; label: string; coachOnly?: boolean }[] = [
+// 日報／報告（休みの報告・練習の確認事項）／体調（疲労度・怪我の管理）
+// 練習の確認事項と疲労度（負荷の試算）は監督（coach）だけに出す
+type AdminSubTab = "submissions" | "reports" | "condition";
+const adminSubTabItems: { value: AdminSubTab; label: string }[] = [
   { value: "submissions", label: "日報" },
   { value: "reports", label: "報告" },
-  { value: "training", label: "練習", coachOnly: true },
-  { value: "injuries", label: "怪我の管理" },
+  { value: "condition", label: "体調" },
 ];
 
 type MemberRoleForEdit = "coach" | "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
@@ -935,8 +935,7 @@ export default function CoachAdminPage({
   const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>(() => {
     if (typeof window === "undefined") return "submissions";
     const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab === "injuries") return "injuries";
-    if (tab === "training" && profile.role === "coach") return "training";
+    if (tab === "injuries" || tab === "condition" || tab === "training") return "condition";
     if (tab === "reports" || window.location.hash === "#absence") return "reports";
     return "submissions";
   });
@@ -961,11 +960,9 @@ export default function CoachAdminPage({
   const adminSubNav = useMemo(
     () => (
       <SubTabBar
-        items={adminSubTabItems
-          .filter((it) => !it.coachOnly || profile.role === "coach")
-          .map(({ coachOnly: _c, ...it }) =>
-            it.value === "reports" ? { ...it, badge: pendingAbsences } : it
-          )}
+        items={adminSubTabItems.map((it) =>
+          it.value === "reports" ? { ...it, badge: pendingAbsences } : it
+        )}
         active={adminSubTab}
         onChange={setAdminSubTab}
       />
@@ -993,8 +990,10 @@ export default function CoachAdminPage({
           />
         )}
 
-        {adminSubTab === "training" && profile.role === "coach" && (
-          <PracticeCheckSection teamId={profile.team_id} coachId={profile.id} />
+        {adminSubTab === "reports" && profile.role === "coach" && (
+          <div className="mt-6">
+            <PracticeCheckSection teamId={profile.team_id} coachId={profile.id} part="checks" />
+          </div>
         )}
 
         {adminSubTab === "submissions" && (
@@ -1193,8 +1192,13 @@ export default function CoachAdminPage({
         </>
         )}
 
-        {adminSubTab === "injuries" && (
+        {adminSubTab === "condition" && (
         <>
+        {profile.role === "coach" && (
+          <div className="mb-6">
+            <PracticeCheckSection teamId={profile.team_id} coachId={profile.id} part="load" />
+          </div>
+        )}
         {/* 怪我人一覧 */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
