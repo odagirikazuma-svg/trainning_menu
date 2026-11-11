@@ -10,12 +10,15 @@ import {
   excludeReasonLabel,
   memberDailyLoads,
   fatigueState,
-  type Coefficients,
+  resolveSettings,
+  type LoadSet,
+  type LoadSettingsRow,
   type ExcludeReason,
   type Participation,
 } from "../lib/loadEstimate";
 import { needsCheck, describeAmount } from "../lib/menuItems";
 import { absenceCoversMat } from "../lib/absence";
+import { toLoadSets } from "../lib/myFatigue";
 import { currentGrade } from "../lib/types";
 import { fatigueColor } from "./FatigueSelector";
 
@@ -38,7 +41,7 @@ type Diff = { menu_id: string; member_id: string; kind: DiffKind; permission: "c
 type PartRow = Participation & { menu_id: string; member_id: string };
 type ReviewKind = DiffKind | "mismatch";
 type Review = { menu_id: string; member_id: string; kind: ReviewKind; decision: "ok" | "ng"; note: string | null };
-type SetRow = { author_id: string; date: string; weight_kg: number | null; reps: number | null; is_warmup: boolean | null };
+type SetRow = LoadSet & { author_id: string };
 
 const reviewKindLabel: Record<ReviewKind, string> = {
   absent_unplanned: "休みの報告なしで欠席",
@@ -86,7 +89,7 @@ type Data = {
   sets: SetRow[];
   fatigue: { author_id: string; date: string; fatigue: number }[];
   reviews: Review[];
-  settings: { coefficients: Coefficients; retention: number; calc_version: string } | null;
+  settings: LoadSettingsRow;
 };
 
 // part：checks＝「報告」タブの練習の確認事項／load＝「体調」タブの負荷の試算
@@ -128,7 +131,7 @@ export default function PracticeCheckSection({
         fetchAll<SetRow>((a, b) =>
           supabase
             .from("training_sets")
-            .select("author_id, date, weight_kg, reps, is_warmup")
+            .select("author_id, date, weight_kg, reps, seconds, is_warmup, exercise:exercises(name)")
             .eq("team_id", teamId)
             .gte("date", from)
             .lte("date", base)
@@ -179,7 +182,7 @@ export default function PracticeCheckSection({
         diffs: per.flatMap((p) => p.df as Diff[]).filter((d) => d.kind !== "left_early"),
         parts: per.flatMap((p) => p.pt),
         absences: (absRes.data ?? []) as { author_id: string; date: string; session_keys: string[] | null }[],
-        sets: setRows,
+        sets: toLoadSets(setRows) as SetRow[],
         fatigue: (fatRes.data ?? []) as Data["fatigue"],
         reviews: per.flatMap((p) => p.rv as Review[]),
         settings: (setRes.data as Data["settings"]) ?? null,
@@ -277,9 +280,7 @@ export default function PracticeCheckSection({
   }
 
   // ---------- 2) 負荷の試算 ----------
-  const coef: Coefficients = data?.settings?.coefficients ?? {};
-  const retention = Number(data?.settings?.retention ?? 0.7);
-  const hasCoef = Object.values(coef).some((v) => typeof v === "number");
+  const { coef, retention } = useMemo(() => resolveSettings(data?.settings ?? null), [data]);
 
   const estimate = useMemo(() => {
     if (!data) return null;
@@ -317,7 +318,7 @@ export default function PracticeCheckSection({
         for (const [k, v] of Object.entries(r.excluded)) excluded[k as ExcludeReason] = (excluded[k as ExcludeReason] ?? 0) + (v ?? 0);
         if (r.classMissing && !member.weight_class) noClass++;
         const daily = r.daily;
-        const st = fatigueState(daily, base, retention);
+        const st = fatigueState(daily, base, retention, coef.off_minus ?? 0, r.active);
         const today = st.today;
         const enough = !st.short;
         const avg = st.avg;
@@ -336,7 +337,6 @@ export default function PracticeCheckSection({
         };
       });
     return { rows, excluded, unanswered, noClass, unreported };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, base, coef, retention]);
 
 
@@ -475,38 +475,32 @@ export default function PracticeCheckSection({
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             疲労度（負荷の試算）
             <span className="text-xs font-normal text-neutral-500">
-              {md(base)}・計算式 {data.settings?.calc_version ?? CALC_VERSION}・残る割合{Math.round(retention * 100)}%
+              {md(base)}・計算式 {CALC_VERSION}
             </span>
           </h2>
           <p className={small}>
-            実測ではなく、メニューの量×係数で出した目安です。「いつもと」は、その人の直近28日の平均を100%としたときの今日の蓄積です（記録が2週間分たまるまでは出しません）。
+            実測ではなく、実績のメニューの量×係数で出した目安です。0＝疲れなしで、練習するほど積み上がり、1日ごとに{Math.round(retention * 100)}%残り、オフの日はさらに{coef.off_minus ?? 0}減ります。「いつもと」は、その人の直近28日の平均を100%としたときの今日の値です（記録が2週間分たまるまでは出しません）。
           </p>
 
-          {!hasCoef && (
-            <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
-              係数がまだ設定されていません。「設定 › 管理設定 › 疲労度の係数」から入れると計算されます。
-            </p>
-          )}
-
-          {hasCoef && (
+          {(
             <div className={card}>
               <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-baseline gap-x-3 gap-y-1.5 text-xs">
                 <span className={small}>名前</span>
-                <span className={`${small} text-right`}>今日</span>
-                <span className={`${small} text-right`}>7日</span>
+                <span className={`${small} text-right`}>疲労度</span>
+                <span className={`${small} text-right`}>今日の負荷</span>
                 <span className={`${small} text-right`}>いつもと</span>
                 <span className={`${small} text-right`}>自己評価</span>
                 {estimate.rows
                   .filter((r) => r.member.home_location === loc)
-                  .sort((a, b) => (b.ratio ?? -1) - (a.ratio ?? -1))
+                  .sort((a, b) => b.acc - a.acc)
                   .map((r) => (
                     <div key={r.member.id} className="contents">
                       <span className="truncate text-neutral-900 dark:text-neutral-100">
                         {r.member.display_name}
                         {r.member.entry_year && <span className="ml-1 text-neutral-400">{currentGrade(r.member.entry_year)}年</span>}
                       </span>
+                      <span className="text-right font-bold tabular-nums text-neutral-900 dark:text-neutral-100">{Math.round(r.acc)}</span>
                       <span className="text-right tabular-nums text-neutral-700 dark:text-neutral-300">{Math.round(r.day) || "-"}</span>
-                      <span className="text-right tabular-nums text-neutral-700 dark:text-neutral-300">{Math.round(r.week7) || "-"}</span>
                       <span
                         className={`text-right font-bold tabular-nums ${
                           r.ratio === null
@@ -536,7 +530,7 @@ export default function PracticeCheckSection({
             </div>
           )}
 
-          {hasCoef && (
+          {(
             <ul className={`${small} flex flex-col gap-0.5`}>
               <li>直近7日で計算に入っていないもの：</li>
               {estimate.unreported > 0 && <li>・実施報告がない練習 {estimate.unreported}件</li>}
@@ -545,7 +539,7 @@ export default function PracticeCheckSection({
                   ・{excludeReasonLabel[k]}：のべ{estimate.excluded[k]}項目
                 </li>
               ))}
-              {estimate.noClass > 0 && <li>・階級が未登録でウェイトを計算できない人 {estimate.noClass}人</li>}
+              {estimate.noClass > 0 && <li>・階級が未登録の人 {estimate.noClass}人（ランは中量級の係数で計算しています）</li>}
               {estimate.unanswered > 0 && <li>・参加範囲の未回答 のべ{estimate.unanswered}回（自由参加以外は全部参加とみなしています）</li>}
               {estimate.unreported === 0 && Object.keys(estimate.excluded).length === 0 && estimate.noClass === 0 && estimate.unanswered === 0 && <li>・なし</li>}
             </ul>

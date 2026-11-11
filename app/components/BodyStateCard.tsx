@@ -54,10 +54,11 @@ export default function BodyStateCard({
   const prevSelf = selfDates.length > 1 ? data.selfByDate.get(selfDates[selfDates.length - 2])! : null;
   const selfAvg = selfDates.length > 0 ? selfDates.reduce((a, d) => a + data.selfByDate.get(d)!, 0) / selfDates.length : null;
 
-  // 練習量から：本人の直近28日の平均を100としたときの今日の値
-  const pct = data.ratio != null ? Math.round(data.ratio * 100) : null;
-  const yPct = data.yesterdayRatio != null ? Math.round(data.yesterdayRatio * 100) : null;
+  // 練習量から：蓄積の値（0＝疲労なし）。いつもとの比較は2週間分たまってから
+  const now = Math.round(data.today);
+  const diff = now - Math.round(data.yesterday);
   const level = data.ratio != null ? levelOf(data.ratio) : null;
+  const hasLoad = data.days.some((d) => (data.accByDate.get(d) ?? 0) > 0);
 
   // 気持ちと練習量のずれ
   let gap: string | null = null;
@@ -68,10 +69,9 @@ export default function BodyStateCard({
       gap = "練習量はいつも並みなのに、疲れを強く感じています。睡眠・食事・体調も振り返ってみましょう。";
   }
 
-  const avg = data.avg || 1;
-  const accPct = data.days.map((d) => (data.short || !data.accByDate.has(d) ? null : Math.round(((data.accByDate.get(d) ?? 0) / avg) * 100)));
+  const accSeries = data.days.map((d) => (hasLoad ? Math.round(data.accByDate.get(d) ?? 0) : null));
   const selfSeries = data.days.map((d) => data.selfByDate.get(d) ?? null);
-  const hasChart = selfSeries.some((v) => v != null) || accPct.some((v) => v != null);
+  const hasChart = selfSeries.some((v) => v != null) || accSeries.some((v) => v != null);
 
   const box = "flex flex-col gap-1 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50";
   const small = "text-[length:calc(10px+var(--fs-add))] leading-snug text-neutral-500";
@@ -97,26 +97,29 @@ export default function BodyStateCard({
         </div>
         <div className={box}>
           <span className="text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-500">📈 練習量からの疲労度</span>
-          {data.noSettings ? (
-            <span className={small}>監督が係数を設定すると出ます</span>
-          ) : pct == null ? (
+          {!hasLoad ? (
             <>
-              <span className="text-lg font-extrabold leading-none text-neutral-400">記録不足</span>
-              <span className={small}>練習の記録が2週間分たまると出ます</span>
+              <span className="text-lg font-extrabold leading-none text-neutral-400">—</span>
+              <span className={small}>練習の記録が入ると出ます</span>
             </>
           ) : (
             <>
               <span className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-extrabold leading-none text-foreground">{pct}</span>
-                <span className="text-xs text-neutral-500">%</span>
-                {yPct != null && yPct !== pct && (
-                  <span className={`text-[length:calc(10px+var(--fs-add))] font-bold ${pct > yPct ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                    {pct > yPct ? "▲" : "▼"} {Math.abs(pct - yPct)}（前日比）
+                <span className="text-2xl font-extrabold leading-none text-foreground">{now}</span>
+                {diff !== 0 && (
+                  <span className={`text-[length:calc(10px+var(--fs-add))] font-bold ${diff > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {diff > 0 ? "▲" : "▼"} {Math.abs(diff)}（前日比）
                   </span>
                 )}
               </span>
-              <span className={`text-[length:calc(11px+var(--fs-add))] font-bold ${level!.cls}`}>{level!.text}</span>
-              <span className={small}>直近4週の平均を100としたときの今日の値</span>
+              {level ? (
+                <span className={`text-[length:calc(11px+var(--fs-add))] font-bold ${level.cls}`}>
+                  {level.text}（4週平均 {Math.round(data.avg)}）
+                </span>
+              ) : (
+                <span className={small}>いつもとの比較は、記録が2週間分たまると出ます</span>
+              )}
+              <span className={small}>0＝疲れなし。練習するほど増え、休むと減ります</span>
             </>
           )}
         </div>
@@ -134,12 +137,12 @@ export default function BodyStateCard({
           <DualAxisChart
             labels={data.days.map(md)}
             leftLabel="自己評価"
-            rightLabel="練習量（平均=100）"
+            rightLabel="練習量からの疲労度"
             leftDomain={[0, 10]}
             formatLeft={(v) => String(Math.round(v))}
             formatRight={(v) => String(Math.round(v))}
             series={[
-              { label: "練習量からの疲労度", axis: "right", kind: "bar", color: "#dc2626", values: accPct },
+              { label: "練習量からの疲労度", axis: "right", kind: "bar", color: "#dc2626", values: accSeries },
               { label: "自己評価", axis: "left", kind: "line", color: "#f59e0b", values: selfSeries },
             ]}
             highlight={(i) => data.days[i] === today}

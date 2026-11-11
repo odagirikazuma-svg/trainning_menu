@@ -8,21 +8,22 @@ import {
   dateRange,
   fatigueState,
   memberDailyLoads,
-  type Coefficients,
+  resolveSettings,
   type LoadMenu,
+  type LoadSet,
+  type LoadSettingsRow,
   type Participation,
 } from "./loadEstimate";
 
 export type MyFatigue = {
-  // 係数が設定されていない（まだ試算できない）
-  noSettings: boolean;
   days: string[]; // 直近28日（古い順）
-  // 練習量からの疲労度：蓄積の値と、本人の直近28日平均を100としたときの値
+  // 練習量からの疲労度：蓄積の値（0＝疲労なし）と、本人の直近28日平均を100としたときの値
   accByDate: Map<string, number>;
+  today: number;
+  yesterday: number;
   avg: number;
   ratio: number | null;
   short: boolean;
-  yesterdayRatio: number | null;
   // 自己評価（日付→1〜10）
   selfByDate: Map<string, number>;
 };
@@ -34,7 +35,7 @@ export async function loadMyFatigue(
 ): Promise<MyFatigue> {
   const from = addDays(base, -55);
   const [setRes, profRes, menuRes, absRes, setsRes, condRes] = await Promise.all([
-    supabase.from("load_settings").select("coefficients, retention").eq("team_id", member.team_id).maybeSingle(),
+    supabase.from("load_settings").select("coefficients, retention, calc_version").eq("team_id", member.team_id).maybeSingle(),
     supabase.from("profiles").select("weight_class").eq("id", member.id).maybeSingle(),
     member.home_location
       ? supabase
@@ -55,7 +56,7 @@ export async function loadMyFatigue(
       .lte("date", base),
     supabase
       .from("training_sets")
-      .select("date, weight_kg, reps, is_warmup")
+      .select("date, weight_kg, reps, seconds, is_warmup, exercise:exercises(name)")
       .eq("author_id", member.id)
       .gte("date", from)
       .lte("date", base)
@@ -69,11 +70,7 @@ export async function loadMyFatigue(
   ]);
   const days = dateRange(addDays(base, -27), base);
   const selfByDate = new Map(((condRes.data ?? []) as { date: string; fatigue: number }[]).map((r) => [r.date, r.fatigue]));
-  const settings = setRes.data as { coefficients: Coefficients; retention: number } | null;
-  const coef = settings?.coefficients ?? {};
-  const noSettings = !Object.values(coef).some((v) => typeof v === "number");
-  const empty: MyFatigue = { noSettings, days, accByDate: new Map(), avg: 0, ratio: null, short: true, yesterdayRatio: null, selfByDate };
-  if (noSettings) return empty;
+  const { coef, retention } = resolveSettings(setRes.data as LoadSettingsRow);
 
   const menus = (menuRes.data ?? []) as LoadMenu[];
   const ids = menus.map((m) => m.id);
@@ -103,7 +100,7 @@ export async function loadMyFatigue(
     for (const r of (ptRes.data ?? []) as (Participation & { menu_id: string })[]) participation.set(r.menu_id, r);
   }
   const absences = (absRes.data ?? []) as { date: string; session_keys: string[] | null }[];
-  const { daily } = memberDailyLoads(
+  const { daily, active } = memberDailyLoads(
     {
       menus,
       items,
@@ -111,23 +108,32 @@ export async function loadMyFatigue(
       diffKind,
       participation,
       isAbsent: (m) => absences.some((a) => a.date === m.date && absenceCoversMat(a.session_keys, m.start_time)),
-      sets: (setsRes.data ?? []) as { date: string; weight_kg: number | null; reps: number | null; is_warmup: boolean | null }[],
+      sets: toLoadSets(setsRes.data),
       weightClass: (profRes.data as { weight_class: number | null } | null)?.weight_class ?? null,
       homeLocation: member.home_location,
     },
     coef
   );
-  const retention = Number(settings?.retention ?? 0.7);
-  const st = fatigueState(daily, base, retention);
-  const yst = fatigueState(daily, addDays(base, -1), retention);
+  const offMinus = coef.off_minus ?? 0;
+  const st = fatigueState(daily, base, retention, offMinus, active);
   return {
-    noSettings,
     days,
     accByDate: st.acc,
+    today: st.today,
+    yesterday: st.yesterday,
     avg: st.avg,
     ratio: st.ratio,
     short: st.short,
-    yesterdayRatio: yst.ratio,
     selfByDate,
   };
+}
+
+// トレ報のセット（種目名つき）を計算用の形に
+export function toLoadSets(rows: unknown): LoadSet[] {
+  return ((rows ?? []) as (Omit<LoadSet, "exercise_name"> & { author_id?: string; exercise?: { name: string } | { name: string }[] | null })[]).map(
+    (r) => {
+      const ex = Array.isArray(r.exercise) ? r.exercise[0] : r.exercise;
+      return { ...r, exercise_name: ex?.name ?? null };
+    }
+  );
 }
