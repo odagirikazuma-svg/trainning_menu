@@ -202,13 +202,38 @@ export default function AbsenceReviewSection({
           return (
             <div
               key={date}
-              className="flex flex-col gap-1.5 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900/70"
+              className={`flex flex-col overflow-hidden rounded-xl border bg-white dark:bg-neutral-900/70 ${
+                date === todayStr
+                  ? "border-red-300 dark:border-red-900"
+                  : date === tomorrowStr
+                    ? "border-amber-300 dark:border-amber-900"
+                    : "border-neutral-200 dark:border-neutral-800"
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200">
-                  {dateLabel(date, todayStr, tomorrowStr)}　休み {list.filter((r) => r.status !== "rejected").length}人
+              {/* 日付の見出し帯：今日＝赤、明日＝オレンジ、それ以降＝グレー */}
+              <div
+                className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                  date === todayStr
+                    ? "bg-red-600 text-white"
+                    : date === tomorrowStr
+                      ? "bg-amber-500 text-white"
+                      : "bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100"
+                }`}
+              >
+                <span className="flex items-baseline gap-2">
+                  {(date === todayStr || date === tomorrowStr) && (
+                    <span className="rounded bg-white/25 px-1.5 py-0.5 text-[length:calc(11px+var(--fs-add))] font-bold">
+                      {date === todayStr ? "今日" : "明日"}
+                    </span>
+                  )}
+                  <span className="text-base font-extrabold tracking-wide">{dateLabel(date, "", "")}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-sm font-bold">
+                    休み {list.filter((r) => r.status !== "rejected").length}人
+                  </span>
                   {list.some((r) => r.status === "rejected") && (
-                    <span className="ml-1 font-normal text-neutral-500">
+                    <span className="text-[length:calc(11px+var(--fs-add))] opacity-80">
                       （取り消し{list.filter((r) => r.status === "rejected").length}）
                     </span>
                   )}
@@ -228,9 +253,9 @@ export default function AbsenceReviewSection({
                   </button>
                 )}
               </div>
-              <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
+              <ul className="flex flex-col divide-y divide-neutral-100 px-3 dark:divide-neutral-800">
                 {list.map((r) => (
-                  <li key={r.id} className="flex flex-col gap-1 py-2">
+                  <li key={r.id} className="flex flex-col gap-1 py-2.5">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
