@@ -203,19 +203,21 @@ export function setsLoad(sets: LoadSet[], weightClass: number | null, coef: Coef
 
 // 日ごとの負荷（dates は古い順・すべての日）から蓄積を出す。
 // 練習のない日（active に入っていない日）は ×残る割合 のあと −オフの回復。0未満は0
+// openDate（きょう）は、まだ練習の記録がなくてもオフとは決めない（×残る割合だけ）
 export function accumulate(
   dates: string[],
   daily: Map<string, number>,
   retention: number,
   offMinus = 0,
-  active?: Set<string>
+  active?: Set<string>,
+  openDate?: string
 ) {
   const acc = new Map<string, number>();
   let prev = 0;
   for (const d of dates) {
     const load = daily.get(d) ?? 0;
     const worked = active ? active.has(d) : load > 0;
-    prev = worked ? prev * retention + load : Math.max(0, prev * retention - offMinus);
+    prev = worked ? prev * retention + load : Math.max(0, prev * retention - (d === openDate ? 0 : offMinus));
     acc.set(d, prev);
   }
   return acc;
@@ -303,7 +305,7 @@ export function fatigueState(
   active?: Set<string>
 ) {
   const dates = dateRange(addDays(base, -55), base);
-  const acc = accumulate(dates, daily, retention, offMinus, active);
+  const acc = accumulate(dates, daily, retention, offMinus, active, base);
   const today = acc.get(base) ?? 0;
   const yesterday = acc.get(addDays(base, -1)) ?? 0;
   const prev28 = dates.slice(-29, -1).map((d) => acc.get(d) ?? 0);
