@@ -140,7 +140,7 @@ export default function FatigueSelector({
         ))}
       </div>
       <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-        タップするとすぐ保存されます。管理者だけが見られます。
+        タップするとすぐ保存されます。監督・コーチと自分だけが見られます。
       </span>
       {error && (
         <span className="text-[length:calc(10px+var(--fs-add))] text-red-600 dark:text-red-400">

@@ -492,6 +492,33 @@ export default function ScheduleEditForm({
     return null;
   }
 
+  // 時間割を変えた結果、どのマット練習にもつながらなくなったメニュー（オフにした日・消したセッション）を探して、
+  // 実施報告がないものは消すか確認する（残すと、部員に日報の提出が求められ続けるため）
+  async function cleanupOrphanMenus(dates: string[]) {
+    if (dates.length === 0) return;
+    const { data } = await supabase
+      .from("menus")
+      .select("id, date, location, start_time, content")
+      .eq("team_id", teamId)
+      .eq("is_off", false)
+      .is("source_session_id", null)
+      .in("date", dates);
+    const menus = (data ?? []) as { id: string; date: string; location: Location; start_time: string | null; content: string | null }[];
+    if (menus.length === 0) return;
+    const { data: reps } = await supabase.from("menu_reports").select("menu_id").in("menu_id", menus.map((m) => m.id));
+    const reported = new Set(((reps ?? []) as { menu_id: string }[]).map((r) => r.menu_id));
+    const orphans = menus.filter((m) => !reported.has(m.id)).sort((a, b) => a.date.localeCompare(b.date));
+    if (orphans.length === 0) return;
+    const list = orphans
+      .map((m) => `・${formatMonthDay(m.date)} ${locationLabel[m.location] ?? m.location} ${m.start_time ? m.start_time.slice(0, 5) : ""}`)
+      .join("\n");
+    const ok = window.confirm(
+      `時間割に合わなくなった練習メニューが残っています。\n${list}\n\n残すと、部員にこの練習の日報が求められます。削除しますか？（実施報告があるメニューは残します）`
+    );
+    if (!ok) return;
+    await supabase.from("menus").delete().in("id", orphans.map((m) => m.id));
+  }
+
   async function handleSaveSingle() {
     setSaving(true);
     setErrorMsg(null);
@@ -509,6 +536,7 @@ export default function ScheduleEditForm({
       setErrorMsg(errorMessage);
       return;
     }
+    await cleanupOrphanMenus([date]);
     await onSaved();
   }
 
@@ -561,6 +589,7 @@ export default function ScheduleEditForm({
     } else {
       setRangeResult(`${dates.length}日分をまとめて設定しました。`);
     }
+    await cleanupOrphanMenus(dates);
     await onSaved();
   }
 
@@ -601,6 +630,7 @@ export default function ScheduleEditForm({
       }
     }
 
+    await cleanupOrphanMenus(copyTargetDates);
     const copiedCount = copyTargetDates.length;
     setShowCopyToDates(false);
     setCopyTargetDates([]);

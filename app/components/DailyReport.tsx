@@ -316,12 +316,18 @@ export default function DailyReport({
   useEffect(() => {
     if (!draftReady.current || loading) return;
     const hasMat = Object.values(matDrafts).some((d) => d.mode);
+    // 休み申請の代替メニューを自動で入れただけの状態は、下書きにしない（開くたびに「戻しました」と出ないように）
+    const onlyPlanPrefill =
+      !!prefilledFromPlan.current &&
+      training.title === "代替メニュー" &&
+      !training.startTime &&
+      (blocks.length > 0
+        ? blocks.every((b) => b.prefilled && b.prefilledFrom === "plan") && training.content.trim() === ""
+        : training.content === (absenceReq?.plan ?? ""));
     const hasTraining = log
       ? editingTraining
-      : !!training.type ||
-        training.content.trim() !== "" ||
-        training.title.trim() !== "" ||
-        blocks.length > 0;
+      : !onlyPlanPrefill &&
+        (!!training.type || training.content.trim() !== "" || training.title.trim() !== "" || blocks.length > 0);
     const hasMemo = memo !== memoSaved;
     const value =
       hasMat || hasTraining || hasMemo
