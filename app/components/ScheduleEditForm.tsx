@@ -505,15 +505,20 @@ export default function ScheduleEditForm({
       .in("date", dates);
     const menus = (data ?? []) as { id: string; date: string; location: Location; start_time: string | null; content: string | null }[];
     if (menus.length === 0) return;
-    const { data: reps } = await supabase.from("menu_reports").select("menu_id").in("menu_id", menus.map((m) => m.id));
-    const reported = new Set(((reps ?? []) as { menu_id: string }[]).map((r) => r.menu_id));
+    const ids = menus.map((m) => m.id);
+    const [{ data: reps }, { data: cms }] = await Promise.all([
+      supabase.from("menu_reports").select("menu_id").in("menu_id", ids),
+      supabase.from("comments").select("menu_id").in("menu_id", ids),
+    ]);
+    // 実施報告か、部員の日報が1件でもあるメニューは残す
+    const reported = new Set([...((reps ?? []) as { menu_id: string }[]), ...((cms ?? []) as { menu_id: string }[])].map((r) => r.menu_id));
     const orphans = menus.filter((m) => !reported.has(m.id)).sort((a, b) => a.date.localeCompare(b.date));
     if (orphans.length === 0) return;
     const list = orphans
       .map((m) => `・${formatMonthDay(m.date)} ${locationLabel[m.location] ?? m.location} ${m.start_time ? m.start_time.slice(0, 5) : ""}`)
       .join("\n");
     const ok = window.confirm(
-      `時間割に合わなくなった練習メニューが残っています。\n${list}\n\n残すと、部員にこの練習の日報が求められます。削除しますか？（実施報告があるメニューは残します）`
+      `時間割に合わなくなった練習メニューが残っています。\n${list}\n\n残すと、部員にこの練習の日報が求められます。削除しますか？（実施報告や部員の日報があるメニューは残します）`
     );
     if (!ok) return;
     await supabase.from("menus").delete().in("id", orphans.map((m) => m.id));

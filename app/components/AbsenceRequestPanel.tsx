@@ -497,7 +497,9 @@ export default function AbsenceRequestPanel({
       )}
       {req.status === "approved" && !readOnly && (
         <p className="text-[length:calc(10px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
-          休みでも日報の提出は必要です。当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。
+          {req.plan_type === "none"
+            ? "休みでも日報の提出は必要です。マット練習は「休み」の内容が入っているので、そのまま提出してください。"
+            : "休みでも日報の提出は必要です。当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。"}
         </p>
       )}
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
