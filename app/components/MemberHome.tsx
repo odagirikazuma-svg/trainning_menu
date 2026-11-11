@@ -30,6 +30,7 @@ import SubTabBar from "./shell/SubTabBar";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
 import { UnifiedCalendar } from "./mypage/UnifiedCalendar";
 import AbsenceRequestTab from "./mypage/AbsenceRequestTab";
+import { loadOffDates } from "../lib/offDays";
 import {
   absencePlanLabel,
   absenceReasonLabel,
@@ -394,8 +395,11 @@ export default function MemberHome({
     }
 
     const menuMap = new Map<string, TodoMenuRow>();
+    const offDates = effectiveHomeLocation
+      ? await loadOffDates(supabase, profile.team_id, effectiveHomeLocation, rangeStart, todayStr)
+      : new Set<string>();
     for (const m of (ownMenuData ?? []) as unknown as TodoMenuRow[]) {
-      menuMap.set(m.id, m);
+      if (!offDates.has(m.date)) menuMap.set(m.id, m);
     }
     for (const m of (jointMenuData ?? []) as unknown as TodoMenuRow[]) {
       menuMap.set(m.id, m);

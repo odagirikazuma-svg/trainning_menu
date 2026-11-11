@@ -496,8 +496,12 @@ export default function DailyReport({
     if (own.error || joint.error) setErrorMsg((own.error ?? joint.error)!.message);
     if (myRes.error) setErrorMsg(myRes.error.message);
 
+    // 時間割でオフにした日に残っている自拠点のメニューは、まだ報告していなければ出さない
+    const offForHome = !!(schedRes.data as { is_off?: boolean } | null)?.is_off;
+    const myMenuIds = new Set(((myRes.data ?? []) as { menu_id: string }[]).map((r) => r.menu_id));
     const menuMap = new Map<string, DayMenu>();
     for (const m of [...((own.data as DayMenu[] | null) ?? []), ...((joint.data as DayMenu[] | null) ?? [])]) {
+      if (offForHome && !m.is_joint && m.location === homeLocation && !myMenuIds.has(m.id)) continue;
       menuMap.set(m.id, m);
     }
     const dayMenus = Array.from(menuMap.values()).sort((a, b) =>

@@ -280,6 +280,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 時間割でオフにした日（その拠点のメニューが残っていても、日報のタスクに数えない）
+  const { data: offRows } = await supabase
+    .from("schedule_days")
+    .select("date, location, team_id")
+    .in("team_id", teamIds)
+    .eq("is_off", true)
+    .gte("date", rangeStart)
+    .lte("date", todayStr);
+  const offKeys = new Set(
+    ((offRows ?? []) as { date: string; location: string; team_id: string }[]).map(
+      (r) => `${r.team_id}:${r.location}:${r.date}`
+    )
+  );
+
   const { data: logRows, error: logError } = await supabase
     .from("weight_logs")
     .select("author_id, date")
@@ -361,6 +375,7 @@ export async function GET(request: NextRequest) {
         (menu) =>
           menu.team_id === m.team_id &&
           (menu.location === m.home_location || menu.is_joint) &&
+          (menu.is_joint || !offKeys.has(`${menu.team_id}:${menu.location}:${menu.date}`)) &&
           menu.date >= joinedDate &&
           !isExemptOn(exemptions, m.id, menu.date) &&
           isReportOpen(menu.date, menu.start_time)

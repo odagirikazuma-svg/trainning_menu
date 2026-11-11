@@ -6,6 +6,7 @@ import type { Profile } from "../AuthGate";
 import type { Location, SessionType } from "../../lib/types";
 import { useTasksChangedSignal } from "./taskRefreshBus";
 import { isExemptOn, loadExemptions } from "../../lib/exemptions";
+import { loadOffDates } from "../../lib/offDays";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -105,12 +106,13 @@ export function useMyTaskCount(profile: Profile | null): number {
           string,
           { id: string; date: string; start_time: string | null }
         >();
+        const offDates = await loadOffDates(supabase, profile!.team_id, effectiveHomeLocation, rangeStart, todayStr);
         for (const m of (ownMenuData ?? []) as {
           id: string;
           date: string;
           start_time: string | null;
         }[])
-          menuMap.set(m.id, m);
+          if (!offDates.has(m.date)) menuMap.set(m.id, m);
         for (const m of (jointMenuData ?? []) as {
           id: string;
           date: string;
