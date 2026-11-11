@@ -45,7 +45,8 @@ export default function DualAxisChart({
   const W = 320;
   const padL = 30;
   const padR = 34;
-  const top = 8;
+  // 上に軸の名前を置くので、グラフは少し下から始める
+  const top = 16;
   const H = height;
   const plotH = H - top - 4;
   const plotW = W - padL - padR;
@@ -60,7 +61,8 @@ export default function DualAxisChart({
     const min = hasBar ? 0 : Math.min(...vals);
     const max = Math.max(...vals);
     const pad = (max - min) * 0.12 || Math.max(1, max * 0.1);
-    return [hasBar ? 0 : Math.max(0, min - pad), max + pad];
+    // 棒の軸は上に余白を多めにとり、棒が折れ線にかぶりすぎないようにする
+    return [hasBar ? 0 : Math.max(0, min - pad), hasBar ? max * 1.35 : max + pad];
   };
   const [l0, l1] = domainOf("left", leftDomain);
   const [r0, r1] = domainOf("right", rightDomain);
@@ -93,7 +95,7 @@ export default function DualAxisChart({
         {series.map((s) => (
           <span key={s.label} className="flex items-center gap-1">
             {s.kind === "bar" ? (
-              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color, opacity: 0.55 }} />
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color, opacity: 0.35 }} />
             ) : s.kind === "point" ? (
               <span className="inline-block h-2.5 w-2.5 rotate-45" style={{ background: s.color }} />
             ) : (
@@ -157,7 +159,7 @@ export default function DualAxisChart({
                 height={Math.max(1, top + plotH - y(s.axis, v))}
                 rx={1.5}
                 fill={s.color}
-                opacity={0.45}
+                opacity={0.28}
               />
             ) : null
           )
