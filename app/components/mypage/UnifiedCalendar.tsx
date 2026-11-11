@@ -292,12 +292,13 @@ export function UnifiedCalendar({
     const hasRecord = actual.some((l) => l.cls === actualCls);
     if (past || (key === todayDate && hasRecord)) return actual;
     // 予定（今日の記録がまだない日・これからの日）
-    if (abs) return [{ text: absText, cls: absCls }, { text: abs.plan === "安静" ? "安静" : `代替:${abs.plan}`, cls: planCls }];
+    if (abs) return [{ text: absText, cls: absCls }, { text: abs.plan, cls: planCls }];
     if (!schedule || schedule.isOff) return [];
-    return schedule.sessions.map((s) => ({
-      text: `${sessionTypeLabel[s.type]}${s.time ? ` ${s.time.slice(0, 5)}` : ""}`,
-      cls: planCls,
-    }));
+    // 狭いマスでも切れないように、種目と時刻を2行に分ける
+    return schedule.sessions.flatMap((s) => [
+      { text: sessionTypeLabel[s.type], cls: planCls },
+      ...(s.time ? [{ text: s.time.slice(0, 5), cls: `${planCls} text-[length:calc(7px+var(--fs-add-mini))]` }] : []),
+    ]);
   }
 
   return (
