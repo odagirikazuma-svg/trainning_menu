@@ -108,10 +108,6 @@ export default function PracticeCheckSection({
   const [loc, setLoc] = useState<Loc>("tama");
   const [showReviewed, setShowReviewed] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [coefDraft, setCoefDraft] = useState<Record<string, string>>({});
-  const [retentionDraft, setRetentionDraft] = useState("70");
-  const [msg, setMsg] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -360,38 +356,6 @@ export default function PracticeCheckSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, base, coef, retention]);
 
-  function startEdit() {
-    const d: Record<string, string> = {};
-    for (const c of coefficientDefs) d[c.key] = typeof coef[c.key] === "number" ? String(coef[c.key]) : "";
-    setCoefDraft(d);
-    setRetentionDraft(String(Math.round(retention * 100)));
-    setEditing(true);
-    setMsg(null);
-  }
-
-  async function saveSettings() {
-    const c: Coefficients = {};
-    for (const [k, v] of Object.entries(coefDraft)) {
-      const n = Number(v);
-      if (v.trim() !== "" && Number.isFinite(n) && n >= 0) c[k] = n;
-    }
-    const r = Number(retentionDraft);
-    if (!Number.isFinite(r) || r < 0 || r >= 100) return setMsg("残る割合は0〜99%で入れてください。");
-    const { error: e } = await supabase.from("load_settings").upsert(
-      {
-        team_id: teamId,
-        coefficients: c,
-        retention: r / 100,
-        calc_version: CALC_VERSION,
-        updated_by: coachId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "team_id" }
-    );
-    if (e) return setMsg(`保存できませんでした：${e.message}`);
-    setEditing(false);
-    await load();
-  }
 
   const card = "flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900/70";
   const h2 = "flex items-center gap-2 text-sm font-semibold text-foreground";
@@ -535,9 +499,9 @@ export default function PracticeCheckSection({
             実測ではなく、メニューの量×係数で出した目安です。「いつもと」は、その人の直近28日の平均を100%としたときの今日の蓄積です（記録が2週間分たまるまでは出しません）。
           </p>
 
-          {!hasCoef && !editing && (
+          {!hasCoef && (
             <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
-              係数がまだ設定されていません。下の「係数を設定」から入れると計算されます。
+              係数がまだ設定されていません。「設定 › 管理設定 › 疲労度の係数」から入れると計算されます。
             </p>
           )}
 
@@ -604,65 +568,7 @@ export default function PracticeCheckSection({
             </ul>
           )}
 
-          {!editing ? (
-            <button type="button" onClick={startEdit} className={`${btn} self-start border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300`}>
-              係数を設定
-            </button>
-          ) : (
-            <div className={card}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">係数（空欄の項目は計算に入れません）</span>
-                <button
-                  type="button"
-                  onClick={() => setCoefDraft(Object.fromEntries(coefficientDefs.map((c) => [c.key, coefDraft[c.key]?.trim() ? coefDraft[c.key] : String(c.suggested)])))}
-                  className="text-xs text-neutral-500 underline"
-                >
-                  空欄におすすめの初期値を入れる
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {coefficientDefs.map((c) => (
-                  <label key={c.key} className="flex items-center justify-between gap-2 text-xs text-neutral-700 dark:text-neutral-300">
-                    <span>
-                      {c.label}
-                      <span className="ml-1 text-neutral-400">{c.unit}</span>
-                    </span>
-                    <input
-                      inputMode="decimal"
-                      value={coefDraft[c.key] ?? ""}
-                      placeholder={String(c.suggested)}
-                      onChange={(e) => setCoefDraft((d) => ({ ...d, [c.key]: e.target.value }))}
-                      className="w-16 rounded-md border border-neutral-300 bg-white px-2 py-1 text-right text-sm text-neutral-900 placeholder:text-neutral-300 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder:text-neutral-700"
-                    />
-                  </label>
-                ))}
-              </div>
-              <label className="flex items-center justify-between gap-2 text-xs text-neutral-700 dark:text-neutral-300">
-                <span>
-                  前日までの蓄積が翌日に残る割合
-                  <span className="ml-1 text-neutral-400">（休むと毎日この割合に減る）</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <input
-                    inputMode="numeric"
-                    value={retentionDraft}
-                    onChange={(e) => setRetentionDraft(e.target.value)}
-                    className="w-14 rounded-md border border-neutral-300 bg-white px-2 py-1 text-right text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
-                  />
-                  %
-                </span>
-              </label>
-              {msg && <p className="text-xs text-red-600 dark:text-red-400">{msg}</p>}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setEditing(false)} className={`${btn} border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300`}>
-                  やめる
-                </button>
-                <button type="button" onClick={saveSettings} className="ml-auto rounded-lg bg-red-600 px-4 py-1.5 text-xs font-bold text-white">
-                  保存
-                </button>
-              </div>
-            </div>
-          )}
+          <p className={small}>係数と残る割合は「設定 › 管理設定 › 疲労度の係数」で変えられます。</p>
         </section>
       )}
     </div>

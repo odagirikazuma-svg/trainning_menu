@@ -37,6 +37,7 @@ import {
 import CollapsibleSection from "../../components/shell/CollapsibleSection";
 import MemberExemptionSection from "../../components/MemberExemptionSection";
 import MenuTemplatesSection from "../../components/MenuTemplatesSection";
+import LoadSettingsSection from "../../components/LoadSettingsSection";
 import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
@@ -929,6 +930,11 @@ export default function SettingsPage() {
             <CollapsibleSection title="LINEのまとめ通知">
               <LineSummarySection />
             </CollapsibleSection>
+            {profile.role === "coach" && (
+              <CollapsibleSection title="疲労度の係数">
+                <LoadSettingsSection />
+              </CollapsibleSection>
+            )}
           </SettingsGroup>
           </>
           )}
