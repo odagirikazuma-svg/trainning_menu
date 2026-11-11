@@ -13,12 +13,6 @@ import {
   type CalendarViewPref,
 } from "../../components/shell/CalendarViewPrefProvider";
 import {
-  useCalendarDisplayPref,
-  calendarSlotOptions,
-  calendarSlotOptionLabel,
-  type CalendarSlotOption,
-} from "../../components/shell/CalendarDisplayPrefProvider";
-import {
   useEventResultsPref,
   type EventResultsViewMode,
 } from "../../components/shell/EventResultsPrefProvider";
@@ -88,68 +82,6 @@ function CalendarViewSection() {
   );
 }
 
-function CalendarSlotSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: CalendarSlotOption;
-  onChange: (v: CalendarSlotOption) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
-      {label}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as CalendarSlotOption)}
-        className="rounded-lg border border-border-color bg-surface-2 px-3 py-2.5 text-sm text-foreground"
-      >
-        {calendarSlotOptions.map((opt) => (
-          <option key={opt} value={opt}>
-            {calendarSlotOptionLabel[opt]}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function MyPageCalendarDisplaySection() {
-  const { pref, setPref } = useCalendarDisplayPref();
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2">
-        <CalendarSlotSelect
-          label="スロット1"
-          value={pref.slot1}
-          onChange={(v) => setPref({ ...pref, slot1: v })}
-        />
-        <CalendarSlotSelect
-          label="スロット2"
-          value={pref.slot2}
-          onChange={(v) => setPref({ ...pref, slot2: v })}
-        />
-      </div>
-      <label className="flex items-center justify-between gap-2 rounded-lg border border-border-color bg-surface-2 px-3 py-2.5">
-        <span className="text-sm font-medium text-foreground">
-          試合日を強調表示する
-        </span>
-        <input
-          type="checkbox"
-          checked={pref.highlightMatch}
-          onChange={(e) =>
-            setPref({ ...pref, highlightMatch: e.target.checked })
-          }
-          className="h-5 w-5 accent-red-600"
-        />
-      </label>
-      <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
-        マイページのカレンダーのマス目は小さいため、直接表示できる項目は最大2つ（スロット1・スロット2）です。行った種目の内容や一言メモの全文など、詳しい情報は日付をタップした下の欄でいつでも確認できます。一言メモは自分だけが閲覧・編集できます（20文字まで）。
-      </p>
-    </div>
-  );
-}
 
 const eventResultsViewOptions: { value: EventResultsViewMode; label: string }[] = [
   { value: "self", label: "自分の数値のみ" },
@@ -1000,7 +932,6 @@ export default function SettingsPage() {
             <CollapsibleSection title="次の試合">
               <NextMatchSection />
             </CollapsibleSection>
-            {/* マイページのカレンダーは表示内容を固定（実績／予定）にしたので、表示設定は出さない */}
           </SettingsGroup>
 
           <SettingsGroup

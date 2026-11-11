@@ -8,7 +8,6 @@ import {
   CALC_VERSION,
   accumulate,
   addDays,
-  coefficientDefs,
   dateRange,
   excludeReasonLabel,
   menuLoadFor,

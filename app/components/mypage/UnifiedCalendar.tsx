@@ -13,10 +13,7 @@ import {
   trainingTypeLabel,
 } from "../../lib/types";
 import { useCalendarViewPref } from "../shell/CalendarViewPrefProvider";
-import {
-  useCalendarDisplayPref,
-  type CalendarSlotOption,
-} from "../shell/CalendarDisplayPrefProvider";
+import { useCalendarDisplayPref } from "../shell/CalendarDisplayPrefProvider";
 
 // マイページ「振り返り」タブのカレンダー。
 // 過ぎた日は実績（休み・マット・その日に記録したトレーニング）、これからの日は予定
@@ -172,105 +169,6 @@ export function UnifiedCalendar({
       d.setDate(d.getDate() + 7);
       onCursorChange(d);
     }
-  }
-
-  // マス目の「スロット」1つ分の表示内容を組み立てる。
-  // マス目のスペースが限られているため、設定で選んだ最大2項目までしか表示しない
-  // （それ以外の詳しい情報は日付タップ後の詳細欄で確認する）。
-  function formatSessionSlot(
-    s: {
-      type: SessionType;
-      time: string | null;
-      locationNote: string | null;
-      isJoint: boolean;
-      jointLocation: Location | null;
-    },
-    schedule: { dayType: DayType } | undefined
-  ) {
-    const time = s.time ? s.time.slice(0, 5) : "各自";
-    let loc = "";
-    if (schedule?.dayType === "camp" || schedule?.dayType === "away") {
-      loc = s.locationNote ? `(${s.locationNote})` : "";
-    } else if (s.type === "mat") {
-      loc = `(${
-        locationLabel[s.isJoint ? (s.jointLocation ?? homeLocation) : homeLocation]
-      })`;
-    } else {
-      loc = s.locationNote ? `(${s.locationNote})` : "";
-    }
-    return `${time}${loc}`;
-  }
-
-  function renderSlot(
-    slot: CalendarSlotOption,
-    slotId: string,
-    key: string,
-    schedule:
-      | {
-          dayType: DayType;
-          sessions: {
-            type: SessionType;
-            time: string | null;
-            locationNote: string | null;
-            isJoint: boolean;
-            jointLocation: Location | null;
-          }[];
-        }
-      | undefined,
-    title: string | undefined
-  ) {
-    if (slot === "none") return null;
-    if (slot === "training_time") {
-      const s = schedule?.sessions.find((s) => s.type !== "mat");
-      if (!s) return null;
-      return (
-        <span
-          key={slotId}
-          className="flex items-center gap-0.5 max-w-full truncate"
-        >
-          {sessionTypeLabel[s.type]} {formatSessionSlot(s, schedule)}
-        </span>
-      );
-    }
-    if (slot === "actual_type") {
-      // その日に実際に記録された種目（ラン/ウェイト/その他）を表示する。
-      // 予定（スケジュール）ではなく、本人が実際にログした内容が元になる。
-      const types = dotsByDate.get(key);
-      const t = types?.[0];
-      if (!t) return null;
-      return (
-        <span
-          key={slotId}
-          className="flex items-center gap-0.5 max-w-full truncate"
-        >
-          {trainingTypeLabel[t]}
-        </span>
-      );
-    }
-    if (slot === "training_content") {
-      if (!title) return null;
-      const truncated = title.length > 6 ? `${title.slice(0, 6)}…` : title;
-      return (
-        <span key={slotId} className="max-w-full truncate">
-          {truncated}
-        </span>
-      );
-    }
-    if (slot === "memo_mark") {
-      const memo = memoPreviews?.get(key);
-      if (!memo) return null;
-      const truncated = memo.length > 5 ? `${memo.slice(0, 5)}…` : memo;
-      return (
-        <span
-          key={slotId}
-          className="flex items-center gap-0.5 max-w-full truncate"
-        >
-          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-          {truncated}
-        </span>
-      );
-    }
-    return null;
   }
 
   // マス目に出す行（固定）

@@ -11,7 +11,6 @@ import {
   toDraft,
   type MenuItemDraft,
   type Participation,
-  type ParticipationScope,
 } from "../lib/menuItems";
 
 // 日報（マット練習）の「参加範囲」と「自由参加スパーの参加量」。

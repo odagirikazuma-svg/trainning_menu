@@ -7,7 +7,6 @@ import {
   canCreateMenu,
   isAdminEditor,
   isStaffRole,
-  CommentKind,
   DayType,
   dayTypeLabel,
   Location,
@@ -15,22 +14,19 @@ import {
   locations,
   SessionType,
   sessionTypeLabel,
-  TrainingType,
-  trainingTypeLabel,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { isExemptOn, loadExemptions, type ExemptionRow } from "../lib/exemptions";
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
-import ReactionBar, { loadReactions, type ReactionRow } from "./ReactionBar";
 import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
 import TemplatePicker from "./board/TemplatePicker";
 import { notifyBoardTasksChanged, useBoardTasks, type BoardTask } from "./shell/useBoardTasks";
 import { itemsToText, toRow, type MenuItemDraft } from "../lib/menuItems";
 import MenuItemsEditor from "./board/MenuItemsEditor";
-import { CommentItem, ReportThread, toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
+import { toDateKey, MenuCalendar, TimeSelect, type MenuRow, type CommentRow } from "./board/BoardParts";
 
 const locationSubTabItems = locations.map((loc) => ({
   value: loc,
@@ -44,14 +40,6 @@ function formatMonthDay(dateStr: string) {
   return `${Number(m)}月${Number(d)}日`;
 }
 
-// "YYYY-MM-DD" + "HH:MM" -> "2026年7月24日 10時10分〜"
-function formatFullDateTime(dateStr: string, startTime: string | null) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const base = `${y}年${m}月${d}日`;
-  if (!startTime) return base;
-  const [h, min] = startTime.split(":").map(Number);
-  return `${base} ${h}時${String(min).padStart(2, "0")}分〜`;
-}
 
 // メニューの開始時刻を過ぎているか判定（開始時刻未設定の場合は常に報告可能）
 function isReportOpen(menu: MenuRow): boolean {
@@ -119,8 +107,6 @@ export default function TrainingBoardSupabase({
     null
   );
   const [comments, setComments] = useState<CommentRow[]>([]);
-  // 日報（実施報告・未実施報告）に付いたリアクション
-  const [reactions, setReactions] = useState<ReactionRow[]>([]);
   const [viewDateSchedule, setViewDateSchedule] = useState<{
     is_off: boolean;
     day_type: DayType;
@@ -146,19 +132,9 @@ export default function TrainingBoardSupabase({
   const [newItems, setNewItems] = useState<MenuItemDraft[]>([]);
   const [newTemplateId, setNewTemplateId] = useState<string | null>(null);
   const [showAllTasks, setShowAllTasks] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [showCommentForm, setShowCommentForm] = useState(false);
-  // 実施報告・未実施報告を送信中かどうか（二重送信防止）
-  const reportSubmitLock = useRef(false);
   // 「◯人/◯人 提出済み」を押すと出る未提出者ポップアップ
   const [showMissingPopup, setShowMissingPopup] = useState(false);
   // 実施報告・未実施報告は名前だけ並べ、押した人の詳細だけ開く
-  const [expandedReportIds, setExpandedReportIds] = useState<Set<string>>(
-    new Set()
-  );
-  const [expandedAbsentIds, setExpandedAbsentIds] = useState<Set<string>>(
-    new Set()
-  );
   const [newMenuType, setNewMenuType] = useState<"normal" | "joint" | "off">(
     "normal"
   );
@@ -170,32 +146,10 @@ export default function TrainingBoardSupabase({
   const [editDate, setEditDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [memberCounts, setMemberCounts] = useState<{
-    tama: number;
-    otsuka: number;
-    all: number;
-  }>({ tama: 0, otsuka: 0, all: 0 });
-  // 免除期間の人数調整用：練習に参加しうる部員(id・拠点)と、免除期間の一覧
-  const [memberRows, setMemberRows] = useState<
-    { id: string; home_location: Location | null }[]
-  >([]);
   const [boardExemptions, setBoardExemptions] = useState<ExemptionRow[]>([]);
   const [locationRoster, setLocationRoster] = useState<
     { id: string; display_name: string }[]
   >([]);
-  const [dayWeightLogs, setDayWeightLogs] = useState<
-    {
-      author_id: string;
-      display_name: string;
-      content: string;
-      type: TrainingType;
-      title: string | null;
-    }[]
-  >([]);
-  const [loadingDayWeightLogs, setLoadingDayWeightLogs] = useState(false);
-  const [submissionMap, setSubmissionMap] = useState<
-    Record<string, { reportAuthors: Set<string>; respondedAuthors: Set<string> }>
-  >({});
   // 「もう一方の拠点」で全体練習として作成されたメニュー（日付→メニュー情報）
   const [jointElsewhere, setJointElsewhere] = useState<
     Map<string, { menuId: string; location: Location }>
@@ -204,27 +158,6 @@ export default function TrainingBoardSupabase({
   const [viewDate, setViewDate] = useState<string>(() => toDateKey(new Date()));
   // 時間割を保存・コピーしたあとに、下の練習スケジュールのカレンダーを再読み込みさせるためのカウンタ
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
-
-  useEffect(() => {
-    // 練習に参加しうる部員を、コーチ・マネージャー・OBを除いて拠点ごとに集計する
-    // （マネージャーは実施報告の提出義務がないため、分母から除外する）
-    supabase
-      .from("profiles")
-      .select("id, home_location")
-      .eq("team_id", profile.team_id)
-      .not("role", "in", "(coach,manager,ob)")
-      .then(({ data }) => {
-        const rows = (data ?? []) as {
-          id: string;
-          home_location: Location | null;
-        }[];
-        setMemberRows(rows);
-        const tama = rows.filter((r) => r.home_location === "tama").length;
-        const otsuka = rows.filter((r) => r.home_location === "otsuka").length;
-        setMemberCounts({ tama, otsuka, all: rows.length });
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     // 免除期間（直近約3か月前〜1年先）を読み込む。免除中の部員は人数・未提出者から外す
@@ -258,42 +191,6 @@ export default function TrainingBoardSupabase({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCoachView, activeLocation]);
-
-  useEffect(() => {
-    if (!isCoachView) return;
-    (async () => {
-      setLoadingDayWeightLogs(true);
-      const { data, error } = await supabase
-        .from("weight_logs")
-        .select(
-          "author_id, content, type, title, author:profiles!weight_logs_author_id_fkey(display_name, home_location)"
-        )
-        .eq("team_id", profile.team_id)
-        .eq("date", viewDate);
-      if (!error) {
-        const rows = (data ?? []) as unknown as {
-          author_id: string;
-          content: string;
-          type: TrainingType;
-          title: string | null;
-          author: { display_name: string; home_location: Location | null } | null;
-        }[];
-        setDayWeightLogs(
-          rows
-            .filter((r) => r.author?.home_location === activeLocation)
-            .map((r) => ({
-              author_id: r.author_id,
-              display_name: r.author?.display_name ?? "不明",
-              content: r.content,
-              type: r.type,
-              title: r.title,
-            }))
-        );
-      }
-      setLoadingDayWeightLogs(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCoachView, activeLocation, viewDate]);
 
   useEffect(() => {
     setJointNoticeDate(null);
@@ -361,10 +258,7 @@ export default function TrainingBoardSupabase({
 
   useEffect(() => {
     if (selectedId) loadComments(selectedId);
-    setShowCommentForm(false);
     setShowMissingPopup(false);
-    setExpandedReportIds(new Set());
-    setExpandedAbsentIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -501,7 +395,6 @@ export default function TrainingBoardSupabase({
     } else {
       rows = (data ?? []) as unknown as MenuRow[];
       setMenus(rows);
-      await loadSubmissionSummary(rows.map((r) => r.id));
     }
     return rows;
   }
@@ -530,43 +423,6 @@ export default function TrainingBoardSupabase({
     return map;
   }
 
-  // メニューごとに「実施報告」「未実施報告」を提出した部員（重複なし）を集計する
-  async function loadSubmissionSummary(menuIds: string[]) {
-    if (menuIds.length === 0) {
-      setSubmissionMap({});
-      return;
-    }
-    const { data, error } = await supabase
-      .from("comments")
-      .select("menu_id, author_id, kind")
-      .in("menu_id", menuIds)
-      .in("kind", ["report", "absent"]);
-
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-
-    const map: Record<
-      string,
-      { reportAuthors: Set<string>; respondedAuthors: Set<string> }
-    > = {};
-    for (const row of (data ?? []) as {
-      menu_id: string;
-      author_id: string;
-      kind: CommentKind;
-    }[]) {
-      if (!map[row.menu_id]) {
-        map[row.menu_id] = { reportAuthors: new Set(), respondedAuthors: new Set() };
-      }
-      map[row.menu_id].respondedAuthors.add(row.author_id);
-      if (row.kind === "report") {
-        map[row.menu_id].reportAuthors.add(row.author_id);
-      }
-    }
-    setSubmissionMap(map);
-  }
-
   async function loadComments(menuId: string) {
     const { data, error } = await supabase
       .from("comments")
@@ -581,16 +437,9 @@ export default function TrainingBoardSupabase({
     } else {
       const rows = (data ?? []) as unknown as CommentRow[];
       setComments(rows);
-      await reloadReactions(rows);
     }
   }
 
-  async function reloadReactions(rows: CommentRow[] = comments) {
-    const ids = rows
-      .filter((c) => !c.parent_id && (c.kind === "report" || c.kind === "absent"))
-      .map((c) => c.id);
-    setReactions(await loadReactions(supabase, ids));
-  }
 
   // 日報はマイページの「日報」から提出する。その日の日報を開いた状態でマイページへ移動する
   function goToDailyReport(date: string) {
@@ -815,138 +664,21 @@ export default function TrainingBoardSupabase({
     applySelectionForDate(editDate, rows, jointElsewhere);
   }
 
-  async function submitComment(
-    kind: CommentKind,
-    text: string,
-    parentId: string | null = null,
-    altType: string | null = null
-  ): Promise<boolean> {
-    if (!selectedId || !text.trim()) return false;
-    const isReport = (kind === "report" || kind === "absent") && !parentId;
-    // 実施報告・未実施報告の二重送信を防ぐ（ボタンの連打・通信の遅れで同じ報告が何件も入らないように）
-    if (isReport) {
-      if (reportSubmitLock.current) return false;
-      reportSubmitLock.current = true;
-    }
-    try {
-      if (isReport) {
-        // すでに自分の報告があれば、新しく作らずに表示を更新するだけにする
-        const { data: existing } = await supabase
-          .from("comments")
-          .select("id")
-          .eq("menu_id", selectedId)
-          .eq("author_id", profile.id)
-          .in("kind", ["report", "absent"])
-          .is("parent_id", null)
-          .limit(1);
-        if (existing && existing.length > 0) {
-          await loadComments(selectedId);
-          return true;
-        }
-      }
-      const { error } = await supabase.from("comments").insert({
-        menu_id: selectedId,
-        author_id: profile.id,
-        kind,
-        parent_id: parentId,
-        text: text.trim(),
-        alt_type: altType,
-      });
-      if (error) {
-        // 23505 = 同じ報告がすでにある（データベース側の重複防止に引っかかった）
-        if (error.code !== "23505") {
-          setErrorMsg(error.message);
-          return false;
-        }
-      }
-      await loadComments(selectedId);
-      if (kind === "report" || kind === "absent") {
-        await loadSubmissionSummary(menus.map((m) => m.id));
-      }
-      return true;
-    } finally {
-      if (isReport) {
-        reportSubmitLock.current = false;
-      }
-    }
-  }
-
-  async function handleUpdateComment(
-    commentId: string,
-    text: string,
-    altType: string | null = null
-  ) {
-    if (!text.trim()) return;
-    const { error } = await supabase
-      .from("comments")
-      .update({ text: text.trim(), alt_type: altType })
-      .eq("id", commentId);
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    if (selectedId) await loadComments(selectedId);
-  }
-
-  async function handleDeleteComment(commentId: string) {
-    const { error } = await supabase
-      .from("comments")
-      .delete()
-      .eq("id", commentId);
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-    if (selectedId) await loadComments(selectedId);
-    await loadSubmissionSummary(menus.map((m) => m.id));
-  }
-
-  async function handleAddComment(e: React.FormEvent) {
-    e.preventDefault();
-    await submitComment("opinion", commentText);
-    setCommentText("");
-  }
-
   const selected =
     menus.find((m) => m.id === selectedId) ??
     (crossLocationMenu && crossLocationMenu.id === selectedId
       ? crossLocationMenu
       : null);
 
-  const opinions = comments.filter((c) => c.kind === "opinion" && !c.parent_id);
   const reports = comments.filter((c) => c.kind === "report" && !c.parent_id);
   const absentReports = comments.filter(
     (c) => c.kind === "absent" && !c.parent_id
   );
-  // 自分の日報をいちばん上に出す
-  const ownFirst = (a: CommentRow, b: CommentRow) =>
-    Number(b.author_id === profile.id) - Number(a.author_id === profile.id);
-  const visibleReports = reports.slice().sort(ownFirst);
-  const visibleAbsentReports = absentReports.slice().sort(ownFirst);
-  const reactionCountOf = (id: string) =>
-    reactions.filter((r) => r.comment_id === id).length;
-  const repliesOf = (id: string) =>
-    comments.filter((c) => c.parent_id === id);
   const myReport = reports.find((r) => r.author_id === profile.id) ?? null;
   const myAbsent =
     absentReports.find((c) => c.author_id === profile.id) ?? null;
   const isViewOnly = profile.role === "coach" || profile.role === "manager";
   const reportOpen = selected ? isReportOpen(selected) : false;
-  const selectedSubmission = selectedId ? submissionMap[selectedId] : undefined;
-  const reportSubmittedCount = selectedSubmission
-    ? selectedSubmission.reportAuthors.size
-    : 0;
-  // そのメニューの対象人数（その日に免除期間中の部員は除く）
-  function totalFor(m: { date: string; is_joint: boolean; location: Location }) {
-    const base = m.is_joint ? memberCounts.all : memberCounts[m.location];
-    const exempt = memberRows.filter(
-      (r) =>
-        (m.is_joint || r.home_location === m.location) &&
-        isExemptOn(boardExemptions, r.id, m.date)
-    ).length;
-    return Math.max(0, base - exempt);
-  }
-  const selectedMemberTotal = selected ? totalFor(selected) : 0;
 
   const boardTasks = useBoardTasks(profile);
   function openTask(t: BoardTask) {
