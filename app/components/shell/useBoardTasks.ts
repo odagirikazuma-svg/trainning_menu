@@ -1,5 +1,6 @@
 "use client";
 
+import { absenceCoversMat } from "../../lib/absence";
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { Location } from "../../lib/types";
@@ -47,17 +48,15 @@ export function useBoardTasks(profile: Profile | null): BoardTask[] {
           .or(`location.eq.${profile!.home_location},is_joint.eq.true`),
         supabase
           .from("absence_requests")
-          .select("date, status")
+          .select("date, status, session_keys")
           .eq("author_id", profile!.id)
           .gte("date", from)
           .lte("date", to),
       ]);
       if (cancelled || menuRes.error) return;
-      const absent = new Set(
-        ((absRes.error ? [] : absRes.data) ?? [])
-          .filter((a: { status: string }) => a.status !== "rejected")
-          .map((a: { date: string }) => a.date)
-      );
+      const absences = ((absRes.error ? [] : absRes.data) ?? []) as { date: string; status: string; session_keys: string[] | null }[];
+      const absentFor = (m: { date: string; start_time: string | null }) =>
+        absences.some((a) => a.status !== "rejected" && a.date === m.date && absenceCoversMat(a.session_keys, m.start_time));
       const menus = (menuRes.data ?? []) as {
         id: string;
         date: string;
@@ -69,7 +68,7 @@ export function useBoardTasks(profile: Profile | null): BoardTask[] {
       const now = Date.now();
       const started = (m: { date: string; start_time: string | null }) =>
         new Date(`${m.date}T${m.start_time ?? "00:00:00"}+09:00`).getTime() <= now;
-      const mine = menus.filter((m) => !absent.has(m.date));
+      const mine = menus.filter((m) => !absentFor(m));
       const startedIds = mine.filter(started).map((m) => m.id);
       const { data: reps, error: repErr } = startedIds.length
         ? await supabase.from("menu_reports").select("menu_id").in("menu_id", startedIds)

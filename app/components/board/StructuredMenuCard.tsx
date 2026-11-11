@@ -16,6 +16,7 @@ import { currentGrade, type Location } from "../../lib/types";
 import type { Profile } from "../AuthGate";
 import MenuItemsEditor from "./MenuItemsEditor";
 import { parseMenuText } from "../../lib/menuParse";
+import { absenceCoversMat } from "../../lib/absence";
 import { notifyBoardTasksChanged } from "../shell/useBoardTasks";
 
 // 練習予定表のメニュー本文（メニュー項目）と「練習後の実施報告」。
@@ -96,6 +97,7 @@ export default function StructuredMenuCard({
   canConfirm,
   legacyContent,
   onPlanSaved,
+  startTime,
 }: {
   profile: Profile;
   menuId: string;
@@ -106,6 +108,8 @@ export default function StructuredMenuCard({
   canEdit: boolean;
   // 予定（メニュー）を書ける・直せる（この拠点のページで見ているとき）
   canEditPlan: boolean;
+  // この練習の開始時刻（休むセクションにこの練習が入っているかを見る）
+  startTime?: string | null;
   // 項目がまだない昔のメニューの自由記述
   legacyContent: string;
   // 予定を保存したあと（親でメニュー本文を項目から作り直す）
@@ -169,7 +173,10 @@ export default function StructuredMenuCard({
     setAbsentIds(
       new Set(
         ((absRes.error ? [] : absRes.data) ?? [])
-          .filter((a: { status: string }) => a.status === "approved")
+          .filter(
+            (a: { status: string; session_keys?: string[] | null }) =>
+              a.status === "approved" && absenceCoversMat(a.session_keys, startTime)
+          )
           .map((a: { author_id: string }) => a.author_id)
       )
     );

@@ -2,6 +2,7 @@
 
 import FatigueSelector from "./FatigueSelector";
 import AbsenceRequestPanel from "./AbsenceRequestPanel";
+import { absenceCoversMat } from "../lib/absence";
 import ParticipationForm from "./ParticipationForm";
 import {
   absenceReasonText,
@@ -630,13 +631,18 @@ export default function DailyReport({
           alt: absenceReq.plan.trim() || "安静",
         }
       : emptyMatDraft;
+  // 休むセクションにこのマット練習が入っているときだけ「休み」で埋める
+  function baseDraftOf(menuId: string): MatDraft {
+    const m = menus.find((x) => x.id === menuId);
+    return absenceReq && absenceCoversMat(absenceReq.session_keys, m?.start_time) ? absenceDraft : emptyMatDraft;
+  }
   function draftOf(menuId: string): MatDraft {
-    return matDrafts[menuId] ?? absenceDraft;
+    return matDrafts[menuId] ?? baseDraftOf(menuId);
   }
   function updateDraft(menuId: string, patch: Partial<MatDraft>) {
     setMatDrafts((prev) => ({
       ...prev,
-      [menuId]: { ...(prev[menuId] ?? absenceDraft), ...patch },
+      [menuId]: { ...(prev[menuId] ?? baseDraftOf(menuId)), ...patch },
     }));
     setMissing([]);
   }

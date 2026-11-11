@@ -5,6 +5,9 @@ import { createClient } from "../lib/supabase/client";
 import type { Profile } from "./AuthGate";
 import SetLogger, { blocksHaveData, SetSummary, type ExerciseBlock } from "./SetLogger";
 import {
+  sessionKey,
+  sessionKeyLabel,
+  absenceSessionsText,
   sickStreakHeads,
   hasHospitalReport,
   blocksToPlan,
@@ -62,6 +65,9 @@ export default function AbsenceRequestPanel({
   const [planBlocks, setPlanBlocks] = useState<ExerciseBlock[]>([]);
   const [permittedBy, setPermittedBy] = useState<string | null>(null);
   const [method, setMethod] = useState<ApprovalMethod | null>(null);
+  // その日の所属拠点のセクションと、休むセクション（全部選んでいれば「終日」）
+  const [daySessions, setDaySessions] = useState<{ key: string; label: string }[]>([]);
+  const [pickedSessions, setPickedSessions] = useState<string[]>([]);
   // 許可をくれる人の候補（監督・管理者）
   const [coaches, setCoaches] = useState<{ id: string; display_name: string }[]>([]);
 
@@ -95,6 +101,27 @@ export default function AbsenceRequestPanel({
             .eq("role", "coach")
             .order("display_name");
           if (!cancelled) setCoaches((cs ?? []) as { id: string; display_name: string }[]);
+          if (profile.home_location) {
+            const { data: day } = await supabase
+              .from("schedule_days")
+              .select("is_off, sessions:schedule_sessions(session_type, start_time)")
+              .eq("team_id", teamId)
+              .eq("location", profile.home_location)
+              .eq("date", date)
+              .maybeSingle();
+            const d = day as { is_off: boolean; sessions: { session_type: string; start_time: string | null }[] } | null;
+            const list =
+              d && !d.is_off
+                ? d.sessions
+                    .slice()
+                    .sort((a, b) => (a.start_time ?? "99").localeCompare(b.start_time ?? "99"))
+                    .map((x) => {
+                      const key = sessionKey(x.session_type, x.start_time);
+                      return { key, label: sessionKeyLabel(key) };
+                    })
+                : [];
+            if (!cancelled) setDaySessions(list);
+          }
         }
         setLoaded(true);
       });
@@ -112,11 +139,13 @@ export default function AbsenceRequestPanel({
     setPlanBlocks(planToBlocks(req?.plan_sets));
     setPermittedBy(req?.permitted_by ?? null);
     setMethod(req?.approval_method ?? null);
+    setPickedSessions(req?.session_keys && req.session_keys.length > 0 ? req.session_keys : daySessions.map((x) => x.key));
     setError(null);
     setEditing(true);
   }
 
   async function submit() {
+    if (daySessions.length > 0 && pickedSessions.length === 0) return setError("休むセクションを選んでください。");
     if (!reasonType) return setError("休む理由を選んでください。");
     if (reasonType === "other" && !reason.trim()) return setError("「その他」の場合は理由を書いてください。");
     const needPermission = !noPermissionNeeded(reasonType);
@@ -143,6 +172,11 @@ export default function AbsenceRequestPanel({
       status: "approved" as const,
       permitted_by: needPermission ? permittedBy : null,
       approval_method: needPermission ? method : null,
+      // 全部のセクションを休むときは null（終日）
+      session_keys:
+        daySessions.length === 0 || daySessions.every((x) => pickedSessions.includes(x.key))
+          ? null
+          : daySessions.filter((x) => pickedSessions.includes(x.key)).map((x) => x.key),
       review_comment: null,
       reviewed_at: null,
       updated_at: new Date().toISOString(),
@@ -203,6 +237,30 @@ export default function AbsenceRequestPanel({
     return (
       <section className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
         <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">🙋 休みの報告</p>
+        {daySessions.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">休むセクション</span>
+            <div className="flex flex-wrap gap-1.5">
+              {daySessions.map((x) => {
+                const on = pickedSessions.includes(x.key);
+                return (
+                  <button
+                    key={x.key}
+                    type="button"
+                    onClick={() => setPickedSessions((p) => (on ? p.filter((k) => k !== x.key) : [...p, x.key]))}
+                    className={chip(on)}
+                  >
+                    {on ? "✓ " : ""}
+                    {x.label}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
+              出るセクションは外してください（例：マットだけ休んでウェイトは出る）。
+            </span>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">休む理由</span>
           <div className="flex flex-wrap gap-1.5">
@@ -338,6 +396,10 @@ export default function AbsenceRequestPanel({
           {absenceStateText(req, coaches.find((c) => c.id === req.permitted_by)?.display_name)}
         </span>
       </div>
+      <p className="text-xs text-neutral-700 dark:text-neutral-300">
+        <span className="text-neutral-500">休むセクション：</span>
+        <b>{absenceSessionsText(req.session_keys)}</b>
+      </p>
       <p className="text-xs text-neutral-700 dark:text-neutral-300">
         <span className="text-neutral-500">理由：</span>
         {absenceReasonText(req)}

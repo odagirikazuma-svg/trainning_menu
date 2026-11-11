@@ -1,5 +1,6 @@
 "use client";
 
+import { absenceCoversMat } from "../../lib/absence";
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { currentGrade, locationLabel, type Location } from "../../lib/types";
@@ -10,7 +11,7 @@ import { currentGrade, locationLabel, type Location } from "../../lib/types";
 // 休み申請は理由を伏せて、状態（申請中・承認済み）だけを見せる（team_absences 関数）
 
 type Member = { id: string; display_name: string; home_location: Location | null; entry_year: number | null };
-type Absence = { author_id: string; status: "pending" | "approved" };
+type Absence = { author_id: string; status: "pending" | "approved"; session_keys?: string[] | null };
 
 export default function ParticipantsPanel({
   menuId,
@@ -20,6 +21,7 @@ export default function ParticipantsPanel({
   isJoint,
   started,
   isStaff,
+  startTime,
 }: {
   menuId: string;
   teamId: string;
@@ -28,6 +30,8 @@ export default function ParticipantsPanel({
   isJoint: boolean;
   started: boolean;
   isStaff: boolean;
+  // この練習の開始時刻（休むセクションにこの練習が入っているかを見る）
+  startTime?: string | null;
 }) {
   const supabase = createClient();
   const [data, setData] = useState<{
@@ -62,7 +66,7 @@ export default function ParticipantsPanel({
       if (aRes.error && isStaff) {
         const { data: rows } = await supabase
           .from("absence_requests")
-          .select("author_id, status")
+          .select("author_id, status, session_keys")
           .eq("date", date)
           .in("status", ["pending", "approved"]);
         absences = (rows ?? []) as Absence[];
@@ -91,7 +95,9 @@ export default function ParticipantsPanel({
         (a.entry_year ?? 9999) - (b.entry_year ?? 9999) ||
         a.display_name.localeCompare(b.display_name, "ja")
     );
-  const absenceOf = new Map(data.absences.map((a) => [a.author_id, a.status]));
+  const absenceOf = new Map(
+    data.absences.filter((a) => absenceCoversMat(a.session_keys, startTime)).map((a) => [a.author_id, a.status])
+  );
   const reportOf = new Map(data.reports.map((r) => [r.author_id, r.kind]));
 
   type Absent = { m: Member; badge: "approved" | "pending" | "report" };

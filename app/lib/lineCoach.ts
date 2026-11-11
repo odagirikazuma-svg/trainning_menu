@@ -1,6 +1,6 @@
 // 監督・コーチ用リッチメニューのボタンへの返信（サーバー側専用・返信なので通数0）
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { absencePlanLabel, absenceReasonText, absenceStateText, type AbsenceRequest } from "./absence";
+import { absencePlanLabel, absenceReasonText, absenceSessionsText, absenceStateText, type AbsenceRequest } from "./absence";
 import { buildDailySummary, jstDateKey } from "./dailySummary";
 import { coachLineUserIds, type LineMessage } from "./line";
 import { appButton, liffUrl } from "./liffConfig";
@@ -110,14 +110,14 @@ export async function replyPending(admin: SupabaseClient, teamId: string, staff:
     const { data } = await admin
       .from("absence_requests")
       .select(
-        "date, reason_type, reason, approval_method, status, author:profiles!absence_requests_author_id_fkey(display_name, home_location), permitter:profiles!absence_requests_permitted_by_fkey(display_name)"
+        "date, reason_type, reason, approval_method, status, session_keys, author:profiles!absence_requests_author_id_fkey(display_name, home_location), permitter:profiles!absence_requests_permitted_by_fkey(display_name)"
       )
       .eq("team_id", teamId)
       .eq("status", "approved")
       .gte("date", jstDateKey(0))
       .lte("date", jstDateKey(7))
       .order("date", { ascending: true });
-    const list = (data ?? []) as unknown as (Pick<AbsenceRequest, "date" | "reason_type" | "reason" | "approval_method" | "status"> & {
+    const list = (data ?? []) as unknown as (Pick<AbsenceRequest, "date" | "reason_type" | "reason" | "approval_method" | "status" | "session_keys"> & {
       author: { display_name: string; home_location: string | null } | null;
       permitter: { display_name: string } | null;
     })[];
@@ -132,7 +132,7 @@ export async function replyPending(admin: SupabaseClient, teamId: string, staff:
         lines.push(`${LOC_LABEL[l]}：`);
         for (const r of inLoc) {
           lines.push(
-            `・${r.author?.display_name ?? "?"}：${absenceReasonText(r)}／${absenceStateText(r, r.permitter?.display_name)}`
+            `・${r.author?.display_name ?? "?"}${r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : ""}：${absenceReasonText(r)}／${absenceStateText(r, r.permitter?.display_name)}`
           );
         }
       }

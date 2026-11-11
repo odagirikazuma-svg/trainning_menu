@@ -11,6 +11,7 @@ import {
   type AbsenceRequest,
   sickStreakHeads,
   hasHospitalReport,
+  absenceSessionsText,
 } from "../lib/absence";
 
 type Loc = "tama" | "otsuka";
@@ -242,6 +243,12 @@ export default function AbsenceReviewSection({
                         {absenceStateText(r, r.permitter?.display_name)}
                       </span>
                     </div>
+                    {r.session_keys && r.session_keys.length > 0 && (
+                      <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                        <span className="text-neutral-500">休むセクション：</span>
+                        <b>{absenceSessionsText(r.session_keys)}</b>（ほかは参加）
+                      </p>
+                    )}
                     <p className="text-xs text-neutral-700 dark:text-neutral-300">
                       <span className="text-neutral-500">理由：</span>
                       {absenceReasonText(r)}

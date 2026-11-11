@@ -207,7 +207,9 @@ export default function MemberHome({
   >([]);
   // カレンダー（実績）：マット練習に出た日（日報で実施報告）と、休みの申請
   const [calendarMatDone, setCalendarMatDone] = useState<Set<string>>(new Set());
-  const [calendarAbsences, setCalendarAbsences] = useState<Map<string, { reason: string; plan: string }>>(new Map());
+  const [calendarAbsences, setCalendarAbsences] = useState<
+    Map<string, { reason: string; plan: string; sessionKeys: string[] | null }>
+  >(new Map());
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
     { date: string; type: TrainingType; title: string | null }[]
   >([]);
@@ -853,7 +855,7 @@ export default function MemberHome({
         .eq("kind", "report"),
       supabase
         .from("absence_requests")
-        .select("date, reason_type, plan_type, status")
+        .select("date, reason_type, plan_type, status, session_keys")
         .eq("author_id", profile.id)
         .neq("status", "rejected")
         .gte("date", rangeStart)
@@ -868,9 +870,18 @@ export default function MemberHome({
     );
     setCalendarAbsences(
       new Map(
-        ((absReqData ?? []) as { date: string; reason_type: AbsenceReasonType; plan_type: AbsencePlanType }[]).map((r) => [
+        ((absReqData ?? []) as {
+          date: string;
+          reason_type: AbsenceReasonType;
+          plan_type: AbsencePlanType;
+          session_keys: string[] | null;
+        }[]).map((r) => [
           r.date,
-          { reason: absenceReasonLabel[r.reason_type], plan: r.plan_type === "none" ? "安静" : absencePlanLabel[r.plan_type] },
+          {
+            reason: absenceReasonLabel[r.reason_type],
+            plan: r.plan_type === "none" ? "安静" : absencePlanLabel[r.plan_type],
+            sessionKeys: r.session_keys,
+          },
         ])
       )
     );

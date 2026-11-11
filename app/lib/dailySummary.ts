@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   absencePlanLabel,
   absenceReasonText,
+  absenceSessionsText,
   type AbsenceRequest,
   sickStreakHeads,
 } from "./absence";
@@ -304,7 +305,8 @@ export async function buildDailySummary(
           r.status === "approved" && r.reason_type !== "school"
             ? `（許可：${coachName.get(r.permitted_by ?? "") ?? "?"}${r.approval_method ? "・" + (r.approval_method === "line" ? "LINE" : "電話") : ""}）`
             : "";
-        lines.push(`${mark}${nameOf(r.author_id)}：${absenceReasonText(r)}${permit}／代替 ${absencePlanLabel[r.plan_type]}`);
+        const part = r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : "";
+        lines.push(`${mark}${nameOf(r.author_id)}${part}：${absenceReasonText(r)}${permit}／代替 ${absencePlanLabel[r.plan_type]}`);
       }
       if (g.rows.length > 15) lines.push(`ほか${g.rows.length - 15}人`);
     }

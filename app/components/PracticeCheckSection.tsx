@@ -18,6 +18,7 @@ import {
   type Participation,
 } from "../lib/loadEstimate";
 import { needsCheck, describeAmount } from "../lib/menuItems";
+import { absenceCoversMat } from "../lib/absence";
 import { currentGrade } from "../lib/types";
 import { fatigueColor } from "./FatigueSelector";
 
@@ -84,7 +85,7 @@ type Data = {
   reported: Set<string>;
   diffs: Diff[];
   parts: PartRow[];
-  absences: { author_id: string; date: string }[];
+  absences: { author_id: string; date: string; session_keys: string[] | null }[];
   sets: SetRow[];
   fatigue: { author_id: string; date: string; fatigue: number }[];
   reviews: Review[];
@@ -126,7 +127,7 @@ export default function PracticeCheckSection({
           .eq("is_off", false)
           .gte("date", from)
           .lte("date", base),
-        supabase.from("absence_requests").select("author_id, date").eq("team_id", teamId).eq("status", "approved").gte("date", from).lte("date", base),
+        supabase.from("absence_requests").select("author_id, date, session_keys").eq("team_id", teamId).eq("status", "approved").gte("date", from).lte("date", base),
         fetchAll<SetRow>((a, b) =>
           supabase
             .from("training_sets")
@@ -180,7 +181,7 @@ export default function PracticeCheckSection({
         // 途中退出・中抜けは扱わない（以前のデータが残っていても無視する）
         diffs: per.flatMap((p) => p.df as Diff[]).filter((d) => d.kind !== "left_early"),
         parts: per.flatMap((p) => p.pt),
-        absences: (absRes.data ?? []) as { author_id: string; date: string }[],
+        absences: (absRes.data ?? []) as { author_id: string; date: string; session_keys: string[] | null }[],
         sets: setRows,
         fatigue: (fatRes.data ?? []) as Data["fatigue"],
         reviews: per.flatMap((p) => p.rv as Review[]),
@@ -207,7 +208,9 @@ export default function PracticeCheckSection({
     const since = addDays(base, -13);
     const rows: CheckRow[] = [];
     const basis: BasisRow[] = [];
-    const absentSet = new Set(data.absences.map((a) => `${a.author_id}:${a.date}`));
+    // 休むセクションにこの練習が入っている休みだけを「休み」とみなす
+    const isAbsent = (memberId: string, menu: Menu) =>
+      data.absences.some((a) => a.author_id === memberId && a.date === menu.date && absenceCoversMat(a.session_keys, menu.start_time));
     for (const menu of data.menus) {
       if (menu.date < since) continue;
       const it = data.items.get(menu.id);
@@ -230,7 +233,7 @@ export default function PracticeCheckSection({
         const d = diffs.find((x) => x.member_id === member.id);
         let detail = "";
         if (p && d?.kind === "absent_unplanned") detail = `出欠確認は「欠席」、本人は「${scopeText(p)}」と報告`;
-        else if (p && absentSet.has(`${member.id}:${menu.date}`) && d?.kind !== "present_unplanned")
+        else if (p && isAbsent(member.id, menu) && d?.kind !== "present_unplanned")
           detail = `休みの報告あり、本人は「${scopeText(p)}」と報告`;
         if (detail)
           rows.push({ key: `${menu.id}:${member.id}:mismatch`, menu, member, kind: "mismatch", detail, review: review(member.id, "mismatch") });
@@ -285,7 +288,9 @@ export default function PracticeCheckSection({
     if (!data) return null;
     const from = addDays(base, -55);
     const dates = dateRange(from, base);
-    const absentSet = new Set(data.absences.map((a) => `${a.author_id}:${a.date}`));
+    // 休むセクションにこの練習が入っている休みだけを「休み」とみなす
+    const isAbsent = (memberId: string, menu: Menu) =>
+      data.absences.some((a) => a.author_id === memberId && a.date === menu.date && absenceCoversMat(a.session_keys, menu.start_time));
     const week = addDays(base, -6);
     const excluded: Partial<Record<ExcludeReason, number>> = {};
     let unanswered = 0;
@@ -303,7 +308,7 @@ export default function PracticeCheckSection({
           const d = data.diffs.find((x) => x.menu_id === menu.id && x.member_id === member.id);
           const p = data.parts.find((x) => x.menu_id === menu.id && x.member_id === member.id) ?? null;
           if (d?.kind === "absent_unplanned" && !p) continue;
-          if (absentSet.has(`${member.id}:${menu.date}`) && d?.kind !== "present_unplanned" && !p) continue;
+          if (isAbsent(member.id, menu) && d?.kind !== "present_unplanned" && !p) continue;
           const it = data.items.get(menu.id);
           const list = it?.actual.length ? it.actual : it?.plan ?? [];
           if (list.length === 0) continue;

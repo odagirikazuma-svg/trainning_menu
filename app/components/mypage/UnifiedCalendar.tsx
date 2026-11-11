@@ -53,7 +53,7 @@ export function UnifiedCalendar({
   weightLogs: { date: string; type: TrainingType; title: string | null }[];
   absentLogs: { date: string; type: TrainingType; title: string | null }[];
   matDoneDates?: Set<string>;
-  absenceByDate?: Map<string, { reason: string; plan: string }>;
+  absenceByDate?: Map<string, { reason: string; plan: string; sessionKeys?: string[] | null }>;
   disablePendingIndicator?: boolean;
   scheduleByDate: Map<
     string,
@@ -292,13 +292,18 @@ export function UnifiedCalendar({
     const hasRecord = actual.some((l) => l.cls === actualCls);
     if (past || (key === todayDate && hasRecord)) return actual;
     // 予定（今日の記録がまだない日・これからの日）
-    if (abs) return [{ text: absText, cls: absCls }, { text: abs.plan, cls: planCls }];
-    if (!schedule || schedule.isOff) return [];
+    // 一部のセクションだけ休むときは、出るセクションの予定も出す
+    const partial = !!abs?.sessionKeys && abs.sessionKeys.length > 0;
+    if (abs && !partial) return [{ text: absText, cls: absCls }, { text: abs.plan, cls: planCls }];
+    if (!schedule || schedule.isOff) return abs ? [{ text: absText, cls: absCls }] : [];
+    const sessions = partial
+      ? schedule.sessions.filter((s) => !abs!.sessionKeys!.includes(`${s.type}@${s.time ? s.time.slice(0, 5) : ""}`))
+      : schedule.sessions;
     // 狭いマスでも切れないように、種目と時刻を2行に分ける
-    return schedule.sessions.flatMap((s) => [
+    return [...(abs ? [{ text: absText, cls: absCls }] : []), ...sessions.flatMap((s) => [
       { text: sessionTypeLabel[s.type], cls: planCls },
       ...(s.time ? [{ text: s.time.slice(0, 5), cls: `${planCls} text-[length:calc(7px+var(--fs-add-mini))]` }] : []),
-    ]);
+    ])];
   }
 
   return (

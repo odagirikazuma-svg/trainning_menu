@@ -50,6 +50,8 @@ export type AbsenceRequest = {
   hospital_name?: string | null;
   hospital_result?: string | null;
   hospital_reported_at?: string | null;
+  // 休むセクション（null は終日）
+  session_keys?: string[] | null;
   review_comment: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -146,4 +148,28 @@ export function sickStreakHeads<T extends Pick<AbsenceRequest, "id" | "author_id
 
 export function hasHospitalReport(r: Pick<AbsenceRequest, "hospital_name" | "hospital_result">) {
   return !!(r.hospital_name || r.hospital_result);
+}
+
+// ---------- 休むセクション ----------
+// セクションの目印「種類@開始時刻」（例 mat@17:00）。時刻がないセクションは「mat@」
+export function sessionKey(type: string, time: string | null | undefined) {
+  return `${type}@${time ? time.slice(0, 5) : ""}`;
+}
+const SESSION_TYPE_LABEL: Record<string, string> = { mat: "マット", weight: "ウェイト", running: "ラン", other: "その他" };
+export function sessionKeyLabel(key: string) {
+  const [type, time] = key.split("@");
+  return `${SESSION_TYPE_LABEL[type] ?? type}${time ? ` ${time}` : ""}`;
+}
+// 休むセクションの表示（null・空は「終日」）
+export function absenceSessionsText(keys: string[] | null | undefined) {
+  if (!keys || keys.length === 0) return "終日";
+  return keys.map(sessionKeyLabel).join("・");
+}
+// この休みが、開始時刻 startTime のマット練習を含むか
+export function absenceCoversMat(keys: string[] | null | undefined, startTime: string | null | undefined) {
+  if (!keys || keys.length === 0) return true;
+  const mats = keys.filter((k) => k.startsWith("mat@"));
+  if (mats.length === 0) return false;
+  if (!startTime) return true;
+  return mats.includes(sessionKey("mat", startTime)) || mats.includes("mat@");
 }

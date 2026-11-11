@@ -1375,6 +1375,7 @@ export default function TrainingBoardSupabase({
                     profile={profile}
                     menuId={selected.id}
                     date={selected.date}
+                    startTime={selected.start_time}
                     location={selected.location}
                     isJoint={selected.is_joint}
                     started={isReportOpen(selected)}
@@ -1410,6 +1411,7 @@ export default function TrainingBoardSupabase({
                 isJoint={selected.is_joint}
                 started={isReportOpen(selected)}
                 isStaff={isStaffRole(profile.role)}
+                startTime={selected.start_time}
               />
             )}
 
