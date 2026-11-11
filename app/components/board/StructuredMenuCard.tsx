@@ -163,7 +163,8 @@ export default function StructuredMenuCard({
     setPlan(rows.filter((r) => r.phase === "plan").map(toDraft));
     setActual(rows.filter((r) => r.phase === "actual").map(toDraft));
     setReport((repRes.data as Report | null) ?? null);
-    setDiffs((diffRes.data ?? []) as Diff[]);
+    // 途中退出・中抜けは扱わない（以前のデータが残っていても出さない）
+    setDiffs(((diffRes.data ?? []) as Diff[]).filter((d) => d.kind !== "left_early"));
     setTemplates((tplRes.data ?? []) as Template[]);
     setMembers(
       ((memRes.data ?? []) as Member[]).sort(
@@ -240,7 +241,7 @@ export default function StructuredMenuCard({
     const base = actual.length > 0 ? actual : plan.length > 0 ? plan : legacyContent.trim() ? parseMenuText(legacyContent) : [];
     // 目印（item_key）は引き継ぐ。予定と実績、本人の報告の対応がずれないように
     setDraft(base.map((p) => ({ ...p })));
-    setMatches(report ? report.attendance_matches : null);
+    setMatches(report ? report.attendance_matches || diffs.length === 0 : null);
     setDraftDiffs(new Map(diffs.map((d) => [d.member_id, d])));
     setReportNote(report?.note ?? "");
     setMode("report");
@@ -567,7 +568,7 @@ export default function StructuredMenuCard({
           <span className="text-neutral-600 dark:text-neutral-400">
             報告：{report.reporter?.display_name ?? "?"}（
             {new Date(report.reported_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}）
-            ・参加者は{report.attendance_matches ? "予定どおり" : "予定と違いあり"}
+            ・参加者は{report.attendance_matches || diffs.length === 0 ? "予定どおり" : "予定と違いあり"}
           </span>
           {canConfirm && diffs.map((d) => (
             <span key={d.member_id} className="text-neutral-800 dark:text-neutral-200">
