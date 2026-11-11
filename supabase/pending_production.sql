@@ -1032,3 +1032,38 @@ create policy "absence_plan_templates_write" on absence_plan_templates
   with check (team_id = get_my_team_id() and is_active_team_member());
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 20. 2026-11-11 振り返り：疲労度を本人にも見せる・代表種目
+-- ############################################################
+-- 負荷の試算の係数は、本人の「今の体の状態」の計算にも使うので、同じチームなら読めるようにする（変更は監督だけ）
+drop policy if exists "load_settings_coach" on load_settings;
+drop policy if exists "load_settings_select" on load_settings;
+create policy "load_settings_select" on load_settings
+  for select using (team_id = get_my_team_id());
+drop policy if exists "load_settings_write_coach" on load_settings;
+create policy "load_settings_write_coach" on load_settings
+  for all
+  using (team_id = get_my_team_id() and is_my_role_coach())
+  with check (team_id = get_my_team_id() and is_my_role_coach());
+
+-- 代表種目：振り返りの「種目ごとの記録」で固定して出す種目（将来のチーム内ランキングにも使う）。監督が選ぶ
+create table if not exists team_featured_exercises (
+  team_id uuid not null references teams(id) on delete cascade,
+  exercise_id uuid not null references exercises(id) on delete cascade,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  primary key (team_id, exercise_id)
+);
+alter table team_featured_exercises enable row level security;
+drop policy if exists "team_featured_exercises_select" on team_featured_exercises;
+create policy "team_featured_exercises_select" on team_featured_exercises
+  for select using (team_id = get_my_team_id());
+drop policy if exists "team_featured_exercises_write_coach" on team_featured_exercises;
+create policy "team_featured_exercises_write_coach" on team_featured_exercises
+  for all
+  using (team_id = get_my_team_id() and is_my_role_coach())
+  with check (team_id = get_my_team_id() and is_my_role_coach());
+
+notify pgrst, 'reload schema';

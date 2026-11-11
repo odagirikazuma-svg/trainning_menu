@@ -285,7 +285,12 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
                 titleColors={emptyTitleColors}
               />
             ) : (
-              <TrainingInsights profile={member} />
+              <TrainingInsights
+                profile={member}
+                viewerId={viewer.id}
+                // 疲労度（今の体の状態）は本人と監督・コーチだけ
+                showBodyState={viewer.role === "coach" || viewer.id === member.id}
+              />
             )}
           </>
         )}

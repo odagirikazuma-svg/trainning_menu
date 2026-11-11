@@ -158,3 +158,82 @@ export function dateRange(from: string, to: string) {
   for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
   return out;
 }
+
+// ---------- 1人分の日ごとの負荷（監督の一覧と、本人の「今の体の状態」で同じ計算を使う） ----------
+export type LoadMenu = { id: string; date: string; start_time: string | null; location: string; is_joint: boolean };
+export type LoadInputs = {
+  menus: LoadMenu[];
+  // 練習ごとの項目（予定・実績）
+  items: Map<string, { plan: MenuItemDraft[]; actual: MenuItemDraft[] }>;
+  // 実施報告がある練習
+  reported: Set<string>;
+  // この人の出欠確認の違い（menu_id → kind）
+  diffKind: Map<string, string>;
+  // この人の参加範囲の回答（menu_id → 回答）
+  participation: Map<string, Participation>;
+  // この人が休む練習か（休みの申請・休むセクションから）
+  isAbsent: (menu: LoadMenu) => boolean;
+  // この人のウェイトのセット（日付つき）
+  sets: { date: string; weight_kg: number | null; reps: number | null; is_warmup?: boolean | null }[];
+  weightClass: number | null;
+  homeLocation: string | null;
+};
+
+export function memberDailyLoads(input: LoadInputs, coef: Coefficients, countFrom?: string) {
+  const daily = new Map<string, number>();
+  const excluded: Partial<Record<ExcludeReason, number>> = {};
+  let unanswered = 0;
+  let classMissing = false;
+  for (const menu of input.menus) {
+    if (!input.reported.has(menu.id)) continue;
+    if (!menu.is_joint && menu.location !== input.homeLocation) continue;
+    const d = input.diffKind.get(menu.id);
+    const p = input.participation.get(menu.id) ?? null;
+    if (d === "absent_unplanned" && !p) continue;
+    if (input.isAbsent(menu) && d !== "present_unplanned" && !p) continue;
+    const it = input.items.get(menu.id);
+    const list = it?.actual.length ? it.actual : it?.plan ?? [];
+    if (list.length === 0) continue;
+    const r = menuLoadFor(list, p, coef);
+    daily.set(menu.date, (daily.get(menu.date) ?? 0) + r.load);
+    if (!countFrom || menu.date >= countFrom) {
+      if (!p) unanswered++;
+      for (const [k, v] of Object.entries(r.excluded))
+        excluded[k as ExcludeReason] = (excluded[k as ExcludeReason] ?? 0) + (v ?? 0);
+    }
+  }
+  const setsByDate = new Map<string, LoadInputs["sets"]>();
+  for (const s of input.sets) {
+    const l = setsByDate.get(s.date) ?? [];
+    l.push(s);
+    setsByDate.set(s.date, l);
+  }
+  for (const [date, list] of setsByDate) {
+    const w = weightLoad(list, input.weightClass, coef);
+    if (w === null) {
+      if (!countFrom || date >= countFrom) classMissing = true;
+      continue;
+    }
+    daily.set(date, (daily.get(date) ?? 0) + w);
+  }
+  return { daily, excluded, unanswered, classMissing };
+}
+
+// 蓄積と「いつもとの比較」（本人の直近28日平均比。記録が2週間分たまるまでは null）
+export function fatigueState(daily: Map<string, number>, base: string, retention: number) {
+  const dates = dateRange(addDays(base, -55), base);
+  const acc = accumulate(dates, daily, retention);
+  const today = acc.get(base) ?? 0;
+  const prev28 = dates.slice(-29, -1).map((d) => acc.get(d) ?? 0);
+  const avg = prev28.reduce((a, b) => a + b, 0) / (prev28.length || 1);
+  const first = dates.find((d) => (daily.get(d) ?? 0) > 0);
+  const enough = !!first && first <= addDays(base, -14);
+  return {
+    acc,
+    today,
+    avg,
+    ratio: enough && avg > 0 ? today / avg : null,
+    short: !enough,
+    week7: dates.slice(-7).reduce((a, d) => a + (daily.get(d) ?? 0), 0),
+  };
+}

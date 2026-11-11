@@ -6,12 +6,10 @@ import { toDraft, toRow, type MenuItemDraft } from "../lib/menuItems";
 import { parseMenuText } from "../lib/menuParse";
 import {
   CALC_VERSION,
-  accumulate,
   addDays,
-  dateRange,
   excludeReasonLabel,
-  menuLoadFor,
-  weightLoad,
+  memberDailyLoads,
+  fatigueState,
   type Coefficients,
   type ExcludeReason,
   type Participation,
@@ -285,8 +283,8 @@ export default function PracticeCheckSection({
 
   const estimate = useMemo(() => {
     if (!data) return null;
-    const from = addDays(base, -55);
-    const dates = dateRange(from, base);
+
+
     // 休むセクションにこの練習が入っている休みだけを「休み」とみなす
     const isAbsent = (memberId: string, menu: Menu) =>
       data.absences.some((a) => a.author_id === memberId && a.date === menu.date && absenceCoversMat(a.session_keys, menu.start_time));
@@ -300,49 +298,30 @@ export default function PracticeCheckSection({
     const rows = data.members
       .filter((m) => m.home_location)
       .map((member) => {
-        const daily = new Map<string, number>();
-        for (const menu of data.menus) {
-          if (!data.reported.has(menu.id)) continue;
-          if (!menu.is_joint && menu.location !== member.home_location) continue;
-          const d = data.diffs.find((x) => x.menu_id === menu.id && x.member_id === member.id);
-          const p = data.parts.find((x) => x.menu_id === menu.id && x.member_id === member.id) ?? null;
-          if (d?.kind === "absent_unplanned" && !p) continue;
-          if (isAbsent(member.id, menu) && d?.kind !== "present_unplanned" && !p) continue;
-          const it = data.items.get(menu.id);
-          const list = it?.actual.length ? it.actual : it?.plan ?? [];
-          if (list.length === 0) continue;
-          const r = menuLoadFor(list, p, coef);
-          daily.set(menu.date, (daily.get(menu.date) ?? 0) + r.load);
-          if (menu.date >= week) {
-            if (!p) unanswered++;
-            for (const [k, v] of Object.entries(r.excluded)) excluded[k as ExcludeReason] = (excluded[k as ExcludeReason] ?? 0) + (v ?? 0);
-          }
-        }
-        const setsByDate = new Map<string, SetRow[]>();
-        for (const s of data.sets) {
-          if (s.author_id !== member.id) continue;
-          const l = setsByDate.get(s.date) ?? [];
-          l.push(s);
-          setsByDate.set(s.date, l);
-        }
-        let classMissing = false;
-        for (const [date, list] of setsByDate) {
-          const w = weightLoad(list, member.weight_class, coef);
-          if (w === null) {
-            if (date >= week) classMissing = true;
-            continue;
-          }
-          daily.set(date, (daily.get(date) ?? 0) + w);
-        }
-        if (classMissing && !member.weight_class) noClass++;
-        const acc = accumulate(dates, daily, retention);
-        const today = acc.get(base) ?? 0;
-        const prev28 = dates.slice(-29, -1).map((d) => acc.get(d) ?? 0);
-        const avg = prev28.reduce((a, b) => a + b, 0) / (prev28.length || 1);
-        // 記録が始まって2週間たつまでは平均が小さすぎて比較にならないので出さない
-        const first = dates.find((d) => (daily.get(d) ?? 0) > 0);
-        const enough = !!first && first <= addDays(base, -14);
-        const week7 = dates.slice(-7).reduce((a, d) => a + (daily.get(d) ?? 0), 0);
+        const r = memberDailyLoads(
+          {
+            menus: data.menus,
+            items: data.items,
+            reported: data.reported,
+            diffKind: new Map(data.diffs.filter((x) => x.member_id === member.id).map((x) => [x.menu_id, x.kind])),
+            participation: new Map(data.parts.filter((x) => x.member_id === member.id).map((x) => [x.menu_id, x])),
+            isAbsent: (menu) => isAbsent(member.id, menu as Menu),
+            sets: data.sets.filter((x) => x.author_id === member.id),
+            weightClass: member.weight_class,
+            homeLocation: member.home_location,
+          },
+          coef,
+          week
+        );
+        unanswered += r.unanswered;
+        for (const [k, v] of Object.entries(r.excluded)) excluded[k as ExcludeReason] = (excluded[k as ExcludeReason] ?? 0) + (v ?? 0);
+        if (r.classMissing && !member.weight_class) noClass++;
+        const daily = r.daily;
+        const st = fatigueState(daily, base, retention);
+        const today = st.today;
+        const enough = !st.short;
+        const avg = st.avg;
+        const week7 = st.week7;
         const fat = data.fatigue
           .filter((f) => f.author_id === member.id)
           .sort((a, b) => b.date.localeCompare(a.date))[0];

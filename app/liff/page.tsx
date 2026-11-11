@@ -114,19 +114,28 @@ export default function LiffPage() {
         if (!tok) throw new Error("LINEの情報を取得できませんでした。もう一度開いてください。");
         setIdToken(tok);
 
-        // すでにアプリにログインしているブラウザなら、そのアカウントにLINEを連携する
+        // まず、このLINEがどのアカウントに連携されているかを確かめる
         const { data } = await supabase.auth.getSession();
+        const r = await call("login", { idToken: tok });
+        if (r.status === "ok" && r.tokenHash) {
+          // 連携済み：このブラウザで別のアカウントにログインしていても、LINEに連携されたアカウントに切り替える
+          // （設定の「LINEと連携する」から来たときだけは、今のアカウントに連携し直そうとする）
+          if (data.session && forceLink) {
+            setStage({ kind: "loading", text: "LINEと連携しています…" });
+            await call("link", { idToken: tok }, data.session.access_token);
+            markLinked(data.session.user.id);
+            window.location.replace(dest);
+            return;
+          }
+          await finishWithToken(r.tokenHash, dest);
+          return;
+        }
+        // まだ連携されていない：アプリにログイン中なら、そのアカウントに連携する
         if (data.session) {
           setStage({ kind: "loading", text: "LINEと連携しています…" });
           await call("link", { idToken: tok }, data.session.access_token);
           markLinked(data.session.user.id);
           window.location.replace(dest);
-          return;
-        }
-
-        const r = await call("login", { idToken: tok });
-        if (r.status === "ok" && r.tokenHash) {
-          await finishWithToken(r.tokenHash, dest);
           return;
         }
         setStage({ kind: "unlinked", lineName: r.lineName ?? "", roster: r.roster ?? [] });
