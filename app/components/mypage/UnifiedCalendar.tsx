@@ -18,7 +18,9 @@ import {
   type CalendarSlotOption,
 } from "../shell/CalendarDisplayPrefProvider";
 
-// マイページ「振り返り」タブのカレンダー（トレーニング・マット・試合などの記録を月／週で表示）
+// マイページ「振り返り」タブのカレンダー。
+// 過ぎた日は実績（休み・マット・その日に記録したトレーニング）、これからの日は予定
+// （所属拠点の時間割。休みを申請していれば「休み」と代替メニュー）を出す。表示内容は固定。
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -32,6 +34,8 @@ export function UnifiedCalendar({
   onCursorChange,
   weightLogs,
   absentLogs,
+  matDoneDates,
+  absenceByDate,
   scheduleByDate,
   matPendingDates,
   disablePendingIndicator,
@@ -48,6 +52,8 @@ export function UnifiedCalendar({
   onCursorChange: (d: Date) => void;
   weightLogs: { date: string; type: TrainingType; title: string | null }[];
   absentLogs: { date: string; type: TrainingType; title: string | null }[];
+  matDoneDates?: Set<string>;
+  absenceByDate?: Map<string, { reason: string; plan: string }>;
   disablePendingIndicator?: boolean;
   scheduleByDate: Map<
     string,
@@ -267,6 +273,33 @@ export function UnifiedCalendar({
     return null;
   }
 
+  // マス目に出す行（固定）
+  function cellLines(
+    key: string,
+    schedule: { isOff: boolean; dayType: DayType; sessions: { type: SessionType; time: string | null }[] } | undefined
+  ): { text: string; cls: string }[] {
+    const abs = absenceByDate?.get(key);
+    const absText = abs ? `休(${abs.reason.split("・")[0]})` : "";
+    const actualCls = "font-semibold text-neutral-700 dark:text-neutral-200";
+    const planCls = "text-neutral-400 dark:text-neutral-500";
+    const absCls = "font-semibold text-red-600 dark:text-red-400";
+    // 実績
+    const actual: { text: string; cls: string }[] = [];
+    if (abs) actual.push({ text: absText, cls: absCls });
+    if (matDoneDates?.has(key)) actual.push({ text: "マット", cls: actualCls });
+    for (const t of [...new Set(dotsByDate.get(key) ?? [])]) actual.push({ text: trainingTypeLabel[t], cls: actualCls });
+    const past = !!todayDate && key < todayDate;
+    const hasRecord = actual.some((l) => l.cls === actualCls);
+    if (past || (key === todayDate && hasRecord)) return actual;
+    // 予定（今日の記録がまだない日・これからの日）
+    if (abs) return [{ text: absText, cls: absCls }, { text: abs.plan === "安静" ? "安静" : `代替:${abs.plan}`, cls: planCls }];
+    if (!schedule || schedule.isOff) return [];
+    return schedule.sessions.map((s) => ({
+      text: `${sessionTypeLabel[s.type]}${s.time ? ` ${s.time.slice(0, 5)}` : ""}`,
+      cls: planCls,
+    }));
+  }
+
   return (
     <div className="rounded-lg border border-border-color bg-surface p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -422,13 +455,20 @@ export function UnifiedCalendar({
                     : `${locationLabel[homeLocation]}のみオフ`}
                 </span>
               )}
-              {(renderSlot(pref.slot1, "slot1", key, schedule, title) ||
-                renderSlot(pref.slot2, "slot2", key, schedule, title)) && (
-                <span className="flex flex-col items-center gap-0.5 text-[length:calc(8px+var(--fs-add-mini))] leading-none text-neutral-500 dark:text-neutral-400">
-                  {renderSlot(pref.slot1, "slot1", key, schedule, title)}
-                  {renderSlot(pref.slot2, "slot2", key, schedule, title)}
-                </span>
-              )}
+              {(() => {
+                const lines = cellLines(key, schedule);
+                if (lines.length === 0) return null;
+                const max = viewMode === "week" ? 4 : 3;
+                return (
+                  <span className="flex w-full flex-col items-center gap-0.5 px-0.5 text-[length:calc(8px+var(--fs-add-mini))] leading-none">
+                    {lines.slice(0, max).map((l, i) => (
+                      <span key={i} className={`max-w-full truncate ${l.cls}`}>
+                        {l.text}
+                      </span>
+                    ))}
+                  </span>
+                );
+              })()}
               {isMatchDay && (
                 <span className="absolute -top-1 -right-1 rounded-full bg-red-500 px-1 text-[length:calc(8px+var(--fs-add-mini))] font-bold text-white">
                   試合

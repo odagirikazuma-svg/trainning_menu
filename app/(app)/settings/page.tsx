@@ -996,9 +996,7 @@ export default function SettingsPage() {
             <CollapsibleSection title="次の試合">
               <NextMatchSection />
             </CollapsibleSection>
-            <CollapsibleSection title="マイページカレンダーの表示設定">
-              <MyPageCalendarDisplaySection />
-            </CollapsibleSection>
+            {/* マイページのカレンダーは表示内容を固定（実績／予定）にしたので、表示設定は出さない */}
           </SettingsGroup>
 
           <SettingsGroup

@@ -224,6 +224,7 @@ export default function DailyReport({
   titleColors,
   onSubmitted,
   onTitlesChanged,
+  onOpenRequest,
   readOnly = false,
   viewer,
 }: {
@@ -240,6 +241,8 @@ export default function DailyReport({
   onSubmitted?: () => void | Promise<void>;
   // タイトル候補を整理したあとに、候補を読み直す（入力中の内容は消さない）
   onTitlesChanged?: () => void | Promise<void>;
+  // 休みの申請は「申請」タブで行う（日報の画面では表示だけ）
+  onOpenRequest?: (date: string) => void;
   // 管理者などが部員の日報を見るとき（書く・直すはできない。リアクション・コメントはできる）
   readOnly?: boolean;
   // 見ている人（readOnly のとき、リアクション・コメントはこの人として付ける）
@@ -1729,6 +1732,7 @@ export default function DailyReport({
           todayStr={todayStr}
           readOnly={readOnly}
           onChange={setAbsenceReq}
+          onOpenRequestTab={readOnly || !onOpenRequest ? undefined : () => onOpenRequest(date)}
         />
       )}
 
@@ -1736,7 +1740,7 @@ export default function DailyReport({
         <p className="text-xs text-neutral-500">読み込み中…</p>
       ) : isFuture ? (
         <p className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3 text-xs text-neutral-500">
-          まだ来ていない日の日報は書けません。練習を休む場合は、上の「休みを報告する」から報告してください。
+          まだ来ていない日の日報は書けません。練習を休む場合は「申請」タブから報告してください。
         </p>
       ) : (
         <>

@@ -29,6 +29,13 @@ import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
 import { UnifiedCalendar } from "./mypage/UnifiedCalendar";
+import AbsenceRequestTab from "./mypage/AbsenceRequestTab";
+import {
+  absencePlanLabel,
+  absenceReasonLabel,
+  type AbsencePlanType,
+  type AbsenceReasonType,
+} from "../lib/absence";
 
 // 未提出の判定に使う分だけ（メニューの本文などは読み込まない）
 type TodoMenuRow = {
@@ -93,7 +100,8 @@ function formatMonthDayWeek(dateStr: string) {
   return `${m}月${d}日(${w})`;
 }
 
-type HomeSubTab = "daily" | "training" | "injury";
+// 日報／振り返り／申請（休みの申請・怪我の記録）
+type HomeSubTab = "daily" | "training" | "request";
 
 export default function MemberHome({
   profile,
@@ -197,6 +205,9 @@ export default function MemberHome({
   const [calendarWeightLogs, setCalendarWeightLogs] = useState<
     { date: string; type: TrainingType; title: string | null }[]
   >([]);
+  // カレンダー（実績）：マット練習に出た日（日報で実施報告）と、休みの申請
+  const [calendarMatDone, setCalendarMatDone] = useState<Set<string>>(new Set());
+  const [calendarAbsences, setCalendarAbsences] = useState<Map<string, { reason: string; plan: string }>>(new Map());
   const [calendarAbsentLogs, setCalendarAbsentLogs] = useState<
     { date: string; type: TrainingType; title: string | null }[]
   >([]);
@@ -259,11 +270,7 @@ export default function MemberHome({
     // LINEのリッチメニューから：?absence=1 は明日の日報（休み申請）、?date=YYYY-MM-DD はその日
     try {
       const q = new URLSearchParams(window.location.search);
-      if (q.get("absence") === "1") {
-        const t = new Date();
-        t.setDate(t.getDate() + 1);
-        return toDateKey(t);
-      }
+      if (q.get("absence") === "1") return todayStr;
       const d = q.get("date");
       if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
     } catch {
@@ -284,8 +291,23 @@ export default function MemberHome({
   const [homeSubTab, setHomeSubTab] = useState<HomeSubTab>(() => {
     if (typeof window === "undefined") return "daily";
     const tab = new URLSearchParams(window.location.search).get("tab");
-    return tab === "review" ? "training" : tab === "injury" ? "injury" : "daily";
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("absence") === "1") return "request";
+    return tab === "review" ? "training" : tab === "injury" || tab === "request" ? "request" : "daily";
   });
+  // 「申請」タブで休みを申請・確認する日（LINEの「休み申請」からは明日）
+  const [requestDate, setRequestDate] = useState<string>(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("absence") === "1") {
+      const t = new Date();
+      t.setDate(t.getDate() + 1);
+      return toDateKey(t);
+    }
+    return todayStr;
+  });
+  function openRequest(date: string) {
+    setRequestDate(date);
+    setHomeSubTab("request");
+  }
 
   useEffect(() => {
     if (isManager) {
@@ -822,6 +844,37 @@ export default function MemberHome({
       setCalendarAbsentLogs(filtered);
     }
 
+    // マット練習の実績（日報で「参加」と報告した練習）と、休みの申請
+    const [{ data: matData }, { data: absReqData }] = await Promise.all([
+      supabase
+        .from("comments")
+        .select("menu:menus!comments_menu_id_fkey(date)")
+        .eq("author_id", profile.id)
+        .eq("kind", "report"),
+      supabase
+        .from("absence_requests")
+        .select("date, reason_type, plan_type, status")
+        .eq("author_id", profile.id)
+        .neq("status", "rejected")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+    ]);
+    setCalendarMatDone(
+      new Set(
+        ((matData ?? []) as unknown as { menu: { date: string } | null }[])
+          .map((r) => r.menu?.date)
+          .filter((d): d is string => !!d && d >= rangeStart && d <= rangeEnd)
+      )
+    );
+    setCalendarAbsences(
+      new Map(
+        ((absReqData ?? []) as { date: string; reason_type: AbsenceReasonType; plan_type: AbsencePlanType }[]).map((r) => [
+          r.date,
+          { reason: absenceReasonLabel[r.reason_type], plan: r.plan_type === "none" ? "安静" : absencePlanLabel[r.plan_type] },
+        ])
+      )
+    );
+
     if (effectiveHomeLocation) {
       const { data: scheduleData, error: scheduleError } = await supabase
         .from("schedule_days")
@@ -1011,7 +1064,7 @@ export default function MemberHome({
           items={[
             { value: "daily", label: "日報", badge: pendingDailyCount },
             { value: "training", label: "振り返り" },
-            { value: "injury", label: "怪我の記録" },
+            { value: "request", label: "申請" },
           ]}
           active={homeSubTab}
           onChange={setHomeSubTab}
@@ -1253,6 +1306,8 @@ export default function MemberHome({
           onCursorChange={setCalendarCursor}
           weightLogs={calendarWeightLogs}
           absentLogs={calendarAbsentLogs}
+          matDoneDates={calendarMatDone}
+          absenceByDate={calendarAbsences}
           scheduleByDate={calendarSchedule}
           matPendingDates={isManager ? new Set() : matPendingDates}
           disablePendingIndicator={isManager}
@@ -1296,11 +1351,22 @@ export default function MemberHome({
             titleColors={titleColorByType}
             onSubmitted={handleDailySubmitted}
             onTitlesChanged={loadTitleOptions}
+            onOpenRequest={openRequest}
           />
         </section>
       )}
 
-      {homeSubTab === "injury" && (
+      {homeSubTab === "request" && (
+        <AbsenceRequestTab
+          profile={profile}
+          date={requestDate}
+          onDateChange={setRequestDate}
+          todayStr={todayStr}
+          onChanged={() => setReportRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {homeSubTab === "request" && (
       <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />

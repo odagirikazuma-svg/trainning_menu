@@ -33,6 +33,7 @@ export default function AbsenceRequestPanel({
   todayStr,
   readOnly = false,
   onChange,
+  onOpenRequestTab,
 }: {
   profile: Profile;
   memberId: string;
@@ -41,6 +42,8 @@ export default function AbsenceRequestPanel({
   todayStr: string;
   readOnly?: boolean;
   onChange?: (req: AbsenceRequest | null) => void;
+  // 指定すると、ここでは申請・変更をせず「申請」タブへ案内する（日報の画面用）
+  onOpenRequestTab?: () => void;
 }) {
   const supabase = createClient();
   const [req, setReq] = useState<AbsenceRequest | null>(null);
@@ -60,7 +63,7 @@ export default function AbsenceRequestPanel({
   // 許可をくれる人の候補（監督・管理者）
   const [coaches, setCoaches] = useState<{ id: string; display_name: string }[]>([]);
 
-  const canEdit = !readOnly && date >= todayStr;
+  const canEdit = !readOnly && !onOpenRequestTab && date >= todayStr;
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +174,17 @@ export default function AbsenceRequestPanel({
   }
 
   if (!loaded || unavailable) return null;
+  if (!req && onOpenRequestTab && !readOnly && date >= todayStr && loaded && !unavailable) {
+    return (
+      <button
+        type="button"
+        onClick={onOpenRequestTab}
+        className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+      >
+        この日の練習を休む場合は「申請」タブから
+      </button>
+    );
+  }
   if (!req && !canEdit) return null;
 
   const chip = (active: boolean) =>
@@ -365,6 +379,15 @@ export default function AbsenceRequestPanel({
             この報告を消す（相談のうえ出し直す場合）
           </button>
         </div>
+      )}
+      {onOpenRequestTab && !readOnly && (
+        <button
+          type="button"
+          onClick={onOpenRequestTab}
+          className="self-start pt-1 text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+        >
+          申請の内容を直す・取り消す（「申請」タブ）
+        </button>
       )}
       {canEdit && req.status !== "rejected" && (
         <div className="flex gap-2 pt-1">
