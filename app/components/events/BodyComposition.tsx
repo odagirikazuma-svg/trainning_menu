@@ -330,8 +330,8 @@ export function BodyCompositionTab({
                               )}
                             </span>
                             <span className="text-neutral-700 dark:text-neutral-200">
-                              体重 {r.submission?.weight_kg ?? "―"}kg・体脂肪率{" "}
-                              {r.submission?.body_fat_pct ?? "―"}%
+                              体脂肪率 <b>{r.submission?.body_fat_pct ?? "―"}%</b>・体重{" "}
+                              {r.submission?.weight_kg ?? "―"}kg
                             </span>
                             <span className="text-neutral-700 dark:text-neutral-200">
                               骨格筋量 {r.submission?.muscle_mass_kg ?? "―"}kg・
@@ -348,8 +348,8 @@ export function BodyCompositionTab({
                           className="flex flex-col gap-0.5 text-xs text-neutral-700 dark:text-neutral-200"
                         >
                           <span>
-                            体重 {r.submission?.weight_kg ?? "―"}kg・体脂肪率{" "}
-                            {r.submission?.body_fat_pct ?? "―"}%
+                            体脂肪率 <b>{r.submission?.body_fat_pct ?? "―"}%</b>・体重{" "}
+                            {r.submission?.weight_kg ?? "―"}kg
                           </span>
                           <span>
                             骨格筋量 {r.submission?.muscle_mass_kg ?? "―"}kg・
@@ -372,7 +372,7 @@ export function BodyCompositionTab({
 
 
 
-// 自分の体組成のまとめ：最新値・前回比・体重の推移・階級までの差
+// 自分の体組成のまとめ：体脂肪率をメインに、前回比・推移。体重は階級までの差つきで下に
 function BodySummary({
   subs,
   weightClass,
@@ -383,37 +383,29 @@ function BodySummary({
   if (subs.length === 0) return null;
   const latest = subs[subs.length - 1];
   const prev = subs.length > 1 ? subs[subs.length - 2] : null;
-  const weights = subs.map((x) => x.weight_kg).filter((v): v is number => v != null);
+  const fats = subs.map((x) => x.body_fat_pct).filter((v): v is number => v != null);
   const toClass = weightClass && latest.weight_kg != null ? Math.round((latest.weight_kg - weightClass) * 10) / 10 : null;
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-border-color bg-surface p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-neutral-500">
-            あなたの体重{latest.key ? `（${formatMonthDay(latest.key)}）` : ""}
+            あなたの体脂肪率{latest.key ? `（${formatMonthDay(latest.key)}）` : ""}
           </span>
           <span className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold tabular-nums text-foreground">{latest.weight_kg ?? "―"}</span>
-            {latest.weight_kg != null && <span className="text-sm text-neutral-500">kg</span>}
-            <DiffBadge current={latest.weight_kg} previous={prev?.weight_kg} unit="kg" goodWhen="none" />
+            <span className="text-3xl font-extrabold tabular-nums text-foreground">{latest.body_fat_pct ?? "―"}</span>
+            {latest.body_fat_pct != null && <span className="text-sm text-neutral-500">%</span>}
+            <DiffBadge current={latest.body_fat_pct} previous={prev?.body_fat_pct} unit="%" goodWhen="down" />
           </span>
-          {toClass != null && (
-            <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
-              {weightClass}kg級まで{" "}
-              <b className={toClass > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
-                {toClass > 0 ? `+${toClass}kg オーバー` : toClass === 0 ? "ぴったり" : `${-toClass}kg 余裕あり`}
-              </b>
-            </span>
-          )}
         </div>
-        <Sparkline values={weights} className="shrink-0 text-red-600" />
+        <Sparkline values={fats} className="shrink-0 text-red-600" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <StatTile
-          label="体脂肪率"
-          value={latest.body_fat_pct}
-          unit="%"
-          sub={<DiffBadge current={latest.body_fat_pct} previous={prev?.body_fat_pct} unit="%" goodWhen="down" />}
+          label="体重"
+          value={latest.weight_kg}
+          unit="kg"
+          sub={<DiffBadge current={latest.weight_kg} previous={prev?.weight_kg} unit="kg" goodWhen="none" />}
         />
         <StatTile
           label="骨格筋量"
@@ -428,6 +420,14 @@ function BodySummary({
           sub={<DiffBadge current={latest.lean_body_mass_kg} previous={prev?.lean_body_mass_kg} unit="kg" />}
         />
       </div>
+      {toClass != null && (
+        <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
+          体重は{weightClass}kg級まで{" "}
+          <b className={toClass > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
+            {toClass > 0 ? `+${toClass}kg オーバー` : toClass === 0 ? "ぴったり" : `${-toClass}kg 余裕あり`}
+          </b>
+        </span>
+      )}
     </section>
   );
 }

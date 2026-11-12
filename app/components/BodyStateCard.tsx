@@ -142,7 +142,7 @@ export default function BodyStateCard({
             formatLeft={(v) => String(Math.round(v))}
             formatRight={(v) => String(Math.round(v))}
             series={[
-              { label: "練習量からの疲労度", axis: "right", kind: "bar", color: "#dc2626", values: accSeries },
+              { label: "練習量からの疲労度", axis: "right", kind: "line", color: "#dc2626", values: accSeries },
               { label: "自己評価", axis: "left", kind: "line", color: "#f59e0b", values: selfSeries },
             ]}
             highlight={(i) => data.days[i] === today}

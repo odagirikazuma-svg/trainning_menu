@@ -308,8 +308,8 @@ export function TeamEventTab({
                       <p>測定日：{formatMonthDay(submitted.measurement_date)}</p>
                     )}
                     <p>
-                      体重 {submitted.weight_kg ?? "―"}kg・体脂肪率{" "}
-                      {submitted.body_fat_pct ?? "―"}%
+                      体脂肪率 <b>{submitted.body_fat_pct ?? "―"}%</b>・体重{" "}
+                      {submitted.weight_kg ?? "―"}kg
                     </p>
                     <p>
                       骨格筋量 {submitted.muscle_mass_kg ?? "―"}kg・除脂肪体重{" "}
@@ -1077,10 +1077,10 @@ export function TeamEventCoachManagement({
                             氏名
                           </th>
                           <th className="px-1 py-1.5 text-right font-medium">
-                            体重
+                            体脂肪率
                           </th>
                           <th className="px-1 py-1.5 text-right font-medium">
-                            体脂肪率
+                            体重
                           </th>
                           <th className="px-1 py-1.5 text-right font-medium">
                             筋肉量
@@ -1098,19 +1098,19 @@ export function TeamEventCoachManagement({
                               <td className="truncate px-1.5 py-1.5 text-foreground">
                                 {r.name}
                               </td>
+                              <td className="px-1 py-1.5 text-right font-bold text-foreground">
+                                {r.bodyFatPct ?? "―"}
+                                {r.bodyFatPct != null && (
+                                  <span className="text-neutral-500 dark:text-neutral-400">
+                                    %
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-1 py-1.5 text-right text-foreground">
                                 {r.weightKg ?? "―"}
                                 {r.weightKg != null && (
                                   <span className="text-neutral-500 dark:text-neutral-400">
                                     kg
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-1 py-1.5 text-right text-foreground">
-                                {r.bodyFatPct ?? "―"}
-                                {r.bodyFatPct != null && (
-                                  <span className="text-neutral-500 dark:text-neutral-400">
-                                    %
                                   </span>
                                 )}
                               </td>
