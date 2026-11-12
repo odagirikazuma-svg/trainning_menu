@@ -1482,11 +1482,15 @@ export default function DailyReport({
       slot: x,
     })),
   ].sort((a, b) => {
-    const ta = a.time ?? (a.kind === "training" ? "99:99" : "00:00");
-    const tb = b.time ?? (b.kind === "training" ? "99:99" : "00:00");
-    return ta.localeCompare(tb);
+    const ta = a.time?.slice(0, 5) ?? (a.kind === "training" ? "99:99" : "00:00");
+    const tb = b.time?.slice(0, 5) ?? (b.kind === "training" ? "99:99" : "00:00");
+    // 同じ時刻なら、休んだマット練習 → 代替メニューの順
+    return ta.localeCompare(tb) || (a.kind === "mat" ? -1 : b.kind === "mat" ? 1 : 0);
   });
   const remaining = (exempt ? 0 : pendingMenus.length) + pendingSlots.length;
+  // 休みの報告で、提出が必要なものが何もない日
+  const allRest =
+    !!absenceReq && absenceReq.status !== "rejected" && pendingMenus.length === 0 && plan.slots.length === 0 && !Object.keys(logs).length && !myReports.length;
   const canAddFree = !readOnly && !uiSlots.some((x) => x.id === FREE);
 
   function isExpanded(item: TimelineItem) {
@@ -1675,9 +1679,11 @@ export default function DailyReport({
                     ? readOnly
                       ? `未提出 ${remaining}件`
                       : `あと${remaining}件`
-                    : dayComplete
-                      ? "この日はすべて提出済み"
-                      : "提出が必要な練習はありません"}
+                    : allRest
+                      ? "休みの報告済み（日報の提出は不要）"
+                      : dayComplete
+                        ? "この日はすべて提出済み"
+                        : "提出が必要な練習はありません"}
                 </span>
               )}
             </div>
@@ -1932,9 +1938,9 @@ export default function DailyReport({
           )}
 
           {/* 提出（画面の下に固定） */}
-          {readOnly ? null : dayComplete && !hasOptionalToSubmit ? (
+          {readOnly ? null : (dayComplete || allRest) && !hasOptionalToSubmit ? (
             <p className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              ✓ この日の日報はすべて提出済みです
+              {allRest ? "✓ 休みの報告済みです（日報の提出は不要）" : "✓ この日の日報はすべて提出済みです"}
             </p>
           ) : (
             <div
