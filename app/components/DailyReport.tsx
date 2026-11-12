@@ -1524,7 +1524,9 @@ export default function DailyReport({
             ? sessionTypeLabel[x.sessionType]
             : "トレーニング";
     const sub = l
-      ? `${trainingTypeLabel[l.type]}${l.title ? `・${l.title}` : ""}`
+      ? x.kind === "session" && x.sessionType === l.type
+        ? l.title || "記録済み"
+        : `${trainingTypeLabel[l.type]}${l.title && l.title !== "代替メニュー" ? `・${l.title}` : ""}`
       : x.kind === "alt"
         ? `${(x.slot?.covered ?? []).map((c) => `${sessionTypeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`).join("・")} の代わり（実際にやった内容）`
         : x.kind === "free"
