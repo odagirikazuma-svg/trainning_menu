@@ -71,7 +71,7 @@ export const absencePlanLabel: Record<AbsencePlanType, string> = {
   weight: "ウェイト",
   running: "ラン",
   other: "その他",
-  none: "なし（安静）",
+  none: "休養（代替なし）",
 };
 
 // 一覧に出す状態のことば（届け出／直接許可済み／取り消し）

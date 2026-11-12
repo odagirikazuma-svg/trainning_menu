@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import type { Location, SessionType } from "../lib/types";
-import { isExemptOn, loadExemptions } from "../lib/exemptions";
+import type { Location } from "../lib/types";
+import { loadObligations, slotLabel } from "../lib/obligations";
 
 /**
  * 管理者が部員のマイページ(閲覧)を開いたときに出す「未提出タスク」欄。
@@ -109,123 +109,38 @@ export default function AdminPendingTasks({
           toDateKey(oneMonthAgo) > joined ? toDateKey(oneMonthAgo) : joined;
         const loc = member.home_location;
         const result: PendingItem[] = [];
-        // 免除期間中の日は未提出タスクに数えない
-        const exemptions = await loadExemptions(
-          supabase,
-          member.team_id,
-          rangeStart,
-          todayStr,
-          member.id
-        );
-
         if (loc) {
-          // マット日報：所属拠点のメニュー＋全体練習のメニュー
-          type MenuRow = {
-            id: string;
-            date: string;
-            start_time: string | null;
-            is_joint: boolean;
-          };
-          const [own, joint] = await Promise.all([
-            supabase
-              .from("menus")
-              .select("id, date, start_time, is_joint")
-              .eq("team_id", member.team_id)
-              .eq("location", loc)
-              .eq("is_off", false)
-              .gte("date", rangeStart)
-              .lte("date", todayStr),
-            supabase
-              .from("menus")
-              .select("id, date, start_time, is_joint")
-              .eq("team_id", member.team_id)
-              .eq("is_joint", true)
-              .eq("is_off", false)
-              .gte("date", rangeStart)
-              .lte("date", todayStr),
-          ]);
-          if (own.error) throw new Error(own.error.message);
-          if (joint.error) throw new Error(joint.error.message);
-          const menuMap = new Map<string, MenuRow>();
-          for (const m of [
-            ...((own.data ?? []) as MenuRow[]),
-            ...((joint.data ?? []) as MenuRow[]),
-          ])
-            menuMap.set(m.id, m);
-          const openMenus = Array.from(menuMap.values())
-            .filter((m) => !isExemptOn(exemptions, member.id, m.date))
-            .filter((m) =>
-              !m.start_time ? true : now >= new Date(`${m.date}T${m.start_time}`)
-            );
-
-          if (openMenus.length > 0) {
-            const { data: commentData, error: commentError } = await supabase
-              .from("comments")
-              .select("menu_id")
-              .eq("author_id", member.id)
-              .in(
-                "menu_id",
-                openMenus.map((m) => m.id)
-              )
-              .in("kind", ["report", "absent"]);
-            if (commentError) throw new Error(commentError.message);
-            const responded = new Set(
-              ((commentData ?? []) as { menu_id: string }[]).map((c) => c.menu_id)
-            );
-            for (const m of openMenus) {
-              if (responded.has(m.id)) continue;
-              result.push({
-                key: `mat-${m.id}`,
-                date: m.date,
-                sortDate: m.date,
-                kind: "mat",
-                label: `${formatMonthDayWeek(m.date)}${
-                  m.start_time ? ` ${m.start_time.slice(0, 5)}〜` : ""
-                }${m.is_joint ? "（全体練習）" : ""}`,
-              });
-            }
-          }
-
-          // トレ報：マット以外のセッションがある日
-          const { data: scheduleData, error: scheduleError } = await supabase
-            .from("schedule_days")
-            .select("date, sessions:schedule_sessions(session_type)")
-            .eq("team_id", member.team_id)
-            .eq("location", loc)
-            .eq("is_off", false)
-            .gte("date", rangeStart)
-            .lte("date", todayStr);
-          if (scheduleError) throw new Error(scheduleError.message);
-          const selfDates = (
-            (scheduleData ?? []) as unknown as {
-              date: string;
-              sessions: { session_type: SessionType }[];
-            }[]
-          )
-            .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-            .map((row) => row.date)
-            .filter((d) => !isExemptOn(exemptions, member.id, d));
-
-          if (selfDates.length > 0) {
-            const { data: logData, error: logError } = await supabase
-              .from("weight_logs")
-              .select("date")
-              .eq("author_id", member.id)
-              .gte("date", rangeStart)
-              .lte("date", todayStr);
-            if (logError) throw new Error(logError.message);
-            const logged = new Set(
-              ((logData ?? []) as { date: string }[]).map((r) => r.date)
-            );
-            for (const d of selfDates) {
-              if (logged.has(d)) continue;
-              result.push({
-                key: `self-${d}`,
-                date: d,
-                sortDate: d,
-                kind: "self",
-                label: formatMonthDayWeek(d),
-              });
+          // 日報：マット練習・ラン／ウェイトのセクション・代替メニュー（休みの報告：休養なら不要）
+          const ob = await loadObligations(
+            supabase,
+            member.team_id,
+            [{ id: member.id, home_location: loc, created_at: member.created_at }],
+            rangeStart,
+            todayStr,
+            now
+          );
+          for (const [d, items] of ob.get(member.id) ?? []) {
+            for (const x of items) {
+              if (x.done) continue;
+              if (x.kind === "mat") {
+                result.push({
+                  key: `mat-${x.menu.id}`,
+                  date: d,
+                  sortDate: d,
+                  kind: "mat",
+                  label: `${formatMonthDayWeek(d)}${
+                    x.menu.start_time ? ` ${x.menu.start_time.slice(0, 5)}〜` : ""
+                  }${x.menu.is_joint ? "（全体練習）" : ""}`,
+                });
+              } else {
+                result.push({
+                  key: `self-${d}-${x.slot.key}`,
+                  date: d,
+                  sortDate: d,
+                  kind: "self",
+                  label: `${formatMonthDayWeek(d)} ${slotLabel(x.slot)}`,
+                });
+              }
             }
           }
         }

@@ -41,8 +41,8 @@ export default function DayRecordPanel({
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [mats, setMats] = useState<MatRow[]>([]);
-  const [log, setLog] = useState<LogRow | null>(null);
-  const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
+  // トレーニングの記録（セクションごとに複数あることがある）
+  const [logs, setLogs] = useState<{ log: LogRow; blocks: ExerciseBlock[] }[]>([]);
   const [memo, setMemo] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function DayRecordPanel({
           .select("id, type, title, content, start_time")
           .eq("author_id", profile.id)
           .eq("date", date)
-          .maybeSingle(),
+          .order("start_time", { ascending: true }),
         supabase
           .from("personal_memos")
           .select("content")
@@ -70,12 +70,11 @@ export default function DayRecordPanel({
           .eq("date", date)
           .maybeSingle(),
       ]);
-      const logRow = (logRes.data as LogRow | null) ?? null;
-      const b = logRow ? await loadSetsForLog(supabase, logRow.id) : [];
+      const logRows = (logRes.data ?? []) as LogRow[];
+      const list = await Promise.all(logRows.map(async (l) => ({ log: l, blocks: await loadSetsForLog(supabase, l.id) })));
       if (cancelled) return;
       setMats((matRes.data ?? []) as unknown as MatRow[]);
-      setLog(logRow);
-      setBlocks(b);
+      setLogs(list);
       setMemo((memoRes.data as { content: string } | null)?.content ?? null);
       setLoading(false);
     })();
@@ -85,7 +84,7 @@ export default function DayRecordPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, profile.id]);
 
-  const empty = !loading && mats.length === 0 && !log && !memo;
+  const empty = !loading && mats.length === 0 && logs.length === 0 && !memo;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-3">
@@ -128,8 +127,8 @@ export default function DayRecordPanel({
               <p className="whitespace-pre-wrap text-sm text-neutral-900 dark:text-neutral-100">{m.text}</p>
             </div>
           ))}
-          {log && (
-            <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/30 p-2.5">
+          {logs.map(({ log, blocks }) => (
+            <div key={log.id} className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/30 p-2.5">
               <p className="mb-1 text-[length:calc(11px+var(--fs-add))] font-semibold text-sky-700 dark:text-sky-300">
                 {trainingTypeLabel[log.type]}
                 {log.title ? `・${log.title}` : ""}
@@ -146,7 +145,7 @@ export default function DayRecordPanel({
                 </p>
               )}
             </div>
-          )}
+          ))}
           {memo && (
             <p className="text-xs text-neutral-600 dark:text-neutral-400">
               <span className="font-semibold">一言メモ：</span>

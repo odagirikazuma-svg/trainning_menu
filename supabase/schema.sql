@@ -1999,3 +1999,42 @@ create policy "absence_plan_templates_own" on absence_plan_templates
   with check (created_by = auth.uid() and team_id = get_my_team_id());
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 22. 2026-11-12 トレーニングの記録をセクションごとに（1日に2つのセクションがあっても別々に記録）
+--     session_key：'weight@13:00' 'running@16:00' など。マットの代替メニューは 'mat@17:00'。null は予定外の自主トレ
+-- ############################################################
+alter table weight_logs add column if not exists session_key text;
+
+-- 今までの記録は、その日の（本人の拠点の）最初のマット以外のセクションに割り当てる
+update weight_logs w set session_key = sub.k
+from (
+  select w2.id,
+    (select ss.session_type || '@' || to_char(ss.start_time, 'HH24:MI')
+       from profiles p
+       join schedule_days sd on sd.team_id = w2.team_id and sd.date = w2.date and sd.location = p.home_location and not sd.is_off
+       join schedule_sessions ss on ss.schedule_day_id = sd.id and ss.session_type <> 'mat'
+      where p.id = w2.author_id
+      order by ss.start_time
+      limit 1) as k
+  from weight_logs w2
+  where w2.session_key is null
+) sub
+where w.id = sub.id and sub.k is not null;
+
+-- 「1人1日1件」の制約を外して「1人1日1セクション1件」にする
+do $$
+declare c text;
+begin
+  for c in
+    select con.conname from pg_constraint con
+    where con.conrelid = 'weight_logs'::regclass and con.contype = 'u'
+  loop
+    execute format('alter table weight_logs drop constraint %I', c);
+  end loop;
+end $$;
+create unique index if not exists weight_logs_author_date_session_key
+  on weight_logs (author_id, date, session_key) nulls not distinct;
+
+notify pgrst, 'reload schema';

@@ -22,6 +22,7 @@ import ScheduleEditForm, {
   ScheduleDayPrefill,
 } from "./ScheduleEditForm";
 import { useCalendarViewPref } from "./shell/CalendarViewPrefProvider";
+import { loadObligations } from "../lib/obligations";
 
 // 合宿/試合/出稽古バッジ配色（ライト/ダーク両対応）
 const dayTypeFillColorDark: Record<DayType, string> = {
@@ -181,6 +182,7 @@ export default function TeamPage({
       entryYear: number | null;
       isPending: boolean;
       isExempt: boolean;
+      rest?: boolean;
       matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
       selfStatus: "not_required" | "not_started" | "done" | "missing";
@@ -519,88 +521,15 @@ export default function TeamPage({
       });
     }
 
-    // 両拠点＋全体のマットメニュー
-    const { data: menuData, error: menuError } = await supabase
-      .from("menus")
-      .select("id, date, location, is_joint")
-      .eq("team_id", profile.team_id)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd);
-
-    if (menuError) {
-      setErrorMsg(menuError.message);
-      return;
-    }
-
-    // menu_id -> その日報が「どの拠点の必要提出」に関係するか
-    const menuLocsById = new Map<string, Location[]>();
-    const menuDateById = new Map<string, string>();
-    for (const m of (menuData ?? []) as {
-      id: string;
-      date: string;
-      location: Location;
-      is_joint: boolean;
-    }[]) {
-      menuDateById.set(m.id, m.date);
-      menuLocsById.set(m.id, m.is_joint ? ["tama", "otsuka"] : [m.location]);
-    }
-    const allMenuIds = Array.from(menuDateById.keys());
-
-    // key: `${authorId}:${loc}:${date}`
-    const submittedMatKeys = new Set<string>();
-    if (allMenuIds.length > 0) {
-      const { data: commentData, error: commentError } = await supabase
-        .from("comments")
-        .select("menu_id, author_id, kind")
-        .in("menu_id", allMenuIds)
-        .in("kind", ["report", "absent"])
-        .is("parent_id", null);
-      if (commentError) {
-        setErrorMsg(commentError.message);
-        return;
-      }
-      for (const row of (commentData ?? []) as {
-        menu_id: string;
-        author_id: string | null;
-      }[]) {
-        if (!row.author_id) continue;
-        const date = menuDateById.get(row.menu_id);
-        const locs = menuLocsById.get(row.menu_id) ?? [];
-        if (!date) continue;
-        for (const loc of locs) {
-          submittedMatKeys.add(`${row.author_id}:${loc}:${date}`);
-        }
-      }
-    }
-
-    const allRealIds = [...realIdsByLoc.tama, ...realIdsByLoc.otsuka];
-    // 免除期間中の部員は、その日の分母・提出人数から外す
-    const exemptions = await loadExemptions(
+    // 部員ごと・日ごとの提出が必要なもの（休みの報告：休養なら不要・代替なら代替メニュー）
+    const realMembers = [...requiredByLoc.tama, ...requiredByLoc.otsuka].filter((m) => !m.isPending);
+    const ob = await loadObligations(
       supabase,
       profile.team_id,
+      realMembers.map((m) => ({ id: m.id, home_location: m.home_location ?? "tama" })),
       rangeStart,
       rangeEnd
     );
-    const selfLoggedKeys = new Set<string>();
-    if (allRealIds.length > 0) {
-      const { data: logData, error: logError } = await supabase
-        .from("weight_logs")
-        .select("author_id, date")
-        .in("author_id", allRealIds)
-        .gte("date", rangeStart)
-        .lte("date", rangeEnd);
-      if (logError) {
-        setErrorMsg(logError.message);
-        return;
-      }
-      for (const row of (logData ?? []) as {
-        author_id: string;
-        date: string;
-      }[]) {
-        selfLoggedKeys.add(`${row.author_id}:${row.date}`);
-      }
-    }
 
     const counts = new Map<string, { submitted: number; total: number }>();
     const countsByLoc = new Map<
@@ -617,20 +546,15 @@ export default function TeamPage({
       for (const loc of ["tama", "otsuka"] as Location[]) {
         const day = scheduleByLocDate.get(`${loc}:${dateKey}`);
         if (!day || day.isOff) continue;
-        if (!day.hasMat && !day.hasNonMat) continue;
-        const exemptIds = realIdsByLoc[loc].filter((id) =>
-          isExemptOn(exemptions, id, dateKey)
-        );
-        const locTotal = requiredByLoc[loc].length - exemptIds.length;
-        if (locTotal <= 0) continue;
+        let locTotal = 0;
         let locSubmitted = 0;
         for (const id of realIdsByLoc[loc]) {
-          if (isExemptOn(exemptions, id, dateKey)) continue;
-          const matOk =
-            !day.hasMat || submittedMatKeys.has(`${id}:${loc}:${dateKey}`);
-          const selfOk = !day.hasNonMat || selfLoggedKeys.has(`${id}:${dateKey}`);
-          if (matOk && selfOk) locSubmitted++;
+          const items = ob.get(id)?.get(dateKey);
+          if (!items || items.length === 0) continue;
+          locTotal++;
+          if (items.every((x) => x.done)) locSubmitted++;
         }
+        if (locTotal === 0) continue;
         byLoc[loc] = { submitted: locSubmitted, total: locTotal };
         total += locTotal;
         submitted += locSubmitted;
@@ -738,30 +662,30 @@ export default function TeamPage({
       tama: requiredMembersForLocation("tama"),
       otsuka: requiredMembersForLocation("otsuka"),
     };
-    const allRealIds = [
-      ...requiredByLoc.tama.filter((m) => !m.isPending).map((m) => m.id),
-      ...requiredByLoc.otsuka.filter((m) => !m.isPending).map((m) => m.id),
-    ];
-    const dayExemptions = await loadExemptions(
-      supabase,
-      profile.team_id,
-      dateStr,
-      dateStr
-    );
-    const selfLogByAuthor = new Map<string, string>();
-    if (allRealIds.length > 0) {
-      const { data: logData } = await supabase
-        .from("weight_logs")
-        .select("author_id, content")
+    const realMembers = [...requiredByLoc.tama, ...requiredByLoc.otsuka].filter((m) => !m.isPending);
+    const [dayExemptions, ob, absRes, logRes] = await Promise.all([
+      loadExemptions(supabase, profile.team_id, dateStr, dateStr),
+      loadObligations(
+        supabase,
+        profile.team_id,
+        realMembers.map((m) => ({ id: m.id, home_location: m.home_location ?? "tama" })),
+        dateStr,
+        dateStr
+      ),
+      supabase
+        .from("absence_requests")
+        .select("author_id")
+        .eq("team_id", profile.team_id)
         .eq("date", dateStr)
-        .in("author_id", allRealIds);
-      for (const row of (logData ?? []) as {
-        author_id: string;
-        content: string;
-      }[]) {
-        selfLogByAuthor.set(row.author_id, row.content);
-      }
-    }
+        .neq("status", "rejected"),
+      realMembers.length > 0
+        ? supabase.from("weight_logs").select("author_id, content").eq("date", dateStr).in("author_id", realMembers.map((m) => m.id))
+        : Promise.resolve({ data: [] }),
+    ]);
+    const restIds = new Set(((absRes.data ?? []) as { author_id: string }[]).map((r) => r.author_id));
+    const selfLogByAuthor = new Map<string, string[]>();
+    for (const row of (logRes.data ?? []) as { author_id: string; content: string }[])
+      selfLogByAuthor.set(row.author_id, [...(selfLogByAuthor.get(row.author_id) ?? []), row.content]);
 
     const detail: {
       memberId: string;
@@ -770,6 +694,7 @@ export default function TeamPage({
       entryYear: number | null;
       isPending: boolean;
       isExempt: boolean;
+      rest: boolean;
       matStatus: "not_required" | "not_started" | "report" | "absent" | "missing";
       matText: string | null;
       selfStatus: "not_required" | "not_started" | "done" | "missing";
@@ -783,6 +708,9 @@ export default function TeamPage({
       if (!day || day.isOff || (!hasMat && !hasNonMat)) continue;
 
       for (const m of requiredByLoc[loc]) {
+        const items = ob.get(m.id)?.get(dateStr) ?? [];
+        const matItems = items.filter((x) => x.kind === "mat");
+        const trItems = items.filter((x) => x.kind === "training");
         const matComment = matStatusByAuthorLoc.get(`${m.id}:${loc}`);
         const selfContent = selfLogByAuthor.get(m.id);
         detail.push({
@@ -792,24 +720,27 @@ export default function TeamPage({
           entryYear: m.entry_year,
           isPending: !!m.isPending,
           isExempt: !m.isPending && isExemptOn(dayExemptions, m.id, dateStr),
-          matStatus: !hasMat
-            ? ("not_required" as const)
-            : !day.matStarted
-              ? ("not_started" as const)
-              : matComment
-                ? matComment.kind === "absent"
+          rest: restIds.has(m.id),
+          matStatus:
+            matItems.length > 0
+              ? matItems.every((x) => x.done)
+                ? matComment?.kind === "absent"
                   ? ("absent" as const)
                   : ("report" as const)
-                : ("missing" as const),
+                : ("missing" as const)
+              : hasMat && !day.matStarted
+                ? ("not_started" as const)
+                : ("not_required" as const),
           matText: matComment?.text ?? null,
-          selfStatus: !hasNonMat
-            ? ("not_required" as const)
-            : !day.selfStarted
-              ? ("not_started" as const)
-              : selfContent
+          selfStatus:
+            trItems.length > 0
+              ? trItems.every((x) => x.done)
                 ? ("done" as const)
-                : ("missing" as const),
-          selfText: selfContent ?? null,
+                : ("missing" as const)
+              : hasNonMat && !day.selfStarted && !restIds.has(m.id)
+                ? ("not_started" as const)
+                : ("not_required" as const),
+          selfText: selfContent ? selfContent.join("\n") : null,
         });
       }
     }

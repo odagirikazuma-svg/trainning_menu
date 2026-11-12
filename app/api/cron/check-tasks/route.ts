@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
-import { isExemptOn, type ExemptionRow } from "../../../lib/exemptions";
+import { loadObligations } from "../../../lib/obligations";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +12,6 @@ function toDateKey(d: Date) {
   const m = String(j.getUTCMonth() + 1).padStart(2, "0");
   const day = String(j.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function isReportOpen(dateStr: string, startTime: string | null): boolean {
-  if (!startTime) return true;
-  const threshold = new Date(`${dateStr}T${startTime.slice(0, 8)}+09:00`);
-  return new Date() >= threshold;
 }
 
 export async function GET(request: NextRequest) {
@@ -79,51 +73,18 @@ export async function GET(request: NextRequest) {
   const memberIds = members.map((m) => m.id);
   const teamIds = Array.from(new Set(members.map((m) => m.team_id)));
 
-  // --- 1) 実施報告・未実施報告が必要なメニュー ---
-  const { data: menuRows, error: menuError } = await supabase
-    .from("menus")
-    .select("id, date, location, start_time, is_off, is_joint, team_id")
-    .in("team_id", teamIds)
-    .eq("is_off", false)
-    .gte("date", rangeStart)
-    .lte("date", todayStr);
-
-  if (menuError) {
-    return NextResponse.json({ error: menuError.message }, { status: 500 });
-  }
-
-  const menus = (menuRows ?? []) as {
-    id: string;
-    date: string;
-    location: "tama" | "otsuka";
-    start_time: string | null;
-    is_off: boolean;
-    is_joint: boolean;
-    team_id: string;
-  }[];
-
-  const openMenuIds = menus
-    .filter((m) => isReportOpen(m.date, m.start_time))
-    .map((m) => m.id);
-
-  const respondedKeys = new Set<string>();
-  if (openMenuIds.length > 0) {
-    const { data: commentRows, error: commentError } = await supabase
-      .from("comments")
-      .select("menu_id, author_id, kind")
-      .in("menu_id", openMenuIds)
-      .in("kind", ["report", "absent"])
-      .is("parent_id", null);
-
-    if (commentError) {
-      return NextResponse.json({ error: commentError.message }, { status: 500 });
-    }
-    for (const row of (commentRows ?? []) as {
-      menu_id: string;
-      author_id: string | null;
-    }[]) {
-      if (row.author_id) respondedKeys.add(`${row.author_id}:${row.menu_id}`);
-    }
+  // --- 1) 日報（マット練習・ラン／ウェイトのセクション・代替メニュー。休みの報告で休養なら不要） ---
+  const pendingDaily = new Set<string>();
+  for (const teamId of teamIds) {
+    const ob = await loadObligations(
+      supabase,
+      teamId,
+      members.filter((m) => m.team_id === teamId),
+      rangeStart,
+      todayStr
+    );
+    for (const [memberId, byDate] of ob)
+      for (const items of byDate.values()) if (items.some((x) => !x.done)) pendingDaily.add(memberId);
   }
 
   // --- 2) ウェイトMAX集計（締切前でも対象。未提出なら通知対象） ---
@@ -249,68 +210,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // --- 3) トレ報（マット以外のセッションがある日の自主トレ記録） ---
-  const { data: scheduleRows, error: scheduleError } = await supabase
-    .from("schedule_days")
-    .select(
-      "date, location, team_id, is_off, sessions:schedule_sessions(session_type)"
-    )
-    .in("team_id", teamIds)
-    .eq("is_off", false)
-    .gte("date", rangeStart)
-    .lte("date", todayStr);
-
-  if (scheduleError) {
-    return NextResponse.json({ error: scheduleError.message }, { status: 500 });
-  }
-
-  // team_id:location:date -> マット以外のセッションがあるか
-  const nonMatDatesByTeamLocation = new Set<string>();
-  for (const row of (scheduleRows ?? []) as {
-    date: string;
-    location: "tama" | "otsuka";
-    team_id: string;
-    is_off: boolean;
-    sessions: { session_type: string }[];
-  }[]) {
-    if (row.sessions.some((s) => s.session_type !== "mat")) {
-      nonMatDatesByTeamLocation.add(
-        `${row.team_id}:${row.location}:${row.date}`
-      );
-    }
-  }
-
-  // 時間割でオフにした日（その拠点のメニューが残っていても、日報のタスクに数えない）
-  const { data: offRows } = await supabase
-    .from("schedule_days")
-    .select("date, location, team_id")
-    .in("team_id", teamIds)
-    .eq("is_off", true)
-    .gte("date", rangeStart)
-    .lte("date", todayStr);
-  const offKeys = new Set(
-    ((offRows ?? []) as { date: string; location: string; team_id: string }[]).map(
-      (r) => `${r.team_id}:${r.location}:${r.date}`
-    )
-  );
-
-  const { data: logRows, error: logError } = await supabase
-    .from("weight_logs")
-    .select("author_id, date")
-    .in("author_id", memberIds)
-    .gte("date", rangeStart)
-    .lte("date", todayStr);
-
-  if (logError) {
-    return NextResponse.json({ error: logError.message }, { status: 500 });
-  }
-
-  const loggedKeys = new Set(
-    ((logRows ?? []) as { author_id: string; date: string }[]).map(
-      (r) => `${r.author_id}:${r.date}`
-    )
-  );
-
   // --- 4) 怪我の経過報告 ---
   const { data: injuryRows, error: injuryError } = await supabase
     .from("injuries")
@@ -354,56 +253,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 免除期間（練習報告・自主トレのみ対象）。免除中の日はタスクとして数えない
-  const { data: exemptionRows } = await supabase
-    .from("member_exemptions")
-    .select("member_id, start_date, end_date")
-    .in("team_id", teamIds)
-    .lte("start_date", todayStr)
-    .gte("end_date", rangeStart);
-  const exemptions = (exemptionRows ?? []) as ExemptionRow[];
-
   // --- 各部員の未完了タスクの有無を判定 ---
   const membersNeedingNotification: string[] = [];
 
   for (const m of members) {
     let hasIncomplete = false;
 
-    if (m.home_location) {
-      const joinedDate = toDateKey(new Date(m.created_at));
-      const applicableMenus = menus.filter(
-        (menu) =>
-          menu.team_id === m.team_id &&
-          (menu.location === m.home_location || menu.is_joint) &&
-          (menu.is_joint || !offKeys.has(`${menu.team_id}:${menu.location}:${menu.date}`)) &&
-          menu.date >= joinedDate &&
-          !isExemptOn(exemptions, m.id, menu.date) &&
-          isReportOpen(menu.date, menu.start_time)
-      );
-      const hasUnrespondedMenu = applicableMenus.some(
-        (menu) => !respondedKeys.has(`${m.id}:${menu.id}`)
-      );
-      if (hasUnrespondedMenu) hasIncomplete = true;
-    }
-
-    if (!hasIncomplete && m.home_location) {
-      const joinedDate = toDateKey(new Date(m.created_at));
-      const memberRangeStart = joinedDate > rangeStart ? joinedDate : rangeStart;
-      const cursor = new Date(`${memberRangeStart}T00:00:00`);
-      const end = new Date(`${todayStr}T00:00:00`);
-      while (cursor <= end && !hasIncomplete) {
-        const dateStr = toDateKey(cursor);
-        const key = `${m.team_id}:${m.home_location}:${dateStr}`;
-        if (
-          nonMatDatesByTeamLocation.has(key) &&
-          !isExemptOn(exemptions, m.id, dateStr) &&
-          !loggedKeys.has(`${m.id}:${dateStr}`)
-        ) {
-          hasIncomplete = true;
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    }
+    if (pendingDaily.has(m.id)) hasIncomplete = true;
 
     if (!hasIncomplete) {
       const activeEvent = activeEventByTeam.get(m.team_id);

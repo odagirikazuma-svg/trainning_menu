@@ -62,6 +62,8 @@ export default function AbsenceRequestPanel({
   const [reasonType, setReasonType] = useState<AbsenceReasonType | null>(null);
   const [reason, setReason] = useState("");
   const [planType, setPlanType] = useState<AbsencePlanType | null>(null);
+  // 「代替メニューをやる」を選んだか（種類はまだのこともある）
+  const [altPicked, setAltPicked] = useState(false);
   const [plan, setPlan] = useState("");
   const [planBlocks, setPlanBlocks] = useState<ExerciseBlock[]>([]);
   const [permittedBy, setPermittedBy] = useState<string | null>(null);
@@ -75,7 +77,8 @@ export default function AbsenceRequestPanel({
   // 許可をくれる人の候補（監督・管理者）
   const [coaches, setCoaches] = useState<{ id: string; display_name: string }[]>([]);
 
-  const canEdit = !readOnly && !onOpenRequestTab && date >= todayStr;
+  // 当日・あとからでも（2週間前まで）直せる：代替の予定だったが体調が悪く休養にした、など
+  const canEdit = !readOnly && !onOpenRequestTab && date >= shiftDays(todayStr, -14);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +142,7 @@ export default function AbsenceRequestPanel({
     setReasonType(req?.reason_type ?? null);
     setReason(req?.reason ?? "");
     setPlanType(req?.plan_type ?? null);
+    setAltPicked(!!req && req.plan_type !== "none");
     setPlan(req?.plan ?? "");
     setPlanBlocks(planToBlocks(req?.plan_sets));
     setPermittedBy(req?.permitted_by ?? null);
@@ -164,7 +168,8 @@ export default function AbsenceRequestPanel({
     const needPermission = !noPermissionNeeded(reasonType);
     if (needPermission && !permittedBy) return setError("許可をくれた監督・管理者を選んでください。");
     if (needPermission && !method) return setError("許可をもらった方法（LINE・電話）を選んでください。");
-    if (!planType) return setError("代替メニューを選んでください。");
+    if (!planType && !altPicked) return setError("休むあいだ「休養」か「代替メニューをやる」かを選んでください。");
+    if (!planType) return setError("代替メニューの種類を選んでください。");
     if (planType === "weight" && !blocksHaveData(planBlocks) && !plan.trim()) {
       return setError("ウェイトの予定（種目とセット）を入れてください。");
     }
@@ -326,6 +331,34 @@ export default function AbsenceRequestPanel({
           </div>
         )}
         <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">休むあいだ</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setPlanType("none");
+                setAltPicked(false);
+              }}
+              className={`rounded-lg px-2 py-2 text-xs font-semibold ${planType === "none" ? "bg-neutral-700 text-white" : "border border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"}`}
+            >
+              休養する
+              <span className="block text-[length:calc(9px+var(--fs-add))] font-normal opacity-80">日報の提出なし</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAltPicked(true);
+                if (planType === "none") setPlanType(null);
+              }}
+              className={`rounded-lg px-2 py-2 text-xs font-semibold ${altPicked && planType !== "none" ? "bg-red-600 text-white" : "border border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"}`}
+            >
+              代替メニューをやる
+              <span className="block text-[length:calc(9px+var(--fs-add))] font-normal opacity-80">当日に実績を報告</span>
+            </button>
+          </div>
+        </div>
+        {altPicked && planType !== "none" && (
+        <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">代替メニュー（予定）</span>
           {planTemplates.length > 0 && (
             <div className="flex flex-col gap-1">
@@ -339,6 +372,7 @@ export default function AbsenceRequestPanel({
                       if ((plan.trim() || blocksHaveData(planBlocks)) && planTemplateId !== t.id && !window.confirm(`今の代替メニューを「${t.name}」に置き換えますか？`)) return;
                       setPlanTemplateId(t.id);
                       setPlanType(t.plan_type);
+                      setAltPicked((t.plan_type as string) !== "none");
                       setPlan(t.plan);
                       setPlanBlocks(planToBlocks(t.plan_sets));
                     }}
@@ -355,7 +389,7 @@ export default function AbsenceRequestPanel({
             </div>
           )}
           <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(absencePlanLabel) as AbsencePlanType[]).map((t) => (
+            {(Object.keys(absencePlanLabel) as AbsencePlanType[]).filter((t) => t !== "none").map((t) => (
               <button key={t} type="button" onClick={() => setPlanType(t)} className={chip(planType === t)}>
                 {absencePlanLabel[t]}
               </button>
@@ -372,7 +406,7 @@ export default function AbsenceRequestPanel({
               />
             </div>
           )}
-          {planType && planType !== "none" && (plan.trim() || blocksHaveData(planBlocks)) && (
+          {planType && (plan.trim() || blocksHaveData(planBlocks)) && (
             <button
               type="button"
               onClick={async () => {
@@ -399,7 +433,7 @@ export default function AbsenceRequestPanel({
               この代替メニューをテンプレートとして保存
             </button>
           )}
-          {planType !== "none" && (
+          {(
             <textarea
               value={plan}
               maxLength={300}
@@ -416,9 +450,10 @@ export default function AbsenceRequestPanel({
             />
           )}
           <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            休みでも、日報の提出は必要です。当日は、この予定がトレーニング欄に入った状態で開くので、実際にやった内容に直して提出してください（予定と変わっても大丈夫です）。
+            当日は、日報の「代替メニュー」欄にこの予定が入った状態で開くので、実際にやった内容に直して提出してください（予定と変わっても大丈夫です）。体調が悪くてできなかったときは、この申請を直して「休養する」に変えてください。
           </span>
         </div>
+        )}
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2">
           <button
@@ -472,7 +507,7 @@ export default function AbsenceRequestPanel({
         {absenceReasonText(req)}
       </p>
       <p className="whitespace-pre-wrap text-xs text-neutral-700 dark:text-neutral-300">
-        <span className="text-neutral-500">代替メニュー（予定）：</span>
+        <span className="text-neutral-500">{req.plan_type === "none" ? "休むあいだ：" : "代替メニュー（予定）："}</span>
         {absencePlanText(req)}
       </p>
       {req.plan_sets && req.plan_sets.length > 0 && (
@@ -498,8 +533,8 @@ export default function AbsenceRequestPanel({
       {req.status === "approved" && !readOnly && (
         <p className="text-[length:calc(10px+var(--fs-add))] text-emerald-700 dark:text-emerald-400">
           {req.plan_type === "none"
-            ? "休みでも日報の提出は必要です。マット練習は「休み」の内容が入っているので、そのまま提出してください。"
-            : "休みでも日報の提出は必要です。当日は、実際にやった代替メニューを日報（トレーニング）に記録してください。"}
+            ? "休むセクションの日報は不要です（休養）。休まないセクションは、いつもどおり提出してください。"
+            : "休むセクションの代わりに、実際にやった代替メニューを日報の「代替メニュー」欄に記録してください。できなかったときは、この申請を「休養する」に直してください。"}
         </p>
       )}
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -683,4 +718,10 @@ function HospitalReport({
       <span className="font-bold">報告する ›</span>
     </button>
   );
+}
+
+function shiftDays(dateStr: string, days: number) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const x = new Date(y, m - 1, d + days);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 }

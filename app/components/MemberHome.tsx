@@ -30,7 +30,7 @@ import SubTabBar from "./shell/SubTabBar";
 import { notifyTasksChanged } from "./shell/taskRefreshBus";
 import { UnifiedCalendar } from "./mypage/UnifiedCalendar";
 import AbsenceRequestTab from "./mypage/AbsenceRequestTab";
-import { loadOffDates } from "../lib/offDays";
+import { loadObligations } from "../lib/obligations";
 import {
   absencePlanLabel,
   absenceReasonLabel,
@@ -81,12 +81,6 @@ function toDateKey(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function isMenuReportOpen(menu: TodoMenuRow): boolean {
-  if (!menu.start_time) return true;
-  const threshold = new Date(`${menu.date}T${menu.start_time}`);
-  return new Date() >= threshold;
 }
 
 function formatMonthDay(dateStr: string) {
@@ -316,8 +310,7 @@ export default function MemberHome({
     if (isManager) {
       return;
     }
-    if (effectiveHomeLocation) loadTodo();
-    loadSelfTrainingTodo();
+    loadTodo();
     loadActiveExemption();
     loadNextMatch();
     loadTitleOptions();
@@ -338,8 +331,7 @@ export default function MemberHome({
       isFirstRefresh.current = false;
       return;
     }
-    if (effectiveHomeLocation) loadTodo();
-    loadSelfTrainingTodo();
+    loadTodo();
     loadActiveExemption();
     if (calendarVisible) loadCalendarData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -357,167 +349,34 @@ export default function MemberHome({
     setActiveExemption(rows[0] ?? null);
   }
 
+  // 未提出の日報（マット練習・ラン／ウェイトのセクション・代替メニュー）。直近1か月分
   async function loadTodo() {
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
-    const joinedDate = toDateKey(new Date(profile.created_at));
-    const rangeStart =
-      toDateKey(oneMonthAgo) > joinedDate
-        ? toDateKey(oneMonthAgo)
-        : joinedDate;
-
-    const { data: ownMenuData, error: ownMenuError } = await supabase
-      .from("menus")
-      .select("id, date, location, start_time, is_off")
-      .eq("team_id", profile.team_id)
-      .eq("location", effectiveHomeLocation)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", todayStr);
-
-    if (ownMenuError) {
-      setErrorMsg(ownMenuError.message);
-      return;
-    }
-
-    const { data: jointMenuData, error: jointMenuError } = await supabase
-      .from("menus")
-      .select("id, date, location, start_time, is_off")
-      .eq("team_id", profile.team_id)
-      .eq("is_joint", true)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", todayStr);
-
-    if (jointMenuError) {
-      setErrorMsg(jointMenuError.message);
-      return;
-    }
-
-    const menuMap = new Map<string, TodoMenuRow>();
-    const offDates = effectiveHomeLocation
-      ? await loadOffDates(supabase, profile.team_id, effectiveHomeLocation, rangeStart, todayStr)
-      : new Set<string>();
-    for (const m of (ownMenuData ?? []) as unknown as TodoMenuRow[]) {
-      if (!offDates.has(m.date)) menuMap.set(m.id, m);
-    }
-    for (const m of (jointMenuData ?? []) as unknown as TodoMenuRow[]) {
-      menuMap.set(m.id, m);
-    }
-    // 管理者が登録した免除期間中の日のメニューは、実施報告のタスクに出さない
-    const exemptions = await loadExemptions(
-      supabase,
-      profile.team_id,
-      rangeStart,
-      todayStr,
-      profile.id
-    );
-    const menus = Array.from(menuMap.values())
-      .filter((m) => !isExemptOn(exemptions, profile.id, m.date))
-      .sort((a, b) => b.date.localeCompare(a.date));
-    const openMenus = menus.filter((m) => isMenuReportOpen(m));
-
-    if (openMenus.length === 0) {
-      setTodoMenus([]);
-      return;
-    }
-
-    const { data: commentData, error: commentError } = await supabase
-      .from("comments")
-      .select("menu_id, kind")
-      .eq("author_id", profile.id)
-      .in(
-        "menu_id",
-        openMenus.map((m) => m.id)
-      )
-      .in("kind", ["report", "absent"]);
-
-    if (commentError) {
-      setErrorMsg(commentError.message);
-      return;
-    }
-
-    const respondedIds = new Set(
-      ((commentData ?? []) as { menu_id: string }[]).map((c) => c.menu_id)
-    );
-    setTodoMenus(openMenus.filter((m) => !respondedIds.has(m.id)));
-  }
-
-  // マット以外のセッション(ラン・ウェイトなど)が組まれている日のうち、
-  // ラン/ウェイト/その他いずれかの自主トレ記録もまだ保存していない日を集計する
-  async function loadSelfTrainingTodo() {
     if (!effectiveHomeLocation) {
+      setTodoMenus([]);
       setSelfTrainingPending([]);
       return;
     }
     const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
-    const joinedDate = toDateKey(new Date(profile.created_at));
-    const rangeStart =
-      toDateKey(oneMonthAgo) > joinedDate
-        ? toDateKey(oneMonthAgo)
-        : joinedDate;
-
-    // 管理者が登録した免除期間中の日は、自主トレ記録のタスクに出さない
-    const selfExemptions = await loadExemptions(
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const ob = await loadObligations(
       supabase,
       profile.team_id,
-      rangeStart,
-      todayStr,
-      profile.id
+      [{ id: profile.id, home_location: effectiveHomeLocation, created_at: profile.created_at }],
+      toDateKey(oneMonthAgo),
+      todayStr
     );
-
-    const { data: scheduleData, error: scheduleError } = await supabase
-      .from("schedule_days")
-      .select(
-        "date, is_off, sessions:schedule_sessions(session_type)"
-      )
-      .eq("team_id", profile.team_id)
-      .eq("location", effectiveHomeLocation)
-      .eq("is_off", false)
-      .gte("date", rangeStart)
-      .lte("date", todayStr);
-
-    if (scheduleError) {
-      setErrorMsg(scheduleError.message);
-      return;
+    const mats: TodoMenuRow[] = [];
+    const trainingDates: string[] = [];
+    for (const [d, items] of ob.get(profile.id) ?? []) {
+      for (const x of items) {
+        if (x.done) continue;
+        if (x.kind === "mat")
+          mats.push({ id: x.menu.id, date: d, location: x.menu.location as Location, start_time: x.menu.start_time, is_off: false });
+        else if (!trainingDates.includes(d)) trainingDates.push(d);
+      }
     }
-
-    const nonMatDates = ((scheduleData ?? []) as unknown as {
-      date: string;
-      is_off: boolean;
-      sessions: { session_type: SessionType }[];
-    }[])
-      .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-      .map((row) => row.date)
-      .filter((d) => !isExemptOn(selfExemptions, profile.id, d));
-
-    if (nonMatDates.length === 0) {
-      setSelfTrainingPending([]);
-      return;
-    }
-
-    const { data: logData, error: logError } = await supabase
-      .from("weight_logs")
-      .select("date")
-      .eq("author_id", profile.id)
-      .gte("date", rangeStart)
-      .lte("date", todayStr);
-
-    if (logError) {
-      setErrorMsg(logError.message);
-      return;
-    }
-
-    // 未実施報告の代替メニューは「マット」への代替であり、
-    // 別枠のラン/ウェイトなどのセッション消化とは別物なのでここではカウントしない
-    const loggedDates = new Set(
-      ((logData ?? []) as { date: string }[]).map((r) => r.date)
-    );
-
-    setSelfTrainingPending(
-      nonMatDates.filter((d) => !loggedDates.has(d)).sort()
-    );
+    setTodoMenus(mats.sort((a, b) => b.date.localeCompare(a.date)));
+    setSelfTrainingPending(trainingDates.sort());
   }
 
   async function loadNextMatch() {
@@ -883,7 +742,7 @@ export default function MemberHome({
           r.date,
           {
             reason: absenceReasonLabel[r.reason_type],
-            plan: r.plan_type === "none" ? "安静" : absencePlanLabel[r.plan_type],
+            plan: r.plan_type === "none" ? "休養" : absencePlanLabel[r.plan_type],
             sessionKeys: r.session_keys,
           },
         ])
@@ -1052,8 +911,7 @@ export default function MemberHome({
   // 日報（マット報告・トレ報）を出したあとの読み直し
   async function handleDailySubmitted() {
     await Promise.all([
-      effectiveHomeLocation ? loadTodo() : Promise.resolve(),
-      loadSelfTrainingTodo(),
+      loadTodo(),
       loadTitleOptions(),
     ]);
     setReportRefreshKey((n) => n + 1);

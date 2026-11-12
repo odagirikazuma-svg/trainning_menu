@@ -2,10 +2,9 @@
 
 import FatigueSelector from "./FatigueSelector";
 import AbsenceRequestPanel from "./AbsenceRequestPanel";
-import { absenceCoversMat } from "../lib/absence";
+import { isOpenAt, planDay, slotLabel, type TrainingSlot } from "../lib/obligations";
 import ParticipationForm from "./ParticipationForm";
 import {
-  absenceReasonText,
   planToBlocks,
   planToTrainingType,
   type AbsenceRequest,
@@ -47,8 +46,9 @@ import { notifyTasksChanged } from "./shell/taskRefreshBus";
  *   開始時刻を過ぎたら「実施した／実施できなかった」を選んで書く。
  *   保存先はこれまで通り comments（kind = report / absent）なので、
  *   練習予定表・管理ページの提出状況はそのまま使える。
- * - トレーニング：その日の時間割にラン・ウェイトなどが入っていれば必須、無ければ任意。
- *   保存先はこれまで通り weight_logs（1日1件）。
+ * - トレーニング：時間割のラン・ウェイトのセクションごとに1件（同じ種類が2つあってもそれぞれ）。
+ *   保存先は weight_logs（session_key でセクションとひもづける。null は予定外の自主トレ）。
+ * - 休みの報告を出したセクションは、休養なら提出なし、代替メニューなら最初の1つの代わりに代替メニューを記録する。
  */
 
 type DayMenu = {
@@ -85,6 +85,19 @@ type TrainingLog = {
   type: TrainingType;
   title: string | null;
   start_time: string | null;
+  session_key: string | null;
+};
+
+// 日報のトレーニング欄（セクションごと・代替メニュー・予定外の自主トレ）
+const FREE = "free";
+type UiSlot = {
+  id: string; // session_key、予定外の自主トレは FREE
+  key: string | null;
+  kind: "session" | "alt" | "free" | "extra";
+  sessionType: SessionType | null;
+  time: string | null;
+  required: boolean;
+  slot?: TrainingSlot;
 };
 
 type DaySession = {
@@ -183,10 +196,10 @@ function menuHeading(m: DayMenu) {
 type DraftData = {
   savedAt: string;
   matDrafts: Record<string, MatDraft>;
-  training: TrainingDraft;
-  blocks: ExerciseBlock[];
+  trainings: Record<string, TrainingDraft>;
+  blocksBy: Record<string, ExerciseBlock[]>;
   memo: string;
-  editingTraining: boolean;
+  editingSlot: string | null;
 };
 
 function readDraft(key: string): DraftData | null {
@@ -194,7 +207,7 @@ function readDraft(key: string): DraftData | null {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const d = JSON.parse(raw) as DraftData;
-    return d && d.training && Array.isArray(d.blocks) ? d : null;
+    return d && d.trainings && d.blocksBy ? d : null;
   } catch {
     return null;
   }
@@ -266,17 +279,21 @@ export default function DailyReport({
   const [sessions, setSessions] = useState<DaySession[]>([]);
   const [isOffDay, setIsOffDay] = useState(false);
   const [exempt, setExempt] = useState(false);
-  const [log, setLog] = useState<TrainingLog | null>(null);
+  // トレーニングの記録（欄ごと）
+  const [logs, setLogs] = useState<Record<string, TrainingLog>>({});
   const [memoId, setMemoId] = useState<string | null>(null);
   const [memoSaved, setMemoSaved] = useState("");
 
   const [matDrafts, setMatDrafts] = useState<Record<string, MatDraft>>({});
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
-  const [training, setTraining] = useState<TrainingDraft>(emptyTrainingDraft);
-  // 種目ごとのセット記録（重量・回数・時間）
-  const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
-  const [savedBlocks, setSavedBlocks] = useState<ExerciseBlock[]>([]);
-  const [editingTraining, setEditingTraining] = useState(false);
+  // 書きかけ（触った欄だけ入る）。欄ごとの入力と、種目ごとのセット記録（重量・回数・時間）
+  const [trainings, setTrainings] = useState<Record<string, TrainingDraft>>({});
+  const [blocksBy, setBlocksBy] = useState<Record<string, ExerciseBlock[]>>({});
+  const [savedBlocksBy, setSavedBlocksBy] = useState<Record<string, ExerciseBlock[]>>({});
+  // 提出済みの記録を直している欄
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  // 予定外の自主トレ欄を開いたか（ほかに提出が必要な欄がある日）
+  const [showFree, setShowFree] = useState(false);
   const [memo, setMemo] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
   // タイムラインのカードの開閉（押して切り替えた分だけ覚える）
@@ -285,14 +302,14 @@ export default function DailyReport({
   const [weekSubmitted, setWeekSubmitted] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [copying, setCopying] = useState(false);
-  // 前回の記録を読み込んだときの案内（例：11月5日(木)の「BIG3」）
-  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
+  // 前回の記録を読み込んだときの案内（例：11月5日(木)の「BIG3」）。欄ごと
+  const [copiedFrom, setCopiedFrom] = useState<Record<string, string>>({});
   // この日の休み申請（AbsenceRequestPanel が読み込んで知らせてくる）
   const [absenceReq, setAbsenceReq] = useState<AbsenceRequest | null>(null);
   // 練習ごとの「参加したメニュー・スパーの参加量」の答えが足りないところ
   const [participationIssues, setParticipationIssues] = useState<Record<string, string[]>>({});
   // ひとことメモ欄を開いているか（セット記録があるときは閉じておく）
-  const [memoOpen, setMemoOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState<Record<string, boolean>>({});
   // ---- 下書き（書きかけの内容を端末に自動保存し、別のタブに移っても消えないようにする） ----
   const draftKey = `daily-draft:${profile.id}:${date}`;
   const draftReady = useRef(false);
@@ -316,28 +333,17 @@ export default function DailyReport({
   useEffect(() => {
     if (!draftReady.current || loading) return;
     const hasMat = Object.values(matDrafts).some((d) => d.mode);
-    // 休み申請の代替メニューを自動で入れただけの状態は、下書きにしない（開くたびに「戻しました」と出ないように）
-    const onlyPlanPrefill =
-      !!prefilledFromPlan.current &&
-      training.title === "代替メニュー" &&
-      !training.startTime &&
-      (blocks.length > 0
-        ? blocks.every((b) => b.prefilled && b.prefilledFrom === "plan") && training.content.trim() === ""
-        : training.content === (absenceReq?.plan ?? ""));
-    const hasTraining = log
-      ? editingTraining
-      : !onlyPlanPrefill &&
-        (!!training.type || training.content.trim() !== "" || training.title.trim() !== "" || blocks.length > 0);
+    const hasTraining = Object.keys(trainings).length > 0 || Object.keys(blocksBy).length > 0;
     const hasMemo = memo !== memoSaved;
     const value =
       hasMat || hasTraining || hasMemo
         ? JSON.stringify({
             savedAt: new Date().toISOString(),
             matDrafts,
-            training,
-            blocks,
+            trainings,
+            blocksBy,
             memo,
-            editingTraining,
+            editingSlot,
           } satisfies DraftData)
         : null;
     latestDraft.current = value;
@@ -347,7 +353,7 @@ export default function DailyReport({
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matDrafts, training, blocks, memo, editingTraining, loading]);
+  }, [matDrafts, trainings, blocksBy, memo, editingSlot, loading]);
 
   // 別のアプリ・タブに切り替えた瞬間にも、待たずに保存する
   useEffect(() => {
@@ -427,12 +433,15 @@ export default function DailyReport({
     if (resetDrafts) {
       setMatDrafts({});
       setEditingReportId(null);
-      setEditingTraining(false);
+      setEditingSlot(null);
+      setTrainings({});
+      setBlocksBy({});
+      setShowFree(false);
       setMissing([]);
       setNotice(null);
       setExpanded({});
-      setCopiedFrom(null);
-      setMemoOpen(false);
+      setCopiedFrom({});
+      setMemoOpen({});
       setDraftRestoredAt(null);
       setDraftSavedAt(null);
       draftReady.current = false;
@@ -480,10 +489,9 @@ export default function DailyReport({
       loadExemptions(supabase, profile.team_id, date, date, profile.id),
       supabase
         .from("weight_logs")
-        .select("id, date, content, type, title, start_time")
+        .select("id, date, content, type, title, start_time, session_key")
         .eq("author_id", profile.id)
-        .eq("date", date)
-        .maybeSingle(),
+        .eq("date", date),
       readOnly
         ? none
         : supabase
@@ -524,8 +532,8 @@ export default function DailyReport({
 
     // 2) 報告に付いたコメント・リアクションと、トレ報のセット記録
     const ids = reports.map((r) => r.id);
-    const logRow = (logRes.data as TrainingLog | null) ?? null;
-    const [replyRes, reactionRows, logBlocks] = await Promise.all([
+    const logRows = ((logRes.data ?? []) as TrainingLog[]);
+    const [replyRes, reactionRows, logBlocksList] = await Promise.all([
       ids.length > 0
         ? supabase
             .from("comments")
@@ -536,7 +544,7 @@ export default function DailyReport({
             .order("created_at", { ascending: true })
         : none,
       loadReactions(supabase, ids),
-      logRow ? loadSetsForLog(supabase, logRow.id) : Promise.resolve([] as ExerciseBlock[]),
+      Promise.all(logRows.map((l) => loadSetsForLog(supabase, l.id))),
     ]);
     const replyRows = ((replyRes.data ?? []) as unknown as ReplyRow[]);
 
@@ -549,22 +557,15 @@ export default function DailyReport({
     setSessions(daySessions);
     setIsOffDay(offDay);
     setExempt(isExemptOn(exemptions, profile.id, date));
-    setLog(logRow);
-    setSavedBlocks(logBlocks);
-    if (resetDrafts) setBlocks(logBlocks);
-    if (resetDrafts) {
-      setTraining(
-        logRow
-          ? {
-              type: logRow.type,
-              startTime: logRow.start_time ? logRow.start_time.slice(0, 5) : "",
-              title: logRow.title ?? "",
-              content:
-                logRow.content === blocksSummaryText(logBlocks) ? "" : logRow.content,
-            }
-          : emptyTrainingDraft
-      );
-    }
+    const logMap: Record<string, TrainingLog> = {};
+    const savedMap: Record<string, ExerciseBlock[]> = {};
+    logRows.forEach((l, i) => {
+      const id = l.session_key ?? FREE;
+      logMap[id] = l;
+      savedMap[id] = logBlocksList[i] ?? [];
+    });
+    setLogs(logMap);
+    setSavedBlocksBy(savedMap);
     const memoRow = (memoRes.data as { id: string; content: string } | null) ?? null;
     setMemoId(memoRow?.id ?? null);
     setMemoSaved(memoRow?.content ?? "");
@@ -575,11 +576,12 @@ export default function DailyReport({
         const d = readDraft(draftKey);
         if (d) {
           if (d.matDrafts) setMatDrafts(d.matDrafts);
-          if (!logRow || d.editingTraining) {
-            setTraining(d.training);
-            setBlocks(d.blocks);
-            if (logRow && d.editingTraining) setEditingTraining(true);
-          }
+          // 提出済みの欄の書きかけは、直している途中だった欄だけ戻す
+          const keep = (id: string) => !logMap[id] || d.editingSlot === id;
+          setTrainings(Object.fromEntries(Object.entries(d.trainings).filter(([id]) => keep(id))));
+          setBlocksBy(Object.fromEntries(Object.entries(d.blocksBy).filter(([id]) => keep(id))));
+          if (d.editingSlot && logMap[d.editingSlot]) setEditingSlot(d.editingSlot);
+          if (d.trainings[FREE] || d.blocksBy[FREE]) setShowFree(true);
           if (typeof d.memo === "string") setMemo(d.memo);
           setDraftRestoredAt(d.savedAt);
         }
@@ -596,69 +598,101 @@ export default function DailyReport({
   }
 
   const reportByMenu = new Map(myReports.map((r) => [r.menu_id, r]));
+  // その日の提出が必要なもの（休みの報告：休養なら提出なし、代替なら代替メニューを1件）
+  const plan = planDay(menus, sessions, absenceReq);
+  const absentMenuIds = new Set(plan.mats.filter((m) => m.absent).map((m) => m.menu.id));
   const openMenus = menus.filter((m) => isMenuOpen(m));
-  const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id));
-  const nonMatSessions = sessions.filter((s) => s.session_type !== "mat");
-  // 休み申請の代替メニューの予定を、その日のトレーニング欄に最初から入れておく
-  // （まだ提出しておらず、書きかけもないときだけ。差し戻された申請は使わない）
-  const prefilledFromPlan = useRef<string | null>(null);
-  useEffect(() => {
-    if (loading || readOnly || !absenceReq || absenceReq.status === "rejected") return;
-    if (date > todayStr || log || absenceReq.plan_type === "none") return;
-    const key = `${absenceReq.id}:${date}`;
-    if (prefilledFromPlan.current === key) return;
-    const planBlocks = planToBlocks(absenceReq.plan_sets);
-    if (planBlocks.length === 0 && !absenceReq.plan.trim()) return;
-    if (blocksHaveData(blocks) || training.content.trim()) return;
-    prefilledFromPlan.current = key;
-    if (planBlocks.length > 0) {
-      setBlocks(planBlocks.map((b) => ({ ...b, prefilled: true, prefilledFrom: "plan" as const })));
-    }
-    setTraining((t) => ({
-      ...t,
-      type: t.type ?? planToTrainingType(absenceReq.plan_type),
-      title: t.title || "代替メニュー",
-      content: t.content || (planBlocks.length > 0 ? "" : absenceReq.plan),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, absenceReq, log, date]);
-
-  // 休みが承認されていても、代替メニュー（安静以外）の実績報告は必須
-  const absenceNeedsTraining =
-    !!absenceReq && absenceReq.status === "approved" && absenceReq.plan_type !== "none";
-  const trainingRequired = !exempt && (nonMatSessions.length > 0 || absenceNeedsTraining);
+  const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id) && !absentMenuIds.has(m.id));
   const isFuture = date > todayStr;
   const maxDateStr = shiftDate(todayStr, 14);
 
-  // 承認済みの休み申請がある日は、マット練習の報告を「休み」＋申請内容で最初から埋めておく
-  const absenceDraft: MatDraft =
-    absenceReq && absenceReq.status === "approved"
-      ? {
-          ...emptyMatDraft,
-          mode: "absent",
-          reason: absenceReasonText(absenceReq),
-          altType: planToTrainingType(absenceReq.plan_type),
-          alt: absenceReq.plan.trim() || "安静",
-        }
-      : emptyMatDraft;
-  // 休むセクションにこのマット練習が入っているときだけ「休み」で埋める
-  function baseDraftOf(menuId: string): MatDraft {
-    const m = menus.find((x) => x.id === menuId);
-    return absenceReq && absenceCoversMat(absenceReq.session_keys, m?.start_time) ? absenceDraft : emptyMatDraft;
+  // トレーニングの欄：セクションごと（＋代替メニュー）、予定外の記録、予定外の自主トレ
+  const uiSlots: UiSlot[] = (() => {
+    const list: UiSlot[] = plan.slots.map((sl) => ({
+      id: sl.key,
+      key: sl.key,
+      kind: sl.kind,
+      sessionType: sl.sessionType,
+      time: sl.time,
+      required: !exempt,
+      slot: sl,
+    }));
+    const known = new Set(list.map((x) => x.id));
+    for (const [id, l] of Object.entries(logs)) {
+      if (known.has(id) || id === FREE) continue;
+      const [t, tm] = id.split("@");
+      list.push({ id, key: id, kind: "extra", sessionType: (t as SessionType) ?? null, time: tm || l.start_time?.slice(0, 5) || null, required: false });
+    }
+    if (logs[FREE] || plan.slots.length === 0 || showFree)
+      list.push({ id: FREE, key: null, kind: "free", sessionType: null, time: logs[FREE]?.start_time?.slice(0, 5) ?? null, required: false });
+    return list;
+  })();
+  const slotById = new Map(uiSlots.map((x) => [x.id, x]));
+
+  const planBlocks = absenceReq ? planToBlocks(absenceReq.plan_sets) : [];
+  function defaultDraft(id: string): TrainingDraft {
+    const l = logs[id];
+    if (l)
+      return {
+        type: l.type,
+        startTime: l.start_time ? l.start_time.slice(0, 5) : "",
+        title: l.title ?? "",
+        content: l.content === blocksSummaryText(savedBlocksBy[id] ?? []) ? "" : l.content,
+      };
+    const sl = slotById.get(id);
+    if (sl?.kind === "alt" && absenceReq)
+      return {
+        type: planToTrainingType(absenceReq.plan_type),
+        startTime: "",
+        title: "代替メニュー",
+        content: planBlocks.length > 0 ? "" : absenceReq.plan,
+      };
+    if (sl?.kind === "session" && sl.sessionType && sl.sessionType !== "mat")
+      return { ...emptyTrainingDraft, type: sl.sessionType, startTime: sl.time ?? "" };
+    return emptyTrainingDraft;
   }
+  function trainingOf(id: string): TrainingDraft {
+    return trainings[id] ?? defaultDraft(id);
+  }
+  function blocksOf(id: string): ExerciseBlock[] {
+    if (blocksBy[id]) return blocksBy[id];
+    if (logs[id]) return savedBlocksBy[id] ?? [];
+    if (slotById.get(id)?.kind === "alt") return planBlocks.map((b) => ({ ...b, prefilled: true, prefilledFrom: "plan" as const }));
+    return [];
+  }
+  // 自分で何か入れた欄か（最初から入っている値だけなら false）
+  function touched(id: string) {
+    return !!trainings[id] || !!blocksBy[id];
+  }
+  function hasContent(id: string) {
+    return trainingOf(id).content.trim() !== "" || blocksHaveData(blocksOf(id));
+  }
+  // 提出する欄：まだ記録がなく、必須か自分で入れた欄
+  const slotsToCheck = uiSlots.filter((x) => !logs[x.id] && (x.required || touched(x.id)));
+  const pendingSlots = uiSlots.filter((x) => x.required && !logs[x.id] && isOpenAt(date, x.time));
+
   function draftOf(menuId: string): MatDraft {
-    return matDrafts[menuId] ?? baseDraftOf(menuId);
+    return matDrafts[menuId] ?? emptyMatDraft;
   }
   function updateDraft(menuId: string, patch: Partial<MatDraft>) {
     setMatDrafts((prev) => ({
       ...prev,
-      [menuId]: { ...(prev[menuId] ?? baseDraftOf(menuId)), ...patch },
+      [menuId]: { ...(prev[menuId] ?? emptyMatDraft), ...patch },
     }));
     setMissing([]);
   }
-  function updateTraining(patch: Partial<TrainingDraft>) {
-    setTraining((prev) => ({ ...prev, ...patch }));
+  function updateTraining(id: string, patch: Partial<TrainingDraft>) {
+    setTrainings((prev) => ({ ...prev, [id]: { ...(prev[id] ?? defaultDraft(id)), ...patch } }));
     setMissing([]);
+  }
+  function setBlocksFor(id: string, next: ExerciseBlock[]) {
+    setBlocksBy((prev) => ({ ...prev, [id]: next }));
+    setMissing([]);
+  }
+  function slotName(x: UiSlot) {
+    if (x.kind === "free") return "予定外の自主トレ";
+    if (x.slot) return slotLabel(x.slot);
+    return `${x.sessionType ? sessionTypeLabel[x.sessionType] : "トレーニング"}${x.time ? ` ${x.time}` : ""}`;
   }
 
   // 提出前のチェック。足りないものを日本語で返す（空なら提出できる）
@@ -684,20 +718,57 @@ export default function DailyReport({
         problems.push(`${label}：理由・代替メニューの種類・詳細をすべて書いてください`);
       }
     }
-    const touched =
-      !!training.type ||
-      training.content.trim() !== "" ||
-      training.title.trim() !== "" ||
-      blocks.length > 0;
-    if (!log && (trainingRequired || touched)) {
-      if (!training.type) problems.push("トレーニング：ラン／ウェイト／その他を選んでください");
-      if (!training.content.trim() && !blocksHaveData(blocks))
-        problems.push("トレーニング：種目の記録か、実施した内容のどちらかを書いてください");
-    }
-    if (training.startTime && training.startTime < "06:00") {
-      problems.push("トレーニング：開始時間はその日の6時以降で入力してください");
+    for (const x of slotsToCheck) {
+      const t = trainingOf(x.id);
+      const name = slotName(x);
+      // 開始前の必須の欄は、何も入れていなければまだ求めない
+      if (x.required && !touched(x.id) && !isOpenAt(date, x.time)) continue;
+      if (!t.type) problems.push(`${name}：ラン／ウェイト／その他を選んでください`);
+      if (!hasContent(x.id)) problems.push(`${name}：種目の記録か、実施した内容のどちらかを書いてください`);
+      if (t.startTime && t.startTime < "06:00") problems.push(`${name}：開始時間はその日の6時以降で入力してください`);
     }
     return problems;
+  }
+
+  async function saveTrainingSlot(id: string) {
+    const x = slotById.get(id);
+    const t = trainingOf(id);
+    const blocks = blocksOf(id);
+    const row = {
+      content: t.content.trim() || blocksSummaryText(blocks),
+      type: t.type,
+      title: t.title.trim() || null,
+      start_time: t.startTime || null,
+      updated_at: new Date().toISOString(),
+    };
+    let logId: string | null = logs[id]?.id ?? null;
+    if (!logId) {
+      // 連打などで同じ欄が2件入らないよう、先にあるか確認する
+      let q = supabase.from("weight_logs").select("id").eq("author_id", profile.id).eq("date", date);
+      q = x?.key ? q.eq("session_key", x.key) : q.is("session_key", null);
+      const { data: ex } = await q.limit(1);
+      logId = ((ex ?? [])[0] as { id: string } | undefined)?.id ?? null;
+    }
+    if (logId) {
+      const { error } = await supabase.from("weight_logs").update(row).eq("id", logId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: saved, error } = await supabase
+        .from("weight_logs")
+        .insert({ ...row, team_id: profile.team_id, author_id: profile.id, date, session_key: x?.key ?? null })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      logId = (saved as { id: string }).id;
+    }
+    const setError = await saveSetsForLog(supabase, {
+      teamId: profile.team_id,
+      authorId: profile.id,
+      logId,
+      date,
+      blocks,
+    });
+    if (setError) throw new Error(setError);
   }
 
   async function handleSubmit() {
@@ -708,10 +779,9 @@ export default function DailyReport({
       return;
     }
     const matToSend = pendingMenus.filter((m) => draftOf(m.id).mode);
-    const sendTraining =
-      !log && !!training.type && (training.content.trim() !== "" || blocksHaveData(blocks));
+    const trainingToSend = slotsToCheck.filter((x) => !!trainingOf(x.id).type && hasContent(x.id));
     const sendMemo = memo.slice(0, 20) !== memoSaved;
-    if (matToSend.length === 0 && !sendTraining && !sendMemo) {
+    if (matToSend.length === 0 && trainingToSend.length === 0 && !sendMemo) {
       setMissing(["提出する内容がまだありません。"]);
       return;
     }
@@ -749,31 +819,7 @@ export default function DailyReport({
         if (error && error.code !== "23505") throw new Error(error.message);
       }
 
-      if (sendTraining) {
-        const title = training.title.trim();
-        const { data: saved, error } = await supabase.from("weight_logs").upsert(
-          {
-            team_id: profile.team_id,
-            author_id: profile.id,
-            date,
-            content: training.content.trim() || blocksSummaryText(blocks),
-            type: training.type,
-            title: title || null,
-            start_time: training.startTime || null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "author_id,date" }
-        ).select("id").single();
-        if (error) throw new Error(error.message);
-        const setError = await saveSetsForLog(supabase, {
-          teamId: profile.team_id,
-          authorId: profile.id,
-          logId: (saved as { id: string }).id,
-          date,
-          blocks,
-        });
-        if (setError) throw new Error(setError);
-      }
+      for (const x of trainingToSend) await saveTrainingSlot(x.id);
 
       if (sendMemo) await saveMemo();
 
@@ -853,46 +899,44 @@ export default function DailyReport({
     setEditingReportId(r.id);
   }
 
-  async function handleUpdateTraining() {
-    if (!training.type || (!training.content.trim() && !blocksHaveData(blocks))) {
+  async function handleUpdateTraining(id: string) {
+    const t = trainingOf(id);
+    if (!t.type || !hasContent(id)) {
       setMissing(["トレーニング：種類と、種目の記録か内容を入力してください"]);
       return;
     }
-    if (training.startTime && training.startTime < "06:00") {
+    if (t.startTime && t.startTime < "06:00") {
       setMissing(["トレーニング：開始時間はその日の6時以降で入力してください"]);
       return;
     }
     setSubmitting(true);
-    const title = training.title.trim();
-    const { error } = await supabase
-      .from("weight_logs")
-      .update({
-        content: training.content.trim() || blocksSummaryText(blocks),
-        type: training.type,
-        title: title || null,
-        start_time: training.startTime || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", log!.id);
-    const setError = error
-      ? null
-      : await saveSetsForLog(supabase, {
-          teamId: profile.team_id,
-          authorId: profile.id,
-          logId: log!.id,
-          date,
-          blocks,
-        });
-    setSubmitting(false);
-    if (error || setError) {
-      setErrorMsg(error?.message ?? setError);
+    try {
+      await saveTrainingSlot(id);
+    } catch (e) {
+      setSubmitting(false);
+      setErrorMsg(e instanceof Error ? e.message : String(e));
       return;
     }
+    setSubmitting(false);
     clearDraft();
     skipDraftRestore.current = true;
     await load(true);
     setNotice("トレーニングの報告を修正しました。");
     await onSubmitted?.();
+  }
+
+  function cancelEditTraining(id: string) {
+    setEditingSlot(null);
+    setTrainings((prev) => {
+      const n = { ...prev };
+      delete n[id];
+      return n;
+    });
+    setBlocksBy((prev) => {
+      const n = { ...prev };
+      delete n[id];
+      return n;
+    });
   }
 
   // タイトル候補から消す：自分の記録に付いているそのタイトルを外す（記録そのものは残る）
@@ -910,12 +954,13 @@ export default function DailyReport({
       setErrorMsg(error.message);
       return;
     }
-    if (training.title.trim() === title) updateTraining({ title: "" });
+    for (const x of uiSlots) if (trainingOf(x.id).title.trim() === title && touched(x.id)) updateTraining(x.id, { title: "" });
     await onTitlesChanged?.();
   }
 
   // 前回の同じ種類（タイトルを選んでいれば同じタイトル）の記録を本文にコピーする
-  async function handleCopyPrevious(titleOverride?: string, silent = false) {
+  async function handleCopyPrevious(id: string, titleOverride?: string, silent = false) {
+    const training = trainingOf(id);
     if (!training.type) return;
     const wantTitle = (titleOverride ?? training.title).trim();
     setCopying(true);
@@ -938,15 +983,14 @@ export default function DailyReport({
       return;
     }
     const prevBlocks = await loadSetsForLog(supabase, prev.id);
-    if (prevBlocks.length > 0)
-      setBlocks(prevBlocks.map((b) => ({ ...b, prefilled: true })));
+    if (prevBlocks.length > 0) setBlocksFor(id, prevBlocks.map((b) => ({ ...b, prefilled: true })));
     const prevMemo = prev.content === blocksSummaryText(prevBlocks) ? "" : prev.content;
-    updateTraining({
+    updateTraining(id, {
       // セット記録がある場合、前回のメモまでは写さない（今日の感想を書く欄なので）
       content: prevBlocks.length > 0 ? training.content : prevMemo,
       title: wantTitle || (prev.title ?? ""),
     });
-    setCopiedFrom(`${formatMonthDayWeek(prev.date)}の「${wantTitle || trainingTypeLabel[training.type]}」`);
+    setCopiedFrom((c) => ({ ...c, [id]: `${formatMonthDayWeek(prev.date)}の「${wantTitle || trainingTypeLabel[training.type!]}」` }));
   }
 
   function jumpToBoard(m: DayMenu) {
@@ -970,15 +1014,10 @@ export default function DailyReport({
   const dayComplete =
     !loading &&
     pendingMenus.length === 0 &&
-    (!trainingRequired || !!log) &&
-    (openMenus.length > 0 || !!log);
-  const trainingTouched =
-    !log &&
-    (!!training.type ||
-      training.content.trim() !== "" ||
-      training.title.trim() !== "" ||
-      blocks.length > 0);
-  const hasOptionalToSubmit = trainingTouched || memo.slice(0, 20) !== memoSaved;
+    pendingSlots.length === 0 &&
+    (openMenus.length > 0 || Object.keys(logs).length > 0 || absentMenuIds.size > 0);
+  const hasOptionalToSubmit =
+    uiSlots.some((x) => !logs[x.id] && touched(x.id) && hasContent(x.id)) || memo.slice(0, 20) !== memoSaved;
 
   const inputCls =
     "rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-2 py-1.5 text-sm text-neutral-900 dark:text-neutral-100";
@@ -1170,7 +1209,9 @@ export default function DailyReport({
     );
   }
 
-  function renderTrainingForm() {
+  function renderTrainingForm(id: string) {
+    const training = trainingOf(id);
+    const blocks = blocksOf(id);
     const type = training.type;
     const activeColor = type ? titleColors[type].get(training.title.trim()) : undefined;
     return (
@@ -1180,7 +1221,7 @@ export default function DailyReport({
             <button
               key={t}
               type="button"
-              onClick={() => updateTraining({ type: t })}
+              onClick={() => updateTraining(id, { type: t })}
               className={`flex-1 rounded-md py-2 font-medium ${
                 type === t ? "bg-red-600 text-white shadow" : "text-neutral-600 dark:text-neutral-400"
               }`}
@@ -1199,7 +1240,7 @@ export default function DailyReport({
                   min="06:00"
                   max="23:59"
                   value={training.startTime}
-                  onChange={(e) => updateTraining({ startTime: e.target.value })}
+                  onChange={(e) => updateTraining(id, { startTime: e.target.value })}
                   className={inputCls}
                 />
               </label>
@@ -1207,13 +1248,13 @@ export default function DailyReport({
                 タイトル
                 <input
                   type="text"
-                  list={`${variant}-${type}-title-options`}
+                  list={`${variant}-${id}-${type}-title-options`}
                   value={training.title}
-                  onChange={(e) => updateTraining({ title: e.target.value })}
+                  onChange={(e) => updateTraining(id, { title: e.target.value })}
                   placeholder="例：BIG3、インターバル走"
                   className={inputCls}
                 />
-                <datalist id={`${variant}-${type}-title-options`}>
+                <datalist id={`${variant}-${id}-${type}-title-options`}>
                   {titleOptions[type].map((t) => (
                     <option key={t} value={t} />
                   ))}
@@ -1265,10 +1306,10 @@ export default function DailyReport({
                       key={t}
                       type="button"
                       onClick={() => {
-                        updateTraining({ title: t });
+                        updateTraining(id, { title: t });
                         // まだ何も入れていなければ、前回の同じメニューを丸ごと読み込む
                         if (!blocksHaveData(blocks) && !training.content.trim()) {
-                          handleCopyPrevious(t, true);
+                          handleCopyPrevious(id, t, true);
                         }
                       }}
                       className={`rounded-full border px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium ${
@@ -1309,7 +1350,7 @@ export default function DailyReport({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => handleCopyPrevious()}
+              onClick={() => handleCopyPrevious(id)}
               disabled={copying}
               className="rounded-full border border-neutral-300 dark:border-neutral-700 px-3 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-700 dark:text-neutral-300 active:bg-neutral-100 dark:active:bg-neutral-800 disabled:opacity-50"
             >
@@ -1319,9 +1360,9 @@ export default function DailyReport({
                   ? `↺ 前回の「${training.title.trim()}」を丸ごと読み込む`
                   : `↺ 前回の${trainingTypeLabel[type]}を丸ごと読み込む`}
             </button>
-            {copiedFrom && (
+            {copiedFrom[id] && (
               <span className="text-[length:calc(10px+var(--fs-add))] text-sky-700 dark:text-sky-300">
-                {copiedFrom}を読み込みました
+                {copiedFrom[id]}を読み込みました
               </span>
             )}
           </div>
@@ -1332,14 +1373,11 @@ export default function DailyReport({
             profile={profile}
             date={date}
             blocks={blocks}
-            onChange={(next) => {
-              setBlocks(next);
-              setMissing([]);
-            }}
+            onChange={(next) => setBlocksFor(id, next)}
           />
         )}
         {type &&
-          (memoOpen || training.content.trim() !== "" || !blocksHaveData(blocks) ? (
+          (memoOpen[id] || training.content.trim() !== "" || !blocksHaveData(blocks) ? (
             <div className="flex flex-col gap-1">
               <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500">
                 {blocksHaveData(blocks)
@@ -1348,7 +1386,7 @@ export default function DailyReport({
               </span>
               <textarea
                 value={training.content}
-                onChange={(e) => updateTraining({ content: e.target.value })}
+                onChange={(e) => updateTraining(id, { content: e.target.value })}
                 placeholder={
                   blocksHaveData(blocks)
                     ? "例：BPの3セット目で肩に違和感。次回は重量を少し下げる"
@@ -1365,17 +1403,17 @@ export default function DailyReport({
           ) : (
             <button
               type="button"
-              onClick={() => setMemoOpen(true)}
+              onClick={() => setMemoOpen((o) => ({ ...o, [id]: true }))}
               className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
             >
               ＋ ひとこと（感想・気づき）を書く
             </button>
           ))}
-        {editingTraining && (
+        {editingSlot === id && (
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleUpdateTraining}
+              onClick={() => handleUpdateTraining(id)}
               disabled={submitting}
               className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white active:bg-red-700 disabled:opacity-50"
             >
@@ -1383,18 +1421,7 @@ export default function DailyReport({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setEditingTraining(false);
-                setBlocks(savedBlocks);
-                if (log)
-                  setTraining({
-                    type: log.type,
-                    startTime: log.start_time ? log.start_time.slice(0, 5) : "",
-                    title: log.title ?? "",
-                    content:
-                      log.content === blocksSummaryText(savedBlocks) ? "" : log.content,
-                  });
-              }}
+              onClick={() => cancelEditTraining(id)}
               className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300"
             >
               やめる
@@ -1432,8 +1459,10 @@ export default function DailyReport({
     done: boolean;
     upcoming: boolean;
     menu?: DayMenu;
+    // 休みの報告で休むマット練習（提出なし）
+    absent?: boolean;
+    slot?: UiSlot;
   };
-  const firstNonMatTime = nonMatSessions.find((s) => s.start_time)?.start_time ?? null;
   const timeline: TimelineItem[] = [
     ...menus.map((m) => ({
       key: `mat-${m.id}`,
@@ -1442,21 +1471,23 @@ export default function DailyReport({
       done: reportByMenu.has(m.id),
       upcoming: !isMenuOpen(m),
       menu: m,
+      absent: absentMenuIds.has(m.id),
     })),
-    {
-      key: "training",
-      time: firstNonMatTime,
+    ...uiSlots.map((x) => ({
+      key: `training-${x.id}`,
+      time: x.time,
       kind: "training" as const,
-      done: !!log,
-      upcoming: false,
-    },
+      done: !!logs[x.id],
+      upcoming: x.required && !isOpenAt(date, x.time),
+      slot: x,
+    })),
   ].sort((a, b) => {
     const ta = a.time ?? (a.kind === "training" ? "99:99" : "00:00");
     const tb = b.time ?? (b.kind === "training" ? "99:99" : "00:00");
     return ta.localeCompare(tb);
   });
-  const remaining =
-    (exempt ? 0 : pendingMenus.length) + (trainingRequired && !log ? 1 : 0);
+  const remaining = (exempt ? 0 : pendingMenus.length) + pendingSlots.length;
+  const canAddFree = !readOnly && !uiSlots.some((x) => x.id === FREE);
 
   function isExpanded(item: TimelineItem) {
     if (item.key in expanded) return expanded[item.key];
@@ -1476,25 +1507,34 @@ export default function DailyReport({
         : locationLabel[item.menu.location];
       return { icon: "🤼", title: "マット練習", sub: place };
     }
-    const types = nonMatSessions.map((s) => sessionTypeLabel[s.session_type]);
-    const icon = log?.type === "running" || (!log && nonMatSessions[0]?.session_type === "running") ? "🏃" : "🏋️";
-    return {
-      icon,
-      title: "トレーニング",
-      sub: log
-        ? `${trainingTypeLabel[log.type]}${log.title ? `・${log.title}` : ""}`
-        : absenceNeedsTraining
-          ? "代替メニューの実績（休みの日も必須）"
-          : types.length > 0
-            ? Array.from(new Set(types)).join("・")
-            : "任意（自主トレをした日に）",
-    };
+    const x = item.slot!;
+    const l = logs[x.id];
+    const icon =
+      x.kind === "alt" ? "🔁" : (l?.type ?? x.sessionType) === "running" ? "🏃" : "🏋️";
+    const title =
+      x.kind === "alt"
+        ? "代替メニュー"
+        : x.kind === "free"
+          ? "自主トレ"
+          : x.sessionType && x.sessionType !== "mat"
+            ? sessionTypeLabel[x.sessionType]
+            : "トレーニング";
+    const sub = l
+      ? `${trainingTypeLabel[l.type]}${l.title ? `・${l.title}` : ""}`
+      : x.kind === "alt"
+        ? `${(x.slot?.covered ?? []).map((c) => `${sessionTypeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`).join("・")} の代わり（実際にやった内容）`
+        : x.kind === "free"
+          ? "任意（予定外に自主トレをした日に）"
+          : "このセクションの記録";
+    return { icon, title, sub };
   }
 
   function itemStatus(item: TimelineItem) {
     if (item.done) return { text: "✓ 提出済み", cls: "bg-emerald-600 text-white" };
+    if (item.absent)
+      return { text: plan.rest ? "休み（休養）" : "休み", cls: "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300" };
     if (item.upcoming) return { text: "開始前", cls: "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400" };
-    if (item.kind === "training" && !trainingRequired)
+    if (item.kind === "training" && !item.slot?.required)
       return { text: "任意", cls: "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400" };
     if (exempt) return { text: "免除", cls: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300" };
     return { text: "未提出", cls: "bg-red-600 text-white" };
@@ -1504,6 +1544,15 @@ export default function DailyReport({
     if (item.kind === "mat" && item.menu) {
       const m = item.menu;
       const r = reportByMenu.get(m.id);
+      if (item.absent && !r) {
+        return (
+          <p className="text-xs text-neutral-600 dark:text-neutral-400">
+            {plan.rest
+              ? "休みの報告（休養）を出しているので、この練習の日報は不要です。"
+              : "休みの報告を出しているので、この練習の日報は不要です。代わりにやったメニューは「代替メニュー」の欄に記録してください。"}
+          </p>
+        );
+      }
       if (item.upcoming) {
         return (
           <p className="text-xs text-neutral-500">
@@ -1551,7 +1600,10 @@ export default function DailyReport({
       );
     }
     // トレーニング
-    return log && !editingTraining ? (
+    const x = item.slot!;
+    const log = logs[x.id];
+    const savedBlocks = savedBlocksBy[x.id] ?? [];
+    return log && editingSlot !== x.id ? (
       <div className="flex flex-col gap-2">
         <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/30 p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
@@ -1563,7 +1615,7 @@ export default function DailyReport({
             {!readOnly && (
               <button
                 type="button"
-                onClick={() => setEditingTraining(true)}
+                onClick={() => setEditingSlot(x.id)}
                 className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 active:text-neutral-800 dark:active:text-neutral-200"
               >
                 修正する
@@ -1590,10 +1642,10 @@ export default function DailyReport({
       </div>
     ) : readOnly ? (
       <p className="text-xs text-neutral-500">
-        {trainingRequired ? "まだ提出されていません。" : "この日のトレーニングの記録はありません。"}
+        {x.required ? "まだ提出されていません。" : "この日のトレーニングの記録はありません。"}
       </p>
     ) : (
-      renderTrainingForm()
+      renderTrainingForm(x.id)
     );
   }
 
@@ -1793,7 +1845,7 @@ export default function DailyReport({
                     className={`relative z-10 mt-[0.95rem] h-3 w-3 shrink-0 rounded-full border-2 ${
                       item.done
                         ? "border-emerald-500 bg-emerald-500"
-                        : item.upcoming || (item.kind === "training" && !trainingRequired)
+                        : item.upcoming || item.absent || (item.kind === "training" && !item.slot?.required)
                           ? "border-neutral-300 dark:border-neutral-600 bg-background"
                           : "border-red-500 bg-background"
                     }`}
@@ -1836,6 +1888,18 @@ export default function DailyReport({
               );
             })}
           </ol>
+          {canAddFree && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowFree(true);
+                setExpanded((e) => ({ ...e, [`training-${FREE}`]: true }));
+              }}
+              className="self-start text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted"
+            >
+              ＋ 予定外の自主トレを記録する
+            </button>
+          )}
 
           {/* 今日の疲労度（自己評価・参考値） */}
           <FatigueSelector
@@ -1892,7 +1956,7 @@ export default function DailyReport({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={submitting || editingTraining || !!editingReportId}
+                disabled={submitting || !!editingSlot || !!editingReportId}
                 className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-50"
               >
                 {submitting

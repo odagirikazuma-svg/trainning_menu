@@ -9,6 +9,7 @@ import {
   type AbsenceRequest,
   sickStreakHeads,
 } from "./absence";
+import { loadObligations } from "./obligations";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 type Loc = "tama" | "otsuka";
@@ -66,8 +67,6 @@ export async function buildDailySummary(
   const [
     membersRes,
     schedRes,
-    commentsRes,
-    logsRes,
     fatigueRes,
     absTodayRes,
     absTomorrowRes,
@@ -81,14 +80,6 @@ export async function buildDailySummary(
       .eq("team_id", teamId)
       .not("role", "in", "(coach,manager,ob)"),
     supabase.from("schedule_days").select("location, is_off").eq("team_id", teamId).eq("date", today),
-    supabase
-      .from("comments")
-      .select("author_id, menu:menus!inner(date, team_id)")
-      .in("kind", ["report", "absent"])
-      .is("parent_id", null)
-      .eq("menu.date", today)
-      .eq("menu.team_id", teamId),
-    supabase.from("weight_logs").select("author_id").eq("team_id", teamId).eq("date", today),
     supabase
       .from("daily_conditions")
       .select("author_id, date, fatigue")
@@ -135,30 +126,22 @@ export async function buildDailySummary(
   lines.push(`📋 ${mdw(today)} のまとめ`);
 
   // ---------- 1) 今日の日報（拠点別） ----------
+  // 提出が必要なもの（マット練習・ラン／ウェイトのセクション・代替メニュー）は lib/obligations と同じ考え方
   const practiceToday = new Set(
     ((schedRes.data ?? []) as { location: Loc; is_off: boolean }[])
       .filter((r) => !r.is_off)
       .map((r) => r.location)
   );
-  const submitted = new Set<string>();
-  for (const r of (commentsRes.data ?? []) as { author_id: string }[]) submitted.add(r.author_id);
-  const trainingLogged = new Set<string>();
-  for (const r of (logsRes.data ?? []) as { author_id: string }[]) {
-    submitted.add(r.author_id);
-    trainingLogged.add(r.author_id);
-  }
-  // 承認済みの休みで、代替メニュー（安静以外）の実績がまだの人
-  const altMissing = new Set(
-    ((absTodayRes.error ? [] : absTodayRes.data) ?? [])
-      .filter(
-        (r: { status: string; plan_type: string; author_id: string }) =>
-          r.status === "approved" && r.plan_type !== "none" && !trainingLogged.has(r.author_id)
-      )
-      .map((r: { author_id: string }) => r.author_id)
+  const ob = await loadObligations(
+    supabase,
+    teamId,
+    members.map((m) => ({ id: m.id, home_location: m.home_location })),
+    today,
+    today
   );
-  const approvedToday = new Set(
+  const absentToday = new Set(
     ((absTodayRes.error ? [] : absTodayRes.data) ?? [])
-      .filter((r: { status: string }) => r.status === "approved")
+      .filter((r: { status: string }) => r.status !== "rejected")
       .map((r: { author_id: string }) => r.author_id)
   );
 
@@ -169,15 +152,18 @@ export async function buildDailySummary(
       lines.push(`${LOC_LABEL[loc]}：練習なし（オフ）`);
       continue;
     }
-    const required = members.filter((m) => m.home_location === loc);
-    const missing = required.filter((m) => !submitted.has(m.id));
-    const rest = required.filter((m) => approvedToday.has(m.id)).length;
+    const locMembers = members.filter((m) => m.home_location === loc);
+    const required = locMembers.filter((m) => (ob.get(m.id)?.get(today) ?? []).length > 0);
+    const missing = required.filter((m) => (ob.get(m.id)?.get(today) ?? []).some((x) => !x.done));
+    const rest = locMembers.filter((m) => absentToday.has(m.id)).length;
     lines.push(
       `${LOC_LABEL[loc]}：${required.length - missing.length}/${required.length}人 提出` +
-        (rest > 0 ? `（うち休み${rest}人）` : "")
+        (rest > 0 ? `（休みの報告${rest}人）` : "")
     );
     lines.push(`未提出者：${missing.length === 0 ? "なし 🎉" : joinNames(missing.map((m) => m.display_name), 15)}`);
-    const alt = required.filter((m) => altMissing.has(m.id) && submitted.has(m.id));
+    const alt = locMembers.filter((m) =>
+      (ob.get(m.id)?.get(today) ?? []).some((x) => x.kind === "training" && x.slot.kind === "alt" && !x.done)
+    );
     if (alt.length > 0) {
       lines.push(`代替メニュー未報告：${joinNames(alt.map((m) => m.display_name), 15)}`);
     }
@@ -306,7 +292,7 @@ export async function buildDailySummary(
             ? `（許可：${coachName.get(r.permitted_by ?? "") ?? "?"}${r.approval_method ? "・" + (r.approval_method === "line" ? "LINE" : "電話") : ""}）`
             : "";
         const part = r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : "";
-        lines.push(`${mark}${nameOf(r.author_id)}${part}：${absenceReasonText(r)}${permit}／代替 ${absencePlanLabel[r.plan_type]}`);
+        lines.push(`${mark}${nameOf(r.author_id)}${part}：${absenceReasonText(r)}${permit}／${r.plan_type === "none" ? "休養" : `代替 ${absencePlanLabel[r.plan_type]}`}`);
       }
       if (g.rows.length > 15) lines.push(`ほか${g.rows.length - 15}人`);
     }

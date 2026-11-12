@@ -5,7 +5,7 @@ import { createClient } from "../../lib/supabase/client";
 import { isStaffRole, Location, locationLabel, locations } from "../../lib/types";
 import { GOALS_CHANGED_EVENT, goalTerms, type GoalTerm } from "../../lib/goals";
 import type { Profile } from "../AuthGate";
-import { isExemptOn, loadExemptions } from "../../lib/exemptions";
+import { loadObligations } from "../../lib/obligations";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -36,8 +36,8 @@ type DayCount = { submitted: number; total: number } | null;
 /**
  * 指定した日（昨日・今日）× 拠点（多摩・大塚）ごとの「日報を出し終えた人数／対象人数」を、
  * まとめて数える。以前は日×拠点ごとに5回ずつ読み込んでいたが、全部で5回にまとめた。
- * 判定：その日のマットメニュー（拠点＋全体練習）すべてに報告し、
- *       ラン・ウェイト等がある日はトレ報も出していれば「提出済み」
+ * 判定：その日の提出が必要なもの（マット練習・ラン／ウェイトのセクション・代替メニュー。
+ *       開始時刻を過ぎたもの）をすべて出していれば「提出済み」（lib/obligations と同じ）
  */
 async function countSubmissions(
   supabase: ReturnType<typeof createClient>,
@@ -45,99 +45,28 @@ async function countSubmissions(
   dates: string[],
   members: MemberRow[]
 ): Promise<Map<string, DayCount>> {
-  const from = dates.slice().sort()[0];
-  const to = dates.slice().sort()[dates.length - 1];
-  const [exemptions, schedRes, menuRes, logRes] = await Promise.all([
-    loadExemptions(supabase, teamId, from, to),
-    supabase
-      .from("schedule_days")
-      .select("date, location, is_off, sessions:schedule_sessions(session_type)")
-      .eq("team_id", teamId)
-      .in("date", dates),
-    supabase
-      .from("menus")
-      .select("id, date, location, is_joint")
-      .eq("team_id", teamId)
-      .eq("is_off", false)
-      .in("date", dates),
-    supabase
-      .from("weight_logs")
-      .select("author_id, date")
-      .eq("team_id", teamId)
-      .in("date", dates),
-  ]);
-  const menus = (menuRes.data ?? []) as {
-    id: string;
-    date: string;
-    location: Location;
-    is_joint: boolean;
-  }[];
-  const reportRes =
-    menus.length > 0
-      ? await supabase
-          .from("comments")
-          .select("author_id, menu_id")
-          .in(
-            "menu_id",
-            menus.map((m) => m.id)
-          )
-          .in("kind", ["report", "absent"])
-          .is("parent_id", null)
-      : { data: [] };
-  const reported = new Set(
-    ((reportRes.data ?? []) as { author_id: string; menu_id: string }[]).map(
-      (r) => `${r.author_id}:${r.menu_id}`
-    )
+  const sorted = dates.slice().sort();
+  const required = members.filter((m) => m.role !== "coach" && m.role !== "manager" && m.role !== "ob");
+  const ob = await loadObligations(
+    supabase,
+    teamId,
+    required.map((m) => ({ id: m.id, home_location: m.home_location ?? "tama" })),
+    sorted[0],
+    sorted[sorted.length - 1]
   );
-  const logged = new Set(
-    ((logRes.data ?? []) as { author_id: string; date: string }[]).map(
-      (r) => `${r.author_id}:${r.date}`
-    )
-  );
-  const schedule = (schedRes.data ?? []) as unknown as {
-    date: string;
-    location: Location;
-    is_off: boolean;
-    sessions: { session_type: string }[];
-  }[];
-
   const out = new Map<string, DayCount>();
   for (const date of dates) {
     for (const loc of locations) {
-      const key = `${date}:${loc}`;
-      const day = schedule.find((d) => d.date === date && d.location === loc);
-      if (!day || day.is_off) {
-        out.set(key, null);
-        continue;
+      let total = 0;
+      let submitted = 0;
+      for (const m of required) {
+        if ((m.home_location ?? "tama") !== loc) continue;
+        const items = ob.get(m.id)?.get(date);
+        if (!items || items.length === 0) continue;
+        total++;
+        if (items.every((x) => x.done)) submitted++;
       }
-      const hasMat = day.sessions.some((x) => x.session_type === "mat");
-      const hasNonMat = day.sessions.some((x) => x.session_type !== "mat");
-      if (!hasMat && !hasNonMat) {
-        out.set(key, null);
-        continue;
-      }
-      const required = members.filter(
-        (m) =>
-          m.role !== "coach" &&
-          m.role !== "manager" &&
-          m.role !== "ob" &&
-          (m.home_location === loc || (loc === "tama" && m.home_location == null)) &&
-          !isExemptOn(exemptions, m.id, date)
-      );
-      if (required.length === 0) {
-        out.set(key, null);
-        continue;
-      }
-      const dayMenus = hasMat
-        ? menus.filter((mm) => mm.date === date && (mm.location === loc || mm.is_joint))
-        : [];
-      const submitted = required.filter((m) => {
-        const matOk =
-          !hasMat || (dayMenus.length > 0 && dayMenus.some((mm) => reported.has(`${m.id}:${mm.id}`)));
-        const selfOk = !hasNonMat || logged.has(`${m.id}:${date}`);
-        return matOk && selfOk;
-      }).length;
-      out.set(key, { submitted, total: required.length });
+      out.set(`${date}:${loc}`, total > 0 ? { submitted, total } : null);
     }
   }
   return out;

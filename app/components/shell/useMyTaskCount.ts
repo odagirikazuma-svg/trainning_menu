@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { Profile } from "../AuthGate";
-import type { Location, SessionType } from "../../lib/types";
+import type { Location } from "../../lib/types";
 import { useTasksChangedSignal } from "./taskRefreshBus";
-import { isExemptOn, loadExemptions } from "../../lib/exemptions";
-import { loadOffDates } from "../../lib/offDays";
+import { loadObligations } from "../../lib/obligations";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -72,114 +71,15 @@ export function useMyTaskCount(profile: Profile | null): number {
 
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1); // 直近1か月分のタスクを対象にする
-      const joinedDate = toDateKey(new Date(profile!.created_at));
-      const rangeStart =
-        toDateKey(oneMonthAgo) > joinedDate ? toDateKey(oneMonthAgo) : joinedDate;
-
       if (effectiveHomeLocation) {
-        // 管理者が登録した免除期間中の日は、練習・自主トレのタスクに数えない
-        const exemptions = await loadExemptions(
+        const ob = await loadObligations(
           supabase,
           profile!.team_id,
-          rangeStart,
-          todayStr,
-          profile!.id
+          [{ id: profile!.id, home_location: effectiveHomeLocation, created_at: profile!.created_at }],
+          toDateKey(oneMonthAgo),
+          todayStr
         );
-        const { data: ownMenuData } = await supabase
-          .from("menus")
-          .select("id, date, start_time")
-          .eq("team_id", profile!.team_id)
-          .eq("location", effectiveHomeLocation)
-          .eq("is_off", false)
-          .gte("date", rangeStart)
-          .lte("date", todayStr);
-        const { data: jointMenuData } = await supabase
-          .from("menus")
-          .select("id, date, start_time")
-          .eq("team_id", profile!.team_id)
-          .eq("is_joint", true)
-          .eq("is_off", false)
-          .gte("date", rangeStart)
-          .lte("date", todayStr);
-
-        const menuMap = new Map<
-          string,
-          { id: string; date: string; start_time: string | null }
-        >();
-        const offDates = await loadOffDates(supabase, profile!.team_id, effectiveHomeLocation, rangeStart, todayStr);
-        for (const m of (ownMenuData ?? []) as {
-          id: string;
-          date: string;
-          start_time: string | null;
-        }[])
-          if (!offDates.has(m.date)) menuMap.set(m.id, m);
-        for (const m of (jointMenuData ?? []) as {
-          id: string;
-          date: string;
-          start_time: string | null;
-        }[])
-          menuMap.set(m.id, m);
-
-        const openMenus = Array.from(menuMap.values())
-          .filter((m) => !isExemptOn(exemptions, profile!.id, m.date))
-          .filter((m) =>
-            !m.start_time
-              ? true
-              : new Date() >= new Date(`${m.date}T${m.start_time}`)
-          );
-
-        if (openMenus.length > 0) {
-          const { data: commentData } = await supabase
-            .from("comments")
-            .select("menu_id")
-            .eq("author_id", profile!.id)
-            .in(
-              "menu_id",
-              openMenus.map((m) => m.id)
-            )
-            .in("kind", ["report", "absent"]);
-          const respondedIds = new Set(
-            ((commentData ?? []) as { menu_id: string }[]).map(
-              (c) => c.menu_id
-            )
-          );
-          for (const m of openMenus) {
-            if (!respondedIds.has(m.id)) pendingDates.add(m.date);
-          }
-        }
-
-        const { data: scheduleData } = await supabase
-          .from("schedule_days")
-          .select("date, is_off, sessions:schedule_sessions(session_type)")
-          .eq("team_id", profile!.team_id)
-          .eq("location", effectiveHomeLocation)
-          .eq("is_off", false)
-          .gte("date", rangeStart)
-          .lte("date", todayStr);
-        const nonMatDates = (
-          (scheduleData ?? []) as unknown as {
-            date: string;
-            sessions: { session_type: SessionType }[];
-          }[]
-        )
-          .filter((row) => row.sessions.some((s) => s.session_type !== "mat"))
-          .map((row) => row.date)
-          .filter((d) => !isExemptOn(exemptions, profile!.id, d));
-
-        if (nonMatDates.length > 0) {
-          const { data: logData } = await supabase
-            .from("weight_logs")
-            .select("date")
-            .eq("author_id", profile!.id)
-            .gte("date", rangeStart)
-            .lte("date", todayStr);
-          const loggedDates = new Set(
-            ((logData ?? []) as { date: string }[]).map((r) => r.date)
-          );
-          for (const d of nonMatDates) {
-            if (!loggedDates.has(d)) pendingDates.add(d);
-          }
-        }
+        for (const [d, items] of ob.get(profile!.id) ?? []) if (items.some((x) => !x.done)) pendingDates.add(d);
       }
 
       const { data: injuryData } = await supabase
