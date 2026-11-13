@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { lineConfigured, lineReply, verifyLineSignature, type LineMessage } from "../../../lib/line";
 import { approve, findStaff, replyInjuries, replyPending, replyStatus } from "../../../lib/lineCoach";
 import { buildDailySummary, buildPracticeMenuText, buildTomorrowMenuText } from "../../../lib/dailySummary";
-import { appButton } from "../../../lib/liffConfig";
+import { appButton, liffUrl } from "../../../lib/liffConfig";
 
 // アプリのデータを読む（サービスロール。無い環境では null）
 // 同じサーバーが温まっている間は、クライアントとチームIDを使い回す（問い合わせを減らす）
@@ -143,10 +143,16 @@ export async function POST(request: NextRequest) {
           ]);
         } else if (ev.type === "follow") {
           // 友だち追加されたとき
+          // 友だち追加されたとき：はじめての人は、ここから名簿の名前を選んで登録できる
           await lineReply(ev.replyToken, [
             {
-              type: "text",
-              text: "練習ノートの公式LINEです。友だち追加ありがとうございます。アプリとの連携は準備中です。",
+              type: "template",
+              altText: "練習ノートをはじめる",
+              template: {
+                type: "buttons",
+                text: "中央大学レスリング部「練習ノート」の公式LINEです。\n下のボタンから開いて、名簿の自分の名前を選ぶと使いはじめられます。",
+                actions: [{ type: "uri", label: "練習ノートをはじめる", uri: liffUrl("/welcome") }],
+              },
             },
           ]);
         } else if (ev.type === "message" && ev.message?.type === "text") {

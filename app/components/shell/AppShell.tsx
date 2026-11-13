@@ -1,6 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "../../lib/supabase/client";
+import { isStaffRole } from "../../lib/types";
 import AuthGate, { type Profile } from "../AuthGate";
 import ThemeProvider from "./ThemeProvider";
 import CalendarViewPrefProvider from "./CalendarViewPrefProvider";
@@ -74,6 +77,27 @@ function AppShellInner({
 }) {
   const [subNav, setSubNav] = useState<React.ReactNode | null>(null);
   const hasSubNav = subNav != null;
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // はじめてログインした部員は、まず「はじめての設定」へ（終わるまで毎回ここに戻る）
+  useEffect(() => {
+    if (isStaffRole(profile.role) || pathname === "/welcome") return;
+    let cancelled = false;
+    createClient()
+      .from("profiles")
+      .select("onboarded_at")
+      .eq("id", profile.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        if (!(data as { onboarded_at: string | null }).onboarded_at) router.replace("/welcome");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, profile.role]);
   // ヘッダーの実際の高さ（試合カウントダウンの有無などで変わりうるため、
   // 決め打ちの数値ではなくHeaderからの実測値を使う。初期値は旧来の72px相当）
   const [headerHeight, setHeaderHeight] = useState(72);

@@ -381,6 +381,9 @@ export default function AuthGate({
             >
               LINEでログイン
             </a>
+            <p className="text-center text-[length:calc(11px+var(--fs-add))] text-neutral-400">
+              はじめての人も「LINEでログイン」から、名簿の自分の名前を選んで登録できます。
+            </p>
             <p className="text-center text-[length:calc(11px+var(--fs-add))] text-neutral-500">
               または、メールアドレスでログイン
             </p>

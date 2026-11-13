@@ -208,6 +208,8 @@ export default function LiffPage() {
               {stage.lineName && " さん、"}はじめまして。
               <br />
               名簿から<b>自分の名前</b>を選んでください。
+              <br />
+              <span className="text-xs text-neutral-500">名前が見つからないときは、監督に名簿への登録を頼んでください。</span>
             </p>
             {stage.roster.length === 0 ? (
               <p className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs text-neutral-500 dark:border-neutral-700">

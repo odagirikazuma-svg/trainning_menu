@@ -2083,3 +2083,13 @@ create policy "absence_requests_update_self" on absence_requests
   );
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 25. 2026-11-14 はじめての設定（ウェルカム画面）を終えたか
+--     いま使っている人は終わった扱いにする（新しく登録した部員だけに出る）
+-- ############################################################
+alter table profiles add column if not exists onboarded_at timestamptz;
+update profiles set onboarded_at = now() where onboarded_at is null;
+
+notify pgrst, 'reload schema';

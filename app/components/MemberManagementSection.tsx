@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { currentGrade, Location, locationLabel, locations } from "../lib/types";
 import type { Profile } from "./AuthGate";
+import JoinLinkCard from "./JoinLinkCard";
 
 type RosterRoleChoice =
   | "coach"
@@ -514,8 +515,9 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
           {s.errorMsg}
         </p>
       )}
+      <JoinLinkCard />
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
-        部員だけでなく、管理者・マネージャーもここから事前登録できます。氏名とメールアドレスをあらかじめ登録しておくと、本人がそのメールアドレスで新規登録した際に、氏名・拠点・学年・役職が自動で反映されます。
+        名簿（部員・管理者・マネージャー）。ここに登録した人だけが、参加リンクから自分の名前を選んで登録できます。
       </p>
 
       {s.loadingRoster ? (
@@ -567,50 +569,6 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                 </div>
               </div>
 
-              {s.editingEmailId === r.id ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    autoFocus
-                    placeholder="メールアドレス"
-                    value={s.editingEmailValue}
-                    onChange={(e) => s.setEditingEmailValue(e.target.value)}
-                    className="flex-1 rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
-                  />
-                  <button
-                    onClick={() => s.handleSaveEmail(r.id)}
-                    disabled={s.savingEmail}
-                    className="rounded bg-red-600 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-white disabled:opacity-50"
-                  >
-                    保存
-                  </button>
-                  <button
-                    onClick={() => s.setEditingEmailId(null)}
-                    className="rounded border border-border-color px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] text-neutral-600 dark:text-neutral-300"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => s.handleStartEditEmail(r)}
-                    className="text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 underline dark:text-neutral-400"
-                  >
-                    {r.email ? "メールを編集" : "メールを追加"}
-                  </button>
-                  {!r.claimed_by && (
-                    <button
-                      onClick={() => s.handleCopyInviteLink(r)}
-                      className="text-[length:calc(11px+var(--fs-add))] font-medium text-blue-600 underline dark:text-blue-400"
-                    >
-                      {s.copiedTokenId === r.id
-                        ? "コピーしました！"
-                        : "招待リンクをコピー"}
-                    </button>
-                  )}
-                </div>
-              )}
             </li>
           ))}
         </ul>
@@ -632,13 +590,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
             onChange={(e) => s.setRosterName(e.target.value)}
             className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
           />
-          <input
-            type="email"
-            placeholder="メールアドレス（あとで追加可）"
-            value={s.rosterEmail}
-            onChange={(e) => s.setRosterEmail(e.target.value)}
-            className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
-          />
+
         </div>
         <div className="grid grid-cols-2 gap-2">
           <select
