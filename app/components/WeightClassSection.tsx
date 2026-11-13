@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { useProfile } from "./shell/AppShell";
+import { WEIGHT_CLASS_CHANGED_EVENT } from "./shell/useWeightClassTask";
 
 // 試合に出る階級（kg）。ウェイトの負荷を階級の体重で割って評価するために使う。
 const MEN_CLASSES = [57, 61, 65, 70, 74, 79, 86, 92, 97, 125];
@@ -49,6 +50,7 @@ export default function WeightClassSection() {
       setMsg({ ok: false, text: `保存できませんでした：${error.message}` });
     } else {
       setValue(v);
+      window.dispatchEvent(new Event(WEIGHT_CLASS_CHANGED_EVENT));
       setMsg({ ok: true, text: v === null ? "階級を未設定にしました。" : `${v}kg級で保存しました。` });
     }
     setSaving(false);

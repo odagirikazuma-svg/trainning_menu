@@ -110,14 +110,6 @@ export async function buildDailySummary(
   ]);
 
   const members = (membersRes.data ?? []) as Member[];
-  const { data: coachRows } = await supabase
-    .from("profiles")
-    .select("id, display_name")
-    .eq("team_id", teamId)
-    .eq("role", "coach");
-  const coachName = new Map(
-    ((coachRows ?? []) as { id: string; display_name: string }[]).map((c) => [c.id, c.display_name])
-  );
   const memberById = new Map(members.map((m) => [m.id, m]));
   const nameOf = (id: string) => memberById.get(id)?.display_name ?? "?";
   const locOf = (id: string) => memberById.get(id)?.home_location ?? null;
@@ -271,7 +263,7 @@ export async function buildDailySummary(
   } else {
     const pending = tomorrowReqs.filter((r) => r.status === "pending").length;
     if (pending > 0) lines.push(`⚠️ 承認待ち ${pending}人`);
-    lines.push("📝届け出（授業）　✅直接許可済み　↩️取り消し");
+    lines.push("📝届け出（授業）　✅監督の許可済み　↩️取り消し");
     const groups: { label: string; rows: AbsenceRequest[] }[] = [
       ...LOCS.map((loc) => ({
         label: LOC_LABEL[loc],
@@ -287,10 +279,7 @@ export async function buildDailySummary(
       lines.push(`${g.label}：${g.rows.length}人`);
       for (const r of g.rows.slice(0, 15)) {
         const mark = r.status === "pending" ? "⏳" : r.status === "rejected" ? "↩️" : r.reason_type === "school" ? "📝" : "✅";
-        const permit =
-          r.status === "approved" && r.reason_type !== "school"
-            ? `（許可：${coachName.get(r.permitted_by ?? "") ?? "?"}${r.approval_method ? "・" + (r.approval_method === "line" ? "LINE" : "電話") : ""}）`
-            : "";
+        const permit = r.status === "approved" && r.reason_type !== "school" ? "（許可済み）" : "";
         const part = r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : "";
         lines.push(`${mark}${nameOf(r.author_id)}${part}：${absenceReasonText(r)}${permit}／${r.plan_type === "none" ? "休養" : `代替 ${absencePlanLabel[r.plan_type]}`}`);
       }

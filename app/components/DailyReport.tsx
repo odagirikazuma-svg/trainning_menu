@@ -604,6 +604,8 @@ export default function DailyReport({
   const openMenus = menus.filter((m) => isMenuOpen(m));
   const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id) && !absentMenuIds.has(m.id));
   const isFuture = date > todayStr;
+  // 提出済みの日報・トレ報を直せるのは、前日の分まで（それより前は直せない）
+  const canEditSubmitted = date >= shiftDate(todayStr, -1);
   const maxDateStr = shiftDate(todayStr, 14);
 
   // トレーニングの欄：セクションごと（＋代替メニュー）、予定外の記録、予定外の自主トレ
@@ -1146,7 +1148,7 @@ export default function DailyReport({
             >
               {commentKindLabel[r.kind]}・提出済み
             </span>
-            {!readOnly && (
+            {!readOnly && canEditSubmitted && (
               <button
                 type="button"
                 onClick={() => startEditReport(r)}
@@ -1618,7 +1620,7 @@ export default function DailyReport({
               {log.title ? `・${log.title}` : ""}
               {log.start_time ? `（${log.start_time.slice(0, 5)}〜）` : ""}
             </span>
-            {!readOnly && (
+            {!readOnly && canEditSubmitted && (
               <button
                 type="button"
                 onClick={() => setEditingSlot(x.id)}
@@ -1910,12 +1912,15 @@ export default function DailyReport({
           )}
 
           {/* 今日の疲労度（自己評価・参考値） */}
-          <FatigueSelector
-            memberId={profile.id}
-            teamId={profile.team_id}
-            date={date}
-            readOnly={readOnly}
-          />
+          {/* 疲労度は当日だけ入力できる（さかのぼって直さない） */}
+          {date <= todayStr && (
+            <FatigueSelector
+              memberId={profile.id}
+              teamId={profile.team_id}
+              date={date}
+              readOnly={readOnly || date !== todayStr}
+            />
+          )}
 
           {/* 一言メモ（自分だけ） */}
           {!isPopup && !readOnly && (

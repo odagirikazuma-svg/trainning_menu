@@ -2049,3 +2049,37 @@ create policy "weight_max_events_update_coach" on weight_max_events
     team_id = get_my_team_id()
     and exists (select 1 from profiles where id = auth.uid() and role = 'coach')
   );
+
+
+-- ############################################################
+-- 24. 2026-11-13 休みの報告：許可は「監督の許可を取ったかどうか」だけ記録する（誰に・どうやってはなし）
+--     あわせて、本人が2週間前までの報告を直せるように（代替の予定だったが休養にした、など）
+-- ############################################################
+alter table absence_requests add column if not exists permission_ok boolean not null default false;
+-- これまでの「直接許可（誰から・LINE/電話）」の報告は、許可済みとみなす
+update absence_requests set permission_ok = true where approval_method is not null and not permission_ok;
+
+drop policy if exists "absence_requests_insert_self" on absence_requests;
+create policy "absence_requests_insert_self" on absence_requests
+  for insert with check (
+    author_id = auth.uid()
+    and team_id = get_my_team_id()
+    and status = 'approved'
+    and (reason_type = 'school' or permission_ok)
+  );
+
+drop policy if exists "absence_requests_update_self" on absence_requests;
+create policy "absence_requests_update_self" on absence_requests
+  for update
+  using (
+    author_id = auth.uid()
+    and status <> 'rejected'
+    and date >= (now() at time zone 'Asia/Tokyo')::date - 14
+  )
+  with check (
+    author_id = auth.uid()
+    and status = 'approved'
+    and (reason_type = 'school' or permission_ok)
+  );
+
+notify pgrst, 'reload schema';

@@ -38,6 +38,7 @@ import ScheduleEditForm, {
   type ScheduleDayPrefill,
 } from "../../components/ScheduleEditForm";
 import ScheduleOverviewCalendar from "../../components/ScheduleOverviewCalendar";
+import { useWeightClassMissing } from "../../components/shell/useWeightClassTask";
 import {
   isAdminEditor,
   isStaffRole,
@@ -815,6 +816,12 @@ export default function SettingsPage() {
   // 管理者・マネージャーは管理者用の設定画面。ただし「管理設定」「セクション登録」は管理者のみ
   const isStaff = isStaffRole(profile.role);
   const goalMissing = useGoalTasks(profile).length;
+  const classMissing = useWeightClassMissing(profile);
+  // 階級が未入力なら「階級」欄を開いた状態にする
+  const [classAutoOpen, setClassAutoOpen] = useState(false);
+  useEffect(() => {
+    if (classMissing) setClassAutoOpen(true);
+  }, [classMissing]);
   // 目標が未設定なら「目標」欄を開いた状態にする（保存して0件になっても閉じない）
   const [goalsAutoOpen, setGoalsAutoOpen] = useState(false);
   useEffect(() => {
@@ -923,7 +930,12 @@ export default function SettingsPage() {
             <CollapsibleSection title="プロフィールアイコンの設定">
               <IconSection />
             </CollapsibleSection>
-            <CollapsibleSection title="階級">
+            <CollapsibleSection
+              key={classAutoOpen ? "class-open" : "class"}
+              title="階級"
+              badge={classMissing ? 1 : 0}
+              defaultOpen={classAutoOpen}
+            >
               <WeightClassSection />
             </CollapsibleSection>
             <CollapsibleSection title="次の試合">

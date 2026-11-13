@@ -19,9 +19,7 @@ import {
   absenceReasonText,
   absenceStateText,
   absenceStatusCls,
-  approvalMethodLabel,
   noPermissionNeeded,
-  type ApprovalMethod,
   type AbsencePlanType,
   type AbsenceReasonType,
   type AbsenceRequest,
@@ -66,16 +64,13 @@ export default function AbsenceRequestPanel({
   const [altPicked, setAltPicked] = useState(false);
   const [plan, setPlan] = useState("");
   const [planBlocks, setPlanBlocks] = useState<ExerciseBlock[]>([]);
-  const [permittedBy, setPermittedBy] = useState<string | null>(null);
-  const [method, setMethod] = useState<ApprovalMethod | null>(null);
+  const [permissionOk, setPermissionOk] = useState(false);
   // その日の所属拠点のセクションと、休むセクション（全部選んでいれば「終日」）
   const [daySessions, setDaySessions] = useState<{ key: string; label: string }[]>([]);
   const [pickedSessions, setPickedSessions] = useState<string[]>([]);
   // 代替メニューのテンプレート
   const [planTemplates, setPlanTemplates] = useState<AbsencePlanTemplate[]>([]);
   const [planTemplateId, setPlanTemplateId] = useState<string | null>(null);
-  // 許可をくれる人の候補（監督・管理者）
-  const [coaches, setCoaches] = useState<{ id: string; display_name: string }[]>([]);
 
   // 当日・あとからでも（2週間前まで）直せる：代替の予定だったが体調が悪く休養にした、など
   const canEdit = !readOnly && !onOpenRequestTab && date >= shiftDays(todayStr, -14);
@@ -101,13 +96,6 @@ export default function AbsenceRequestPanel({
           const r = (data as AbsenceRequest | null) ?? null;
           setReq(r);
           onChange?.(r);
-          const { data: cs } = await supabase
-            .from("profiles")
-            .select("id, display_name")
-            .eq("team_id", teamId)
-            .eq("role", "coach")
-            .order("display_name");
-          if (!cancelled) setCoaches((cs ?? []) as { id: string; display_name: string }[]);
           if (profile.home_location) {
             const { data: day } = await supabase
               .from("schedule_days")
@@ -145,8 +133,7 @@ export default function AbsenceRequestPanel({
     setAltPicked(!!req && req.plan_type !== "none");
     setPlan(req?.plan ?? "");
     setPlanBlocks(planToBlocks(req?.plan_sets));
-    setPermittedBy(req?.permitted_by ?? null);
-    setMethod(req?.approval_method ?? null);
+    setPermissionOk(!!req?.permission_ok || !!req?.approval_method);
     setPlanTemplateId(null);
     supabase
       .from("absence_plan_templates")
@@ -166,8 +153,7 @@ export default function AbsenceRequestPanel({
     if (!reasonType) return setError("休む理由を選んでください。");
     if (reasonType === "other" && !reason.trim()) return setError("「その他」の場合は理由を書いてください。");
     const needPermission = !noPermissionNeeded(reasonType);
-    if (needPermission && !permittedBy) return setError("許可をくれた監督・管理者を選んでください。");
-    if (needPermission && !method) return setError("許可をもらった方法（LINE・電話）を選んでください。");
+    if (needPermission && !permissionOk) return setError("監督の許可を取ってから、「監督の許可を取りました」にチェックしてください。");
     if (!planType && !altPicked) return setError("休むあいだ「休養」か「代替メニューをやる」かを選んでください。");
     if (!planType) return setError("代替メニューの種類を選んでください。");
     if (planType === "weight" && !blocksHaveData(planBlocks) && !plan.trim()) {
@@ -189,8 +175,9 @@ export default function AbsenceRequestPanel({
       plan: planType === "none" ? "" : plan.trim(),
       plan_sets: planType === "weight" && blocksHaveData(planBlocks) ? blocksToPlan(planBlocks) : null,
       status: "approved" as const,
-      permitted_by: needPermission ? permittedBy : null,
-      approval_method: needPermission ? method : null,
+      permission_ok: needPermission && permissionOk,
+      permitted_by: null,
+      approval_method: null,
       // 全部のセクションを休むときは null（終日）
       session_keys:
         daySessions.length === 0 || daySessions.every((x) => pickedSessions.includes(x.key))
@@ -306,29 +293,17 @@ export default function AbsenceRequestPanel({
         {reasonType && !noPermissionNeeded(reasonType) && (
           <div className="flex flex-col gap-2 rounded-lg bg-amber-100/60 p-2.5 dark:bg-amber-950/30">
             <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-              ⚠️ 先に、監督・管理者からLINEか電話で直接許可をもらってから報告してください。
+              ⚠️ 先に、監督の許可を取ってから報告してください。
             </p>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-neutral-600 dark:text-neutral-400">許可をくれた人</span>
-              <div className="flex flex-wrap gap-1.5">
-                {coaches.map((c) => (
-                  <button key={c.id} type="button" onClick={() => setPermittedBy(c.id)} className={chip(permittedBy === c.id)}>
-                    {c.display_name}
-                  </button>
-                ))}
-                {coaches.length === 0 && <span className="text-xs text-neutral-500">監督・管理者が登録されていません</span>}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-neutral-600 dark:text-neutral-400">許可をもらった方法</span>
-              <div className="flex gap-1.5">
-                {(["line", "phone"] as ApprovalMethod[]).map((m) => (
-                  <button key={m} type="button" onClick={() => setMethod(m)} className={chip(method === m)}>
-                    {approvalMethodLabel[m]}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <input
+                type="checkbox"
+                checked={permissionOk}
+                onChange={(e) => setPermissionOk(e.target.checked)}
+                className="h-5 w-5 accent-red-600"
+              />
+              監督の許可を取りました
+            </label>
           </div>
         )}
         <div className="flex flex-col gap-1.5">
@@ -496,7 +471,7 @@ export default function AbsenceRequestPanel({
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">🙋 休みの報告</span>
         <span className={`rounded-full px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${absenceStatusCls[req.status]}`}>
-          {absenceStateText(req, coaches.find((c) => c.id === req.permitted_by)?.display_name)}
+          {absenceStateText(req)}
         </span>
       </div>
       <p className="text-xs text-neutral-700 dark:text-neutral-300">

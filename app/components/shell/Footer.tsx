@@ -8,6 +8,7 @@ import { useMyTaskCount } from "./useMyTaskCount";
 import { useMyEventTaskCount } from "./useMyEventTaskCount";
 import { useBoardTasks } from "./useBoardTasks";
 import { useGoalTasks } from "./useGoalTasks";
+import { useWeightClassMissing } from "./useWeightClassTask";
 
 type TabItem = {
   href: string;
@@ -59,7 +60,8 @@ export default function Footer({ profile }: { profile: Profile }) {
   const taskCount = useMyTaskCount(profile);
   const eventTaskCount = useMyEventTaskCount(profile);
   // 年間目標・月間目標が未設定なら、設定アイコンに赤丸を出す
-  const goalTaskCount = useGoalTasks(profile).length;
+  // 階級が未入力なら、それも設定のタスクとして数える
+  const goalTaskCount = useGoalTasks(profile).length + (useWeightClassMissing(profile) ? 1 : 0);
   // 練習予定表：メニュー未登録・練習後の実施報告がまだ
   const boardTaskCount = useBoardTasks(profile).length;
   // 管理者・マネージャーは管理者用のタブ構成（マネージャーは閲覧のみ）

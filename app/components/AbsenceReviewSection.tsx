@@ -267,7 +267,7 @@ export default function AbsenceReviewSection({
                         {r.author?.display_name ?? "（不明）"}
                       </button>
                       <span className={`rounded-full px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-bold ${absenceStatusCls[r.status]}`}>
-                        {absenceStateText(r, r.permitter?.display_name)}
+                        {absenceStateText(r)}
                       </span>
                     </div>
                     {r.session_keys && r.session_keys.length > 0 && (

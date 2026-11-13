@@ -132,12 +132,12 @@ export async function replyPending(admin: SupabaseClient, teamId: string, staff:
         lines.push(`${LOC_LABEL[l]}：`);
         for (const r of inLoc) {
           lines.push(
-            `・${r.author?.display_name ?? "?"}${r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : ""}：${absenceReasonText(r)}／${absenceStateText(r, r.permitter?.display_name)}`
+            `・${r.author?.display_name ?? "?"}${r.session_keys && r.session_keys.length > 0 ? `［${absenceSessionsText(r.session_keys)}］` : ""}：${absenceReasonText(r)}／${absenceStateText(r)}`
           );
         }
       }
     }
-    lines.push("", "1週間先までの休みは、アプリの「報告」タブで見られます。身に覚えのない「直接許可済み」もそこから取り消せます。");
+    lines.push("", "1週間先までの休みは、アプリの「報告」タブで見られます。身に覚えのない「監督の許可済み」もそこから取り消せます。");
     return [{ type: "text", text: lines.join("\n") }, appButton("/admin#absence")];
   }
   const canApprove = staff.role === "coach";

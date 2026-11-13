@@ -45,6 +45,8 @@ export type AbsenceRequest = {
   status: AbsenceStatus;
   // 直接許可をくれた監督・管理者と、その方法（授業・学業は不要）
   permitted_by?: string | null;
+  // 監督の許可を取ったか（授業・学業以外）
+  permission_ok?: boolean | null;
   approval_method?: ApprovalMethod | null;
   // 体調不良のとき：行った病院と結果（あとから本人が書く）
   hospital_name?: string | null;
@@ -74,16 +76,12 @@ export const absencePlanLabel: Record<AbsencePlanType, string> = {
   none: "休養（代替なし）",
 };
 
-// 一覧に出す状態のことば（届け出／直接許可済み／取り消し）
-export function absenceStateText(
-  r: Pick<AbsenceRequest, "status" | "reason_type" | "approval_method">,
-  permitterName?: string | null
-) {
+// 一覧に出す状態のことば（届け出／監督の許可済み／取り消し）
+export function absenceStateText(r: Pick<AbsenceRequest, "status" | "reason_type">) {
   if (r.status === "rejected") return "取り消し";
   if (r.status === "pending") return "承認待ち";
   if (noPermissionNeeded(r.reason_type)) return "届け出";
-  const how = r.approval_method ? approvalMethodLabel[r.approval_method] : "";
-  return `直接許可済み${permitterName || how ? `（${[permitterName, how].filter(Boolean).join("・")}）` : ""}`;
+  return "監督の許可済み";
 }
 
 export const absenceStatusCls: Record<AbsenceStatus, string> = {
