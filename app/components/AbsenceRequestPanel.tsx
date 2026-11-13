@@ -185,7 +185,8 @@ export default function AbsenceRequestPanel({
       reason_type: reasonType,
       reason: reason.trim(),
       plan_type: planType,
-      plan: plan.trim(),
+      // 休養にしたときは、前に書いた代替メニューの予定を残さない
+      plan: planType === "none" ? "" : plan.trim(),
       plan_sets: planType === "weight" && blocksHaveData(planBlocks) ? blocksToPlan(planBlocks) : null,
       status: "approved" as const,
       permitted_by: needPermission ? permittedBy : null,

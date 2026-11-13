@@ -104,6 +104,7 @@ export function absenceReasonText(r: Pick<AbsenceRequest, "reason_type" | "reaso
 
 export function absencePlanText(r: Pick<AbsenceRequest, "plan_type" | "plan">) {
   const base = absencePlanLabel[r.plan_type];
+  if (r.plan_type === "none") return base;
   return r.plan.trim() ? `${base}：${r.plan.trim()}` : base;
 }
 
