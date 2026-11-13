@@ -327,12 +327,6 @@ export default function StructuredMenuCard({
     setTemplates((data ?? []) as Template[]);
   }
 
-  async function deleteTemplate(t: Template) {
-    if (!window.confirm(`テンプレート「${t.name}」を削除しますか？`)) return;
-    await supabase.from("menu_templates").delete().eq("id", t.id);
-    setTemplates((prev) => prev.filter((x) => x.id !== t.id));
-  }
-
   async function copyPrevious() {
     // 同じ拠点の、この日より前のメニューのうち、予定の項目がある直近のもの
     let q = supabase.from("menus").select("id, date").eq("team_id", profile.team_id).lt("date", date);
@@ -369,17 +363,16 @@ export default function StructuredMenuCard({
   const templateChips = (
     <div className="flex flex-wrap gap-1.5">
       {templates.map((t) => (
-        <span key={t.id} className="flex items-center overflow-hidden rounded-full border border-neutral-300 text-xs dark:border-neutral-700">
-          <button type="button" onClick={() => applyTemplate(t)} className="px-2.5 py-1 text-neutral-800 dark:text-neutral-200">
-            📄 {t.name}
-            {t.purpose && <span className="ml-1 text-neutral-400">{t.purpose}</span>}
-          </button>
-          {mode === "plan" && (
-            <button type="button" onClick={() => deleteTemplate(t)} className="border-l border-neutral-300 px-1.5 py-1 text-neutral-400 dark:border-neutral-700" aria-label="テンプレートを削除">
-              ×
-            </button>
-          )}
-        </span>
+        // テンプレートの削除は設定（メニューのテンプレート）から行う
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => applyTemplate(t)}
+          className="rounded-full border border-neutral-300 px-2.5 py-1 text-xs text-neutral-800 dark:border-neutral-700 dark:text-neutral-200"
+        >
+          📄 {t.name}
+          {t.purpose && <span className="ml-1 text-neutral-400">{t.purpose}</span>}
+        </button>
       ))}
       <button type="button" onClick={copyPrevious} className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
         前回のメニューをコピー
