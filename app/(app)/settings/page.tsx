@@ -887,16 +887,7 @@ export default function SettingsPage() {
             <CollapsibleSection title="メニューのテンプレート">
               <MenuTemplatesSection />
             </CollapsibleSection>
-            <CollapsibleSection title="代替メニューのテンプレート（休み・自分用）">
-              <AbsencePlanTemplatesSection />
-            </CollapsibleSection>
           </SettingsGroup>
-
-          <SettingsGroup
-            icon="/icons/nav-events.png"
-            iconAlt="イベント"
-            title="イベント"
-          />
         </>
       ) : (
         <>
@@ -939,12 +930,6 @@ export default function SettingsPage() {
               <NextMatchSection />
             </CollapsibleSection>
           </SettingsGroup>
-
-          <SettingsGroup
-            icon="/icons/nav-team-chuo.png"
-            iconAlt="チームページ"
-            title="チームページ"
-          />
 
           <SettingsGroup
             icon="/icons/nav-board.png"
