@@ -35,7 +35,14 @@ export type DayPlan<M extends ObMenu = ObMenu> = {
 
 const t5 = (t: string | null | undefined) => (t ? t.slice(0, 5) : null);
 
-export function planDay<M extends ObMenu>(menus: M[], sessions: ObSession[], absence: ObAbsence | null): DayPlan<M> {
+// loggedKeys：その日にもう出ているトレーニングの記録の session_key。
+// 代替メニューは、休んだセクションのどれかの記録がすでにあればそれを代替メニューの記録とみなす（以前の1日1件の記録との互換）
+export function planDay<M extends ObMenu>(
+  menus: M[],
+  sessions: ObSession[],
+  absence: ObAbsence | null,
+  loggedKeys?: Set<string>
+): DayPlan<M> {
   const abs = absence && absence.status !== "rejected" ? absence : null;
   const all = !abs?.session_keys || abs.session_keys.length === 0;
   const covers = (type: ObSessionType, time: string | null) => {
@@ -59,7 +66,8 @@ export function planDay<M extends ObMenu>(menus: M[], sessions: ObSession[], abs
   }
   if (abs && abs.plan_type !== "none" && coveredList.length > 0) {
     coveredList.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
-    const first = coveredList[0];
+    const first =
+      coveredList.find((c) => loggedKeys?.has(sessionKey(c.type, c.time))) ?? coveredList[0];
     slots.push({ key: sessionKey(first.type, first.time), kind: "alt", sessionType: first.type, time: first.time, covered: coveredList });
   }
   slots.sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
@@ -144,11 +152,15 @@ export async function loadObligations(
   const sched = new Map<string, { is_off: boolean; sessions: ObSession[] }>();
   for (const r of (schedRes.data ?? []) as unknown as { date: string; location: string; is_off: boolean; sessions: ObSession[] }[])
     sched.set(`${r.location}:${r.date}`, r);
-  const logs = new Set(
-    ((logRes.data ?? []) as { author_id: string; date: string; session_key: string | null }[]).map(
-      (r) => `${r.author_id}:${r.date}:${r.session_key ?? ""}`
-    )
-  );
+  const logRows = (logRes.data ?? []) as { author_id: string; date: string; session_key: string | null }[];
+  const logs = new Set(logRows.map((r) => `${r.author_id}:${r.date}:${r.session_key ?? ""}`));
+  const logKeysByMemberDate = new Map<string, Set<string>>();
+  for (const r of logRows) {
+    if (!r.session_key) continue;
+    const k = `${r.author_id}:${r.date}`;
+    if (!logKeysByMemberDate.has(k)) logKeysByMemberDate.set(k, new Set());
+    logKeysByMemberDate.get(k)!.add(r.session_key);
+  }
   const absences = new Map<string, ObAbsence>();
   for (const r of (absRes.data ?? []) as (ObAbsence & { author_id: string; date: string })[])
     absences.set(`${r.author_id}:${r.date}`, r);
@@ -169,7 +181,12 @@ export async function loadObligations(
       const day = sched.get(`${loc}:${date}`);
       const off = !!day?.is_off;
       const dayMenus = (menusByDate.get(date) ?? []).filter((m) => m.is_joint || (m.location === loc && !off));
-      const plan = planDay(dayMenus, off ? [] : day?.sessions ?? [], absences.get(`${mem.id}:${date}`) ?? null);
+      const plan = planDay(
+        dayMenus,
+        off ? [] : day?.sessions ?? [],
+        absences.get(`${mem.id}:${date}`) ?? null,
+        logKeysByMemberDate.get(`${mem.id}:${date}`)
+      );
       const items: PendingItem[] = [];
       for (const m of plan.mats) {
         if (m.absent || !isOpenAt(date, m.menu.start_time, now)) continue;

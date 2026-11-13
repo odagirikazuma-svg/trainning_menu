@@ -599,7 +599,7 @@ export default function DailyReport({
 
   const reportByMenu = new Map(myReports.map((r) => [r.menu_id, r]));
   // その日の提出が必要なもの（休みの報告：休養なら提出なし、代替なら代替メニューを1件）
-  const plan = planDay(menus, sessions, absenceReq);
+  const plan = planDay(menus, sessions, absenceReq, new Set(Object.keys(logs)));
   const absentMenuIds = new Set(plan.mats.filter((m) => m.absent).map((m) => m.menu.id));
   const openMenus = menus.filter((m) => isMenuOpen(m));
   const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id) && !absentMenuIds.has(m.id));
