@@ -660,9 +660,11 @@ export function TeamEventCoachManagement({
   const [matchSubmissions, setMatchSubmissions] = useState<
     MatchSubmissionRow[]
   >([]);
-  const [expandedMatchAuthorIds, setExpandedMatchAuthorIds] = useState<
-    Set<string>
-  >(new Set());
+  // 終了した試合の振り返り（提出内容はあとからも見られるように）
+  const [pastMatches, setPastMatches] = useState<
+    { event: TeamEventRow; rows: MatchSubmissionRow[] }[]
+  >([]);
+  const [openPastId, setOpenPastId] = useState<string | null>(null);
   const [newDeadline, setNewDeadline] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(
@@ -725,6 +727,30 @@ export function TeamEventCoachManagement({
     } else {
       setTargetCount(null);
       setMatchSubmissions([]);
+    }
+
+    if (type === "match_reflection") {
+      const { data: closedData } = await supabase
+        .from("team_events")
+        .select("id, type, title, deadline, closed_at")
+        .eq("team_id", profile.team_id)
+        .eq("type", "match_reflection")
+        .not("closed_at", "is", null)
+        .order("deadline", { ascending: false });
+      const closed = (closedData ?? []) as TeamEventRow[];
+      let subs: (MatchSubmissionRow & { event_id: string })[] = [];
+      if (closed.length > 0) {
+        const { data: subData } = await supabase
+          .from("team_event_submissions")
+          .select(
+            "id, event_id, author_id, updated_at, match_result, match_title, match_count, win_count, loss_count, reflection, good_points, challenges, improvement_plan, team_challenges"
+          )
+          .in("event_id", closed.map((e) => e.id));
+        subs = (subData ?? []) as (MatchSubmissionRow & { event_id: string })[];
+      }
+      setPastMatches(closed.map((e) => ({ event: e, rows: subs.filter((x) => x.event_id === e.id) })));
+    } else {
+      setPastMatches([]);
     }
 
     if (type === "body_composition") {
@@ -875,103 +901,7 @@ export function TeamEventCoachManagement({
           </p>
 
           {type === "match_reflection" && matchSubmissions.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  setExpandedMatchAuthorIds((prev) =>
-                    prev.size === matchSubmissions.length
-                      ? new Set()
-                      : new Set(matchSubmissions.map((s) => s.author_id))
-                  )
-                }
-                className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
-              >
-                {expandedMatchAuthorIds.size === matchSubmissions.length
-                  ? "すべて閉じる"
-                  : "全員の詳細を表示"}
-              </button>
-              {matchSubmissions
-                .map((s) => ({
-                  ...s,
-                  name:
-                    members.find((m) => m.id === s.author_id)?.display_name ??
-                    "（不明な部員）",
-                }))
-                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
-                .map((s) => {
-                  const isExpanded = expandedMatchAuthorIds.has(s.author_id);
-                  return (
-                    <div
-                      key={s.author_id}
-                      className="overflow-hidden rounded-lg border border-border-color bg-background"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedMatchAuthorIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(s.author_id)) next.delete(s.author_id);
-                            else next.add(s.author_id);
-                            return next;
-                          })
-                        }
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
-                      >
-                        <span className="font-medium text-foreground">
-                          {s.name}
-                        </span>
-                        <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
-                          {s.match_result ?? ""}
-                          {isExpanded ? " ▲" : " ▼"}
-                        </span>
-                      </button>
-                      {isExpanded && (
-                        <div className="flex flex-col gap-1.5 border-t border-border-color p-2.5 text-xs text-neutral-700 dark:text-neutral-200">
-                          {s.match_title && <p>試合名：{s.match_title}</p>}
-                          {s.match_result && <p>結果：{s.match_result}</p>}
-                          {s.match_count != null && (
-                            <p>
-                              {s.match_count}試合（{s.win_count ?? 0}勝{" "}
-                              {s.loss_count ?? 0}敗）
-                            </p>
-                          )}
-                          {s.reflection && (
-                            <p className="whitespace-pre-wrap">
-                              反省：{s.reflection}
-                            </p>
-                          )}
-                          {s.good_points && (
-                            <p className="whitespace-pre-wrap">
-                              良かった点：{s.good_points}
-                            </p>
-                          )}
-                          {s.challenges && (
-                            <p className="whitespace-pre-wrap">
-                              課題：{s.challenges}
-                            </p>
-                          )}
-                          {s.improvement_plan && (
-                            <p className="whitespace-pre-wrap">
-                              今後の改善策：{s.improvement_plan}
-                            </p>
-                          )}
-                          {s.team_challenges && (
-                            <p className="whitespace-pre-wrap">
-                              チームとしての課題：{s.team_challenges}
-                            </p>
-                          )}
-                          <CommentThread
-                            submissionId={s.id}
-                            profile={profile}
-                            members={members}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
+            <MatchSubmissionList rows={matchSubmissions} members={members} profile={profile} />
           )}
 
           {!readOnly && (
@@ -1028,6 +958,41 @@ export function TeamEventCoachManagement({
             </button>
           </div>
         </form>
+      )}
+
+      {type === "match_reflection" && pastMatches.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+            これまでの試合の振り返り
+          </h3>
+          {pastMatches.map(({ event: ev, rows }) => {
+            const open = openPastId === ev.id;
+            return (
+              <div key={ev.id} className="overflow-hidden rounded-lg border border-border-color bg-surface-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenPastId(open ? null : ev.id)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">{ev.title || "試合の振り返り"}</span>
+                    <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
+                      締切 {formatMonthDay(ev.deadline)}・終了済み
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
+                    提出 {rows.length}人{open ? " ▲" : " ▼"}
+                  </span>
+                </button>
+                {open && (
+                  <div className="border-t border-border-color p-2">
+                    <MatchSubmissionList rows={rows} members={members} profile={profile} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {type === "body_composition" && bodyGroups.length > 0 && (
@@ -1134,6 +1099,120 @@ export function TeamEventCoachManagement({
         </div>
       )}
     </div>
+  );
+}
+
+// 試合の振り返りの提出一覧（名前をタップで中身を開く）。開催中・終了したイベントの両方で使う
+function MatchSubmissionList({
+  rows,
+  members,
+  profile,
+}: {
+  rows: MatchSubmissionRow[];
+  members: ReturnType<typeof useEventMembers>;
+  profile: ReturnType<typeof useProfile>["profile"];
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  if (rows.length === 0)
+    return <p className="text-xs text-neutral-500 dark:text-neutral-400">提出はありません。</p>;
+  return (
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpanded((prev) =>
+                    prev.size === rows.length
+                      ? new Set()
+                      : new Set(rows.map((s) => s.author_id))
+                  )
+                }
+                className="self-end text-[length:calc(11px+var(--fs-add))] text-neutral-500 underline decoration-dotted dark:text-neutral-400"
+              >
+                {expanded.size === rows.length
+                  ? "すべて閉じる"
+                  : "全員の詳細を表示"}
+              </button>
+              {rows
+                .map((s) => ({
+                  ...s,
+                  name:
+                    members.find((m) => m.id === s.author_id)?.display_name ??
+                    "（不明な部員）",
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+                .map((s) => {
+                  const isExpanded = expanded.has(s.author_id);
+                  return (
+                    <div
+                      key={s.author_id}
+                      className="overflow-hidden rounded-lg border border-border-color bg-background"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpanded((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(s.author_id)) next.delete(s.author_id);
+                            else next.add(s.author_id);
+                            return next;
+                          })
+                        }
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+                      >
+                        <span className="font-medium text-foreground">
+                          {s.name}
+                        </span>
+                        <span className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
+                          {s.match_result ?? ""}
+                          {isExpanded ? " ▲" : " ▼"}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="flex flex-col gap-1.5 border-t border-border-color p-2.5 text-xs text-neutral-700 dark:text-neutral-200">
+                          {s.match_title && <p>試合名：{s.match_title}</p>}
+                          {s.match_result && <p>結果：{s.match_result}</p>}
+                          {s.match_count != null && (
+                            <p>
+                              {s.match_count}試合（{s.win_count ?? 0}勝{" "}
+                              {s.loss_count ?? 0}敗）
+                            </p>
+                          )}
+                          {s.reflection && (
+                            <p className="whitespace-pre-wrap">
+                              反省：{s.reflection}
+                            </p>
+                          )}
+                          {s.good_points && (
+                            <p className="whitespace-pre-wrap">
+                              良かった点：{s.good_points}
+                            </p>
+                          )}
+                          {s.challenges && (
+                            <p className="whitespace-pre-wrap">
+                              課題：{s.challenges}
+                            </p>
+                          )}
+                          {s.improvement_plan && (
+                            <p className="whitespace-pre-wrap">
+                              今後の改善策：{s.improvement_plan}
+                            </p>
+                          )}
+                          {s.team_challenges && (
+                            <p className="whitespace-pre-wrap">
+                              チームとしての課題：{s.team_challenges}
+                            </p>
+                          )}
+                          <CommentThread
+                            submissionId={s.id}
+                            profile={profile}
+                            members={members}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
   );
 }
 
