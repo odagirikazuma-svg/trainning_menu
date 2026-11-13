@@ -35,9 +35,10 @@ export default function EmailLoginSection({ onSaved }: { onSaved?: () => void })
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token ?? ""}` },
         body: JSON.stringify({ email: email || current, password }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string; tokenHash?: string | null };
       if (!res.ok || json.error) throw new Error(json.error ?? "保存できませんでした");
-      await supabase.auth.refreshSession();
+      // ログインし直す（パスワードを変えると前のログインが切れるため）
+      if (json.tokenHash) await supabase.auth.verifyOtp({ type: "magiclink", token_hash: json.tokenHash });
       await loadCurrent();
       setPassword("");
       setOpen(false);

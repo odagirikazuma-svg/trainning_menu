@@ -38,5 +38,8 @@ export async function POST(request: NextRequest) {
       : error.message;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  return NextResponse.json({ ok: true });
+  // パスワードを変えると今のログインが切れることがあるので、そのまま続けて使えるように
+  // ログイン用のワンタイムトークンを返す（画面側で verifyOtp してログインし直す）
+  const { data: link } = await admin.auth.admin.generateLink({ type: "magiclink", email });
+  return NextResponse.json({ ok: true, tokenHash: link?.properties?.hashed_token ?? null });
 }
