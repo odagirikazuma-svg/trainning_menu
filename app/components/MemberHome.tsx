@@ -509,6 +509,8 @@ export default function MemberHome({
     if (error) {
       setErrorMsg(error.message);
     } else {
+      // 編集中の怪我を完治にしたら、編集欄も閉じる
+      if (editingInjuryId === id) resetInjuryForm();
       await loadInjuries();
     }
   }
