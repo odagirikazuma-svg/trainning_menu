@@ -488,12 +488,15 @@ export function WeightMaxCoachManagement({
       )
     )
       return;
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("weight_max_events")
       .update({ closed_at: new Date().toISOString() })
-      .eq("id", event.id);
+      .eq("id", event.id)
+      .select("id");
     if (error) {
       setErrorMsg(error.message);
+    } else if (!updated || updated.length === 0) {
+      setErrorMsg("終了できませんでした（権限がありません）。");
     } else {
       await load();
     }

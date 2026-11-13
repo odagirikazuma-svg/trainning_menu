@@ -1120,3 +1120,14 @@ create unique index if not exists weight_logs_author_date_session_key
   on weight_logs (author_id, date, session_key) nulls not distinct;
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 23. 2026-11-13 ウェイトMAXの集計を終了できるように（更新の権限が無く、終了ボタンが効いていなかった）
+-- ############################################################
+drop policy if exists "weight_max_events_update_coach" on weight_max_events;
+create policy "weight_max_events_update_coach" on weight_max_events
+  for update using (
+    team_id = get_my_team_id()
+    and exists (select 1 from profiles where id = auth.uid() and role = 'coach')
+  );
