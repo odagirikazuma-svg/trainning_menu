@@ -205,7 +205,12 @@ export function TeamEventTab({
           <ul className="flex flex-col gap-1">
             {record.list.map(({ ev, sub }) => (
               <li key={ev.id} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs dark:bg-neutral-900">
-                <span className="truncate text-neutral-800 dark:text-neutral-200">{sub!.match_title || ev.title}</span>
+                <span className="truncate text-neutral-800 dark:text-neutral-200">
+                  {ev.title || sub!.match_title}
+                  {ev.title && sub!.match_title && sub!.match_title !== ev.title && (
+                    <span className="text-neutral-500">（{sub!.match_title}）</span>
+                  )}
+                </span>
                 <span className="flex shrink-0 items-center gap-2">
                   {(sub!.win_count != null || sub!.loss_count != null) && (
                     <span className="tabular-nums text-neutral-500">
@@ -250,7 +255,7 @@ export function TeamEventTab({
                 </span>
               </span>
               {submitted ? (
-                <span className="shrink-0 rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="shrink-0 rounded bg-emerald-100 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
@@ -258,7 +263,7 @@ export function TeamEventTab({
                   className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
-                      : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
                   }`}
                 >
                   未提出

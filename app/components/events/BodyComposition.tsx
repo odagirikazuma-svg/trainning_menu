@@ -190,7 +190,7 @@ export function BodyCompositionTab({
               className={`shrink-0 rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                 new Date().toISOString().slice(0, 10) > openEvent.deadline
                   ? "bg-red-600 text-white"
-                  : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
+                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
               }`}
             >
               未提出

@@ -208,7 +208,7 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                 <span className="text-xs text-neutral-500">〜{formatMonthDay(ev.deadline)}</span>
               </span>
               {submitted ? (
-                <span className="rounded bg-emerald-800/60 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="rounded bg-emerald-100 px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
                   提出済み
                 </span>
               ) : isOpenEvent ? (
@@ -216,7 +216,7 @@ export function WeightMaxTab({ profile }: { profile: ReturnType<typeof useProfil
                   className={`rounded px-2 py-0.5 text-[length:calc(11px+var(--fs-add))] font-medium ${
                     isOverdue
                       ? "bg-red-600 text-white"
-                      : "bg-amber-800/60 text-amber-700 dark:text-amber-300"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
                   }`}
                 >
                   未提出
