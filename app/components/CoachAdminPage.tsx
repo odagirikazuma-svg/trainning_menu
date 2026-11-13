@@ -901,7 +901,7 @@ export default function CoachAdminPage({
   useSubNav(adminSubNav);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col text-neutral-200">
+    <div className="mx-auto flex w-full max-w-3xl flex-col text-foreground">
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         {errorMsg && (
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
@@ -926,8 +926,8 @@ export default function CoachAdminPage({
 
         {adminSubTab === "submissions" && (
         <>
-        {/* 日報の提出状況 */}
-        <section className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold tracking-tight">今日のチーム</h1>
+        <section className="flex flex-col gap-3 rounded-xl border border-border-color bg-surface p-3 sm:p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
             日報の提出状況
@@ -985,7 +985,7 @@ export default function CoachAdminPage({
               この日は報告が必要なセッションがありません（オフ、または部員が登録されていません）。
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {(() => {
                 // 学年ごとの区切りが多摩・大塚で縦にずれないよう、両拠点を合わせた
                 // 学年一覧を基準に、各拠点の行数の差だけ高さの揃った空白行を
@@ -1046,7 +1046,7 @@ export default function CoachAdminPage({
                                   `/team/${d.memberId}?date=${selectedReportDate}`
                                 )
                               }
-                              className={`flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                              className={`flex items-center justify-between gap-1.5 min-h-11 rounded-lg border px-3 py-2 text-left text-sm ${
                                 d.isPending
                                   ? "border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-600"
                                   : d.isExempt
@@ -1091,7 +1091,7 @@ export default function CoachAdminPage({
                                       : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400"
                                   }`}
                                 >
-                                  {allDone ? (d.rest ? "休" : "済") : "未"}
+                                  {allDone ? (d.rest ? "休み" : "報告済み") : "未提出"}
                                 </span>
                               )}
                             </button>
@@ -1103,7 +1103,7 @@ export default function CoachAdminPage({
                           <div
                             key={`spacer-${i}`}
                             aria-hidden="true"
-                            className="invisible flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs"
+                            className="invisible hidden min-h-11 sm:block"
                           >
                             <span>&nbsp;</span>
                           </div>

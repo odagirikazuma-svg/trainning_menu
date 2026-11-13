@@ -1665,7 +1665,7 @@ export default function DailyReport({
   return (
     <div className="flex flex-col gap-4">
       {!isPopup && onDateChange && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3 rounded-xl border border-border-color bg-surface p-3">
           <div className="flex items-end justify-between gap-2">
             <div className="flex flex-col">
               <span className="text-lg font-bold text-foreground">
@@ -1946,7 +1946,7 @@ export default function DailyReport({
             </p>
           ) : (
             <div
-              className={`${isPopup ? "" : "sticky z-20"} flex flex-col gap-2 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-background/95 p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.35)] backdrop-blur`}
+              className={`${isPopup ? "" : "sticky z-20"} flex flex-col gap-2 rounded-xl border border-border-color bg-surface p-2`}
               style={isPopup ? undefined : { bottom: "calc(144px + env(safe-area-inset-bottom))" }}
             >
               {missing.length > 0 && (
@@ -1965,7 +1965,7 @@ export default function DailyReport({
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting || !!editingSlot || !!editingReportId}
-                className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-50"
+                className="min-h-11 w-full rounded-lg bg-accent px-3 py-3 text-base font-bold text-white active:brightness-90 disabled:opacity-50"
               >
                 {submitting
                   ? "提出中…"

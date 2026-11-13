@@ -98,7 +98,7 @@ export default function Footer({ profile }: { profile: Profile }) {
 
   return (
     <nav
-      className="flex border-t border-border-color bg-surface/95 backdrop-blur"
+      className="flex border-t border-border-color bg-surface"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 10px)" }}
     >
       {items.map((item) => (

@@ -1213,7 +1213,8 @@ export default function MemberHome({
       {!isManager && (
         <>
       {homeSubTab === "daily" && (
-        <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+        <section className="flex flex-col gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">マイページ</h1>
           <DailyReport
             profile={profile}
             date={reportDate}

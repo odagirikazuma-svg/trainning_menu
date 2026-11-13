@@ -333,9 +333,7 @@ export default function Header({
   return (
     <header
       ref={headerRef}
-      // 試合カウントダウンなどを目立たせつつ、ボタン類で多用している赤とは
-      // 被らないよう、ヘッダー全体を指定色（マット・グレイッシュな紫）で統一する
-      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-black/20 bg-[#7c6c77]/95 px-4 py-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.25)] backdrop-blur dark:border-black/40 dark:bg-[#5c4f57]/95"
+      className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b border-white/15 bg-team-navy px-4 py-2.5"
       style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
     >
       <span className="inline-block h-6 w-1 shrink-0 rounded-full bg-white/50" />

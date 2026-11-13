@@ -21,7 +21,7 @@ export default function SubTabBar<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex gap-1.5 border-t border-border-color bg-surface-2/95 p-2 shadow-[0_-2px_6px_rgba(0,0,0,0.08)] backdrop-blur dark:shadow-[0_-2px_8px_rgba(0,0,0,0.4)]">
+    <div className="flex gap-1.5 border-t border-border-color bg-surface-2 p-2">
       {items.map((item) => {
         const isActive = active === item.value;
         return (
@@ -31,7 +31,7 @@ export default function SubTabBar<T extends string>({
             onClick={() => onChange(item.value)}
             className={`relative flex-1 rounded-lg py-2.5 text-[length:calc(13px+var(--fs-add))] font-semibold transition-colors ${
               isActive
-                ? "bg-red-600 text-white shadow"
+                ? "bg-accent text-white"
                 : "bg-surface text-neutral-500 active:bg-neutral-200 dark:text-neutral-400 dark:active:bg-neutral-700"
             }`}
           >
