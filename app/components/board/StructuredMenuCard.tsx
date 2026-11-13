@@ -127,6 +127,8 @@ export default function StructuredMenuCard({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [absentIds, setAbsentIds] = useState<Set<string>>(new Set());
+  // 実施報告で開いている参加者の一覧（参加予定／休みの報告）
+  const [rosterOpen, setRosterOpen] = useState<"present" | "absent" | null>(null);
 
   // 編集中の状態
   const [mode, setMode] = useState<"view" | "plan" | "report">("view");
@@ -428,10 +430,49 @@ export default function StructuredMenuCard({
           <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
             予定と実際の参加者は合っていますか？
           </span>
-          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-            参加予定 {plannedPresent.length}人／休みの報告 {plannedAbsent.length}人
-            {plannedAbsent.length > 0 && `（${plannedAbsent.map((m) => m.display_name).join("、")}）`}
-          </span>
+          {/* 参加予定・休みの報告の人数をタップすると、名前の一覧が開く */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {([
+              ["present", "参加予定", plannedPresent],
+              ["absent", "休みの報告", plannedAbsent],
+            ] as const).map(([k, label, list]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setRosterOpen((o) => (o === k ? null : k))}
+                className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ring-1 ${
+                  rosterOpen === k
+                    ? "bg-surface font-semibold text-foreground ring-neutral-400 dark:ring-neutral-500"
+                    : "bg-surface text-neutral-600 ring-neutral-200 dark:text-neutral-400 dark:ring-neutral-800"
+                }`}
+              >
+                <span>
+                  {label} <b className="text-sm text-foreground">{list.length}</b>人
+                </span>
+                <span className="text-neutral-400">{rosterOpen === k ? "▲" : "▼"}</span>
+              </button>
+            ))}
+          </div>
+          {rosterOpen && (
+            <ul className="flex flex-wrap gap-1.5 rounded-lg bg-surface p-2 ring-1 ring-neutral-200 dark:ring-neutral-800">
+              {(rosterOpen === "present" ? plannedPresent : plannedAbsent).map((m) => (
+                <li
+                  key={m.id}
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    rosterOpen === "present"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300"
+                      : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200"
+                  }`}
+                >
+                  {m.display_name}
+                  {m.entry_year && <span className="ml-1 opacity-70">{currentGrade(m.entry_year)}年</span>}
+                </li>
+              ))}
+              {(rosterOpen === "present" ? plannedPresent : plannedAbsent).length === 0 && (
+                <li className="text-xs text-neutral-500">いません</li>
+              )}
+            </ul>
+          )}
           <div className="grid grid-cols-2 gap-1.5">
             {[true, false].map((v) => (
               <button
