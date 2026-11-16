@@ -7,10 +7,13 @@
 //    - 代替メニュー：休んだセクションの最初の1つの代わりに「代替メニューの記録」を1件
 // ■ トレーニングの記録は weight_logs.session_key でセクションとひもづける
 //    （'weight@13:00'、マットの代わりの代替メニューは 'mat@17:00'。null は予定外の自主トレ）
+// ■ 授業の時間割：練習の半分以上が授業なら休み申請なしで欠席（代替メニューの記録が必要）。
+//    半分未満の重なりは「遅れて参加／早めに抜ける」として参加扱い
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { absenceCoversMat, sessionKey } from "./absence";
 import { isExemptOn, loadExemptions } from "./exemptions";
+import { classImpact, loadClassLookup, type ClassImpact } from "./classSchedule";
 
 export type ObSessionType = "mat" | "running" | "weight";
 export type ObSession = { session_type: ObSessionType; start_time: string | null };
@@ -23,11 +26,14 @@ export type TrainingSlot = {
   sessionType: ObSessionType;
   time: string | null;
   // 代替メニューのとき：休んだセクション（表示用）
-  covered?: { type: ObSessionType; time: string | null }[];
+  covered?: { type: ObSessionType; time: string | null; byClass?: boolean }[];
+  // 授業で遅れて参加・早めに抜ける（参加扱い）
+  classNote?: ClassImpact;
 };
 
 export type DayPlan<M extends ObMenu = ObMenu> = {
-  mats: { menu: M; absent: boolean }[];
+  // byClass：授業で休み（absent=true）、または遅れて参加・早めに抜ける（absent=false）
+  mats: { menu: M; absent: boolean; byClass?: ClassImpact }[];
   slots: TrainingSlot[];
   // 休みの報告（差し戻し以外）があり、休養か
   rest: boolean;
@@ -41,7 +47,9 @@ export function planDay<M extends ObMenu>(
   menus: M[],
   sessions: ObSession[],
   absence: ObAbsence | null,
-  loggedKeys?: Set<string>
+  loggedKeys?: Set<string>,
+  // その日の授業の時限（時間割から）
+  classPeriods?: number[]
 ): DayPlan<M> {
   const abs = absence && absence.status !== "rejected" ? absence : null;
   const all = !abs?.session_keys || abs.session_keys.length === 0;
@@ -50,21 +58,47 @@ export function planDay<M extends ObMenu>(
     if (type === "mat") return absenceCoversMat(abs.session_keys, time);
     return all || abs.session_keys!.includes(sessionKey(type, time));
   };
+  const cls = (type: ObSessionType, time: string | null) => classImpact(type, time, classPeriods ?? []);
   const mats = menus
     .slice()
     .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""))
-    .map((menu) => ({ menu, absent: covers("mat", menu.start_time) }));
-  const coveredList: { type: ObSessionType; time: string | null }[] = mats
-    .filter((m) => m.absent)
-    .map((m) => ({ type: "mat" as const, time: t5(m.menu.start_time) }));
+    .map((menu) => {
+      if (covers("mat", menu.start_time)) return { menu, absent: true };
+      const c = cls("mat", menu.start_time);
+      return c ? { menu, absent: c.status === "absent", byClass: c } : { menu, absent: false };
+    });
+  type Cov = { type: ObSessionType; time: string | null; byClass?: boolean };
+  const absCovered: Cov[] = [];
+  const classCovered: Cov[] = [];
+  for (const m of mats) {
+    if (!m.absent) continue;
+    const c = { type: "mat" as const, time: t5(m.menu.start_time) };
+    if (m.byClass) classCovered.push({ ...c, byClass: true });
+    else absCovered.push(c);
+  }
   const slots: TrainingSlot[] = [];
   for (const s of sessions) {
     if (s.session_type === "mat") continue;
     const time = t5(s.start_time);
-    if (covers(s.session_type, time)) coveredList.push({ type: s.session_type, time });
-    else slots.push({ key: sessionKey(s.session_type, time), kind: "session", sessionType: s.session_type, time });
+    if (covers(s.session_type, time)) {
+      absCovered.push({ type: s.session_type, time });
+      continue;
+    }
+    const c = cls(s.session_type, time);
+    if (c?.status === "absent") {
+      classCovered.push({ type: s.session_type, time, byClass: true });
+      continue;
+    }
+    slots.push({
+      key: sessionKey(s.session_type, time),
+      kind: "session",
+      sessionType: s.session_type,
+      time,
+      ...(c ? { classNote: c } : {}),
+    });
   }
-  if (abs && abs.plan_type !== "none" && coveredList.length > 0) {
+  const coveredList = [...(abs && abs.plan_type !== "none" ? absCovered : []), ...classCovered];
+  if (coveredList.length > 0) {
     coveredList.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
     const first =
       coveredList.find((c) => loggedKeys?.has(sessionKey(c.type, c.time))) ?? coveredList[0];
@@ -84,7 +118,9 @@ const typeLabel: Record<ObSessionType, string> = { mat: "マット", running: "�
 export function slotLabel(s: TrainingSlot) {
   const base = `${typeLabel[s.sessionType]}${s.time ? ` ${s.time}` : ""}`;
   if (s.kind === "alt")
-    return `代替メニュー（${(s.covered ?? []).map((c) => `${typeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`).join("・")} の代わり）`;
+    return `代替メニュー（${(s.covered ?? [])
+      .map((c) => `${c.byClass ? "授業で休んだ" : ""}${typeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`)
+      .join("・")} の代わり）`;
   return base;
 }
 
@@ -134,6 +170,7 @@ export async function loadObligations(
       .lte("date", to),
     loadExemptions(supabase, teamId, from, to),
   ]);
+  const classOf = await loadClassLookup(supabase, teamId, ids, from, to);
   const menus = (menuRes.data ?? []) as ObMenu[];
   const reported = new Set<string>();
   if (menus.length > 0) {
@@ -185,7 +222,8 @@ export async function loadObligations(
         dayMenus,
         off ? [] : day?.sessions ?? [],
         absences.get(`${mem.id}:${date}`) ?? null,
-        logKeysByMemberDate.get(`${mem.id}:${date}`)
+        logKeysByMemberDate.get(`${mem.id}:${date}`),
+        classOf(mem.id, date)
       );
       const items: PendingItem[] = [];
       for (const m of plan.mats) {

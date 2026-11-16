@@ -1175,3 +1175,72 @@ alter table profiles add column if not exists onboarded_at timestamptz;
 update profiles set onboarded_at = now() where onboarded_at is null;
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 26. 2026-11-16 授業の時間割
+--     ・管理者が「前期・後期」と「授業のない期間（長期休みなど）」を登録する
+--     ・部員は期間ごとに、授業のある曜日×時限を登録する
+--     ・時間割で出られないセクションは休みの申請なしで欠席扱い（代替メニューの記録が必要）
+-- ############################################################
+create table if not exists team_terms (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  kind text not null default 'term' check (kind in ('term', 'break')),
+  name text not null check (char_length(name) between 1 and 30),
+  start_date date not null,
+  end_date date not null,
+  created_at timestamptz not null default now(),
+  check (end_date >= start_date)
+);
+alter table team_terms enable row level security;
+drop policy if exists "team_terms_select" on team_terms;
+create policy "team_terms_select" on team_terms
+  for select using (team_id = get_my_team_id());
+drop policy if exists "team_terms_write_coach" on team_terms;
+create policy "team_terms_write_coach" on team_terms
+  for all
+  using (team_id = get_my_team_id() and is_my_role_coach())
+  with check (team_id = get_my_team_id() and is_my_role_coach());
+
+-- 授業のコマ（曜日 1=月〜6=土、時限 1〜6）
+create table if not exists class_schedules (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  author_id uuid not null references profiles(id) on delete cascade,
+  term_id uuid not null references team_terms(id) on delete cascade,
+  weekday smallint not null check (weekday between 1 and 6),
+  period smallint not null check (period between 1 and 6),
+  created_at timestamptz not null default now(),
+  unique (author_id, term_id, weekday, period)
+);
+alter table class_schedules enable row level security;
+drop policy if exists "class_schedules_select" on class_schedules;
+create policy "class_schedules_select" on class_schedules
+  for select using (team_id = get_my_team_id());
+drop policy if exists "class_schedules_insert_self" on class_schedules;
+create policy "class_schedules_insert_self" on class_schedules
+  for insert with check (author_id = auth.uid() and team_id = get_my_team_id());
+drop policy if exists "class_schedules_delete_self" on class_schedules;
+create policy "class_schedules_delete_self" on class_schedules
+  for delete using (author_id = auth.uid());
+
+-- 期間ごとに「時間割を登録した」（授業が0コマの人も登録済みにできるように）
+create table if not exists class_term_registrations (
+  author_id uuid not null references profiles(id) on delete cascade,
+  term_id uuid not null references team_terms(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  registered_at timestamptz not null default now(),
+  primary key (author_id, term_id)
+);
+alter table class_term_registrations enable row level security;
+drop policy if exists "class_term_registrations_select" on class_term_registrations;
+create policy "class_term_registrations_select" on class_term_registrations
+  for select using (team_id = get_my_team_id());
+drop policy if exists "class_term_registrations_write_self" on class_term_registrations;
+create policy "class_term_registrations_write_self" on class_term_registrations
+  for all
+  using (author_id = auth.uid())
+  with check (author_id = auth.uid() and team_id = get_my_team_id());
+
+notify pgrst, 'reload schema';

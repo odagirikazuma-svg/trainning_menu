@@ -1,6 +1,7 @@
 "use client";
 
 import { absenceCoversMat } from "../../lib/absence";
+import { classImpact, impactShort, loadClassLookup, type ClassImpact } from "../../lib/classSchedule";
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { currentGrade, locationLabel, type Location } from "../../lib/types";
@@ -38,6 +39,7 @@ export default function ParticipantsPanel({
     members: Member[];
     absences: Absence[];
     reports: { author_id: string; kind: string }[];
+    classOf: Map<string, ClassImpact>;
   } | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -71,8 +73,16 @@ export default function ParticipantsPanel({
           .in("status", ["pending", "approved"]);
         absences = (rows ?? []) as Absence[];
       }
+      const memIds = ((mRes.data ?? []) as Member[]).map((m) => m.id);
+      const lookup = await loadClassLookup(supabase, teamId, memIds, date, date);
+      const classOf = new Map<string, ClassImpact>();
+      for (const id of memIds) {
+        const c = classImpact("mat", startTime, lookup(id, date));
+        if (c) classOf.set(id, c);
+      }
       if (cancelled) return;
       setData({
+        classOf,
         members: (mRes.data ?? []) as Member[],
         absences,
         reports: (cRes.data ?? []) as { author_id: string; kind: string }[],
@@ -100,19 +110,21 @@ export default function ParticipantsPanel({
   );
   const reportOf = new Map(data.reports.map((r) => [r.author_id, r.kind]));
 
-  type Absent = { m: Member; badge: "approved" | "pending" | "report" };
+  type Absent = { m: Member; badge: "approved" | "pending" | "report" | "class" };
   const going: Member[] = [];
   const absent: Absent[] = [];
   const unknown: Member[] = [];
   for (const m of targets) {
     const a = absenceOf.get(m.id);
+    const byClass = data.classOf.get(m.id)?.status === "absent";
     if (!started) {
       if (a) absent.push({ m, badge: a });
+      else if (byClass) absent.push({ m, badge: "class" });
       else going.push(m);
     } else {
       const r = reportOf.get(m.id);
       if (r === "report") going.push(m);
-      else if (r === "absent" || a) absent.push({ m, badge: a ?? "report" });
+      else if (r === "absent" || a || byClass) absent.push({ m, badge: a ?? (byClass ? "class" : "report") });
       else unknown.push(m);
     }
   }
@@ -120,6 +132,7 @@ export default function ParticipantsPanel({
   const badge: Record<Absent["badge"], { text: string; cls: string }> = {
     approved: { text: "報告済み", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300" },
     pending: { text: "申請中", cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" },
+    class: { text: "授業", cls: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300" },
     report: { text: "申請なし", cls: "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" },
   };
   const grade = (m: Member) => (m.entry_year ? `${currentGrade(m.entry_year)}年` : "");
@@ -162,6 +175,14 @@ export default function ParticipantsPanel({
                   <span key={m.id} className={chip}>
                     {m.display_name}
                     <span className="ml-1 text-[length:calc(10px+var(--fs-add))] text-neutral-500">{grade(m)}</span>
+                    {(() => {
+                      const c = data.classOf.get(m.id);
+                      return c && c.status !== "absent" ? (
+                        <span className="ml-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[length:calc(9px+var(--fs-add))] font-bold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+                          {impactShort(c)}
+                        </span>
+                      ) : null;
+                    })()}
                   </span>
                 ))}
               </div>
@@ -204,7 +225,7 @@ export default function ParticipantsPanel({
           )}
           {!started && (
             <p className="text-[length:calc(10px+var(--fs-add))] text-neutral-500">
-              {scope}の部員は、休み申請を出していなければ参加予定です。練習が始まると、日報の報告をもとに参加・欠席を表示します。
+              {scope}の部員は、休み申請を出していなければ参加予定です（授業の時間割と重なる人は自動で欠席・遅れて参加などになります）。練習が始まると、日報の報告をもとに参加・欠席を表示します。
             </p>
           )}
         </div>

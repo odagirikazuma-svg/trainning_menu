@@ -1,5 +1,6 @@
 "use client";
 
+import { classImpact, loadClassLookup } from "../../lib/classSchedule";
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import {
@@ -173,15 +174,20 @@ export default function StructuredMenuCard({
         (a, b) => (a.entry_year ?? 9999) - (b.entry_year ?? 9999) || a.display_name.localeCompare(b.display_name, "ja")
       )
     );
+    // 時間割で、この練習を授業で休む人も欠席扱い
+    const memIds = ((memRes.data ?? []) as Member[]).map((m) => m.id);
+    const classOf = await loadClassLookup(supabase, profile.team_id, memIds, date, date);
+    const classAbsent = memIds.filter((id) => classImpact("mat", startTime, classOf(id, date))?.status === "absent");
     setAbsentIds(
-      new Set(
-        ((absRes.error ? [] : absRes.data) ?? [])
+      new Set([
+        ...classAbsent,
+        ...((absRes.error ? [] : absRes.data) ?? [])
           .filter(
             (a: { status: string; session_keys?: string[] | null }) =>
               a.status === "approved" && absenceCoversMat(a.session_keys, startTime)
           )
-          .map((a: { author_id: string }) => a.author_id)
-      )
+          .map((a: { author_id: string }) => a.author_id),
+      ])
     );
     setLoaded(true);
   }

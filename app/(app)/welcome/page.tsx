@@ -7,13 +7,14 @@ import { createClient } from "../../lib/supabase/client";
 import { currentGrade, locationLabel, roleLabel } from "../../lib/types";
 import WeightClassSection from "../../components/WeightClassSection";
 import NextMatchSection from "../../components/NextMatchSection";
+import ClassScheduleSection from "../../components/ClassScheduleSection";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
 import EmailLoginSection from "../../components/EmailLoginSection";
 
 // はじめての設定（LINEで登録した部員が最初に通る画面）。
 // 1 名簿の確認 → 2 階級 → 3 次の試合・目標 → 4 パソコンから使う（任意）→ 5 使い方
 // 最後まで進むと profiles.onboarded_at が入り、次からは出ない。途中の入力は設定からいつでも直せる。
-const STEPS = ["確認", "階級", "試合・目標", "パソコン", "使い方"] as const;
+const STEPS = ["確認", "階級", "時間割", "試合・目標", "パソコン", "使い方"] as const;
 
 export default function WelcomePage() {
   const { profile } = useProfile();
@@ -115,6 +116,22 @@ export default function WelcomePage() {
 
       {step === 2 && (
         <section className={card}>
+          <h2 className="text-base font-bold text-foreground">授業の時間割</h2>
+          <p className="text-xs text-neutral-500">
+            授業のあるコマを入れておくと、授業と重なる練習は休みの申請なしで自動で反映されます。
+          </p>
+          <ClassScheduleSection />
+          <button type="button" onClick={next} className={primary}>
+            次へ
+          </button>
+          <button type="button" onClick={next} className={ghost}>
+            あとで入れる（設定に「やること」として残ります）
+          </button>
+        </section>
+      )}
+
+      {step === 3 && (
+        <section className={card}>
           <h2 className="text-base font-bold text-foreground">次の試合と目標</h2>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">次の試合</span>
@@ -133,7 +150,7 @@ export default function WelcomePage() {
         </section>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <section className={card}>
           <h2 className="text-base font-bold text-foreground">パソコンからも使う（任意）</h2>
           <p className="text-xs text-neutral-500">
@@ -149,13 +166,13 @@ export default function WelcomePage() {
         </section>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <section className={card}>
           <h2 className="text-base font-bold text-foreground">毎日やること</h2>
           <ul className="flex flex-col gap-2.5">
             {[
               ["📝", "練習のあとに日報を出す", "公式LINEのメニュー「日報を書く」から。マット練習の振り返りと、ウェイト・ランの記録、今日の疲労度を入れます。"],
-              ["🙋", "休むときは前もって申請", "マイページの「申請」から。休むセクションと、休むあいだ休養するか代替メニューをやるかを選びます。"],
+              ["🙋", "休むときは前もって申請", "マイページの「申請」から。休むセクションと、休むあいだ休養するか代替メニューをやるかを選びます。時間割に入れた授業は申請しなくても反映されます。"],
               ["📈", "振り返りで記録を見る", "マイページの「振り返り」で、提出状況や種目ごとの記録の伸びが見られます。"],
               ["🔔", "やることは赤い数字で", "下のメニューの赤い数字が、まだ出していない日報などの数です。"],
             ].map(([icon, title, body]) => (

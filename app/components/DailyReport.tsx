@@ -3,6 +3,7 @@
 import FatigueSelector from "./FatigueSelector";
 import AbsenceRequestPanel from "./AbsenceRequestPanel";
 import { isOpenAt, planDay, slotLabel, type TrainingSlot } from "../lib/obligations";
+import { impactText, loadClassLookup, type ClassImpact } from "../lib/classSchedule";
 import ParticipationForm from "./ParticipationForm";
 import {
   planToBlocks,
@@ -277,6 +278,18 @@ export default function DailyReport({
   const [replies, setReplies] = useState<ReplyRow[]>([]);
   const [reactions, setReactions] = useState<ReactionRow[]>([]);
   const [sessions, setSessions] = useState<DaySession[]>([]);
+  // その日の授業の時限（時間割から。授業のある練習は休み申請なしで欠席・遅刻・早退になる）
+  const [classPeriods, setClassPeriods] = useState<number[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    loadClassLookup(supabase, profile.team_id, [profile.id], date, date).then((f) => {
+      if (!cancelled) setClassPeriods(f(profile.id, date));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, profile.team_id, date]);
   const [isOffDay, setIsOffDay] = useState(false);
   const [exempt, setExempt] = useState(false);
   // トレーニングの記録（欄ごと）
@@ -599,8 +612,10 @@ export default function DailyReport({
 
   const reportByMenu = new Map(myReports.map((r) => [r.menu_id, r]));
   // その日の提出が必要なもの（休みの報告：休養なら提出なし、代替なら代替メニューを1件）
-  const plan = planDay(menus, sessions, absenceReq, new Set(Object.keys(logs)));
+  const plan = planDay(menus, sessions, absenceReq, new Set(Object.keys(logs)), classPeriods);
   const absentMenuIds = new Set(plan.mats.filter((m) => m.absent).map((m) => m.menu.id));
+  const classByMenu = new Map<string, ClassImpact>();
+  for (const m of plan.mats) if (m.byClass) classByMenu.set(m.menu.id, m.byClass);
   const openMenus = menus.filter((m) => isMenuOpen(m));
   const pendingMenus = openMenus.filter((m) => !reportByMenu.has(m.id) && !absentMenuIds.has(m.id));
   const isFuture = date > todayStr;
@@ -1530,7 +1545,7 @@ export default function DailyReport({
         ? l.title || "記録済み"
         : `${trainingTypeLabel[l.type]}${l.title && l.title !== "代替メニュー" ? `・${l.title}` : ""}`
       : x.kind === "alt"
-        ? `${(x.slot?.covered ?? []).map((c) => `${sessionTypeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`).join("・")} の代わり（実際にやった内容）`
+        ? `${(x.slot?.covered ?? []).map((c) => `${c.byClass ? "授業で休んだ" : ""}${sessionTypeLabel[c.type]}${c.time ? ` ${c.time}` : ""}`).join("・")} の代わり（実際にやった内容）`
         : x.kind === "free"
           ? "任意（予定外に自主トレをした日に）"
           : "このセクションの記録";
@@ -1539,6 +1554,8 @@ export default function DailyReport({
 
   function itemStatus(item: TimelineItem) {
     if (item.done) return { text: "✓ 提出済み", cls: "bg-emerald-600 text-white" };
+    if (item.absent && item.menu && classByMenu.get(item.menu.id)?.status === "absent")
+      return { text: "授業で休み", cls: "bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300" };
     if (item.absent)
       return { text: plan.rest ? "休み（休養）" : "休み", cls: "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300" };
     if (item.upcoming) return { text: "開始前", cls: "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400" };
@@ -1552,6 +1569,14 @@ export default function DailyReport({
     if (item.kind === "mat" && item.menu) {
       const m = item.menu;
       const r = reportByMenu.get(m.id);
+      const ci = classByMenu.get(m.id);
+      if (item.absent && !r && ci?.status === "absent") {
+        return (
+          <p className="text-xs text-neutral-600 dark:text-neutral-400">
+            {impactText(ci)}です（時間割から自動で反映。休みの申請は不要です）。代わりにやったメニューは「代替メニュー」の欄に記録してください。
+          </p>
+        );
+      }
       if (item.absent && !r) {
         return (
           <p className="text-xs text-neutral-600 dark:text-neutral-400">
@@ -1880,6 +1905,15 @@ export default function DailyReport({
                         <span className="truncate text-[length:calc(10px+var(--fs-add))] text-neutral-500">
                           {t.sub}
                         </span>
+                        {(() => {
+                          const ci =
+                            item.kind === "mat" && item.menu ? classByMenu.get(item.menu.id) : item.slot?.slot?.classNote;
+                          return ci && ci.status !== "absent" ? (
+                            <span className="text-[length:calc(10px+var(--fs-add))] font-semibold text-sky-700 dark:text-sky-400">
+                              📚 {impactText(ci)}
+                            </span>
+                          ) : null;
+                        })()}
                       </span>
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[length:calc(10px+var(--fs-add))] font-semibold ${st.cls}`}
