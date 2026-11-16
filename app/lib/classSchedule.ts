@@ -25,7 +25,7 @@ export const WEEKDAYS: { no: number; label: string }[] = [
 // 練習の長さ（分）。終わりの時刻がないので、種類ごとの標準の長さで重なりを見る
 export const PRACTICE_MINUTES: Record<string, number> = { mat: 120, running: 60, weight: 90 };
 
-// live：出席必須（練習に出られない）／vod：オンデマンドなど、その時間に練習に出られる
+// live：出席必須（練習に出られない）／vod：出席必須でない授業（オンデマンドなど。その時間も練習に参加）
 export type ClassMode = "live" | "vod";
 export type TeamTerm = { id: string; kind: "term" | "break"; name: string; start_date: string; end_date: string };
 export type ClassImpact = { status: "absent" | "late" | "early" | "late_early"; periods: number[] };

@@ -90,19 +90,22 @@ export default function ClassScheduleSection() {
   const breaks = terms.filter((x) => x.kind === "break" && x.start_date <= term.end_date && x.end_date >= term.start_date);
   const dirty = cells.size !== saved.size || [...cells].some(([k, v]) => saved.get(k) !== v);
   const liveCount = [...cells.values()].filter((v) => v === "live").length;
-  const vodCount = cells.size - liveCount;
 
-  // タップするたびに 空き → 授業（出席必須）→ オンデマンド（練習OK）→ 空き
+  // タップで授業あり／なし。新しく入れたコマは「出席必須」にチェックが入った状態
   function toggle(k: string) {
     setCells((prev) => {
       const n = new Map(prev);
-      const cur = n.get(k);
-      if (!cur) n.set(k, "live");
-      else if (cur === "live") n.set(k, "vod");
-      else n.delete(k);
+      if (n.has(k)) n.delete(k);
+      else n.set(k, "live");
       return n;
     });
   }
+  function setRequired(k: string, required: boolean) {
+    setCells((prev) => new Map(prev).set(k, required ? "live" : "vod"));
+  }
+  const cellList = [...cells.keys()]
+    .map((k) => k.split("-").map(Number) as [number, number])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 
   async function save() {
     setBusy(true);
@@ -135,14 +138,14 @@ export default function ClassScheduleSection() {
       text:
         cells.size === 0
           ? `${term.name}は「授業なし」で登録しました。`
-          : `${term.name}の時間割（出席必須${liveCount}コマ${vodCount > 0 ? `・オンデマンド${vodCount}コマ` : ""}）を保存しました。`,
+          : `${term.name}の時間割（${cells.size}コマ・うち出席必須${liveCount}コマ）を保存しました。`,
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-neutral-600 dark:text-neutral-400">
-        授業のあるコマをタップしてください。タップするたびに「授業（出席必須）」→「オンデマンド」→「空き」と切り替わります。出席必須の授業と重なる練習は、休みの申請なしで自動で欠席（代替メニューの記録が必要）・遅れて参加・早めに抜けるになります。オンデマンド（VOD）など、その時間に練習に出られる授業は練習には影響しません。休講・補講・試験など時間割どおりでない日は、ふだんの休みの申請で対応してください。
+        授業のあるコマをタップしてください。そのあと、表の下で授業ごとに「出席必須」を選びます。出席必須の授業と重なる練習は、休みの申請なしで自動で欠席（代替メニューの記録が必要）・遅れて参加・早めに抜けるになります。チェックを外した授業（オンデマンドなど）は、その時間も練習に参加します。休講・補講・試験など時間割どおりでない日は、ふだんの休みの申請で対応してください。
       </p>
       {termList.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
@@ -212,7 +215,7 @@ export default function ClassScheduleSection() {
                               : "border-neutral-200 bg-white text-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-600"
                         }`}
                       >
-                        {mode === "live" ? "授業" : mode === "vod" ? "オンデ\nマンド" : "—"}
+                        {mode === "live" ? "授業" : mode === "vod" ? "授業\n練習可" : "—"}
                       </button>
                     </td>
                   );
@@ -222,16 +225,45 @@ export default function ClassScheduleSection() {
           </tbody>
         </table>
       </div>
-      <p className="flex flex-wrap gap-x-3 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
-        <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sky-600 align-middle" />
-          授業＝出席必須（練習に出られない）
-        </span>
-        <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-sky-500 bg-sky-50 align-middle" />
-          オンデマンド＝その時間も練習に出られる
-        </span>
-      </p>
+      {cellList.length > 0 && (
+        <div className="flex flex-col gap-1 rounded-lg border border-neutral-200 p-2 dark:border-neutral-800">
+          <p className="text-[length:calc(11px+var(--fs-add))] font-semibold">
+            出席必須の授業にチェック（チェックなし＝その時間も練習に参加）
+          </p>
+          <ul className="flex flex-col">
+            {cellList.map(([w, p]) => {
+              const k = `${w}-${p}`;
+              const per = PERIODS.find((x) => x.no === p)!;
+              const required = cells.get(k) === "live";
+              return (
+                <li key={k}>
+                  <label className="flex cursor-pointer items-center gap-2 py-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-sky-600"
+                      checked={required}
+                      onChange={(e) => setRequired(k, e.target.checked)}
+                    />
+                    <span className="font-semibold">
+                      {WEEKDAYS.find((x) => x.no === w)!.label}曜{p}限
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      {per.start}〜{per.end}
+                    </span>
+                    <span
+                      className={`ml-auto text-xs font-semibold ${
+                        required ? "text-sky-700 dark:text-sky-400" : "text-emerald-700 dark:text-emerald-400"
+                      }`}
+                    >
+                      {required ? "出席必須" : "練習に参加"}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <button
         type="button"
         disabled={busy || (!dirty && registered.has(term.id))}
