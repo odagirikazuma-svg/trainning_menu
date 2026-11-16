@@ -279,17 +279,22 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
   y.setDate(y.getDate() - 1);
   const yesterdayStr = toDateKey(y);
 
-  function line(label: string, dateStr: string, s: SubmissionStats | null) {
+  // 狭い画面や大きい文字でも見切れないよう、日付×拠点の小さな表にする
+  function row(label: string, dateStr: string) {
     return (
-      <span className="block truncate">
-        {label}（{formatMonthDay(dateStr)}）：
-        {locations
-          .map((loc) => {
-            const v = s ? (dateStr === todayStr ? s.today[loc] : s.yesterday[loc]) : null;
-            return `${locationLabel[loc]}：${v ? `${v.submitted}人/${v.total}人提出` : "―"}`;
-          })
-          .join("　")}
-      </span>
+      <>
+        <span className="whitespace-nowrap">
+          {label}（{formatMonthDay(dateStr)}）の日報
+        </span>
+        {locations.map((loc) => {
+          const v = stats ? (dateStr === todayStr ? stats.today[loc] : stats.yesterday[loc]) : null;
+          return (
+            <span key={loc} className="whitespace-nowrap">
+              {locationLabel[loc]} {v ? `${v.submitted}/${v.total}人` : "―"}
+            </span>
+          );
+        })}
+      </>
     );
   }
 
@@ -298,9 +303,9 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
       <span className="text-sm font-semibold text-white">
         {profile.display_name}
       </span>
-      <span className="text-[length:calc(10px+var(--fs-add))] leading-tight text-white/80">
-        {line("昨日の提出状況", yesterdayStr, stats)}
-        {line("今日の提出状況", todayStr, stats)}
+      <span className="grid grid-cols-[auto_auto_auto] gap-x-3 text-[length:calc(10px+var(--fs-add))] leading-tight text-white/80">
+        {row("昨日", yesterdayStr)}
+        {row("今日", todayStr)}
       </span>
     </div>
   );
