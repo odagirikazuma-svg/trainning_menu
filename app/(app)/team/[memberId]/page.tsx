@@ -288,7 +288,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
               <TrainingInsights
                 profile={member}
                 viewerId={viewer.id}
-                // 疲労度（今の体の状態）は本人と監督・コーチだけ
+                // 疲労度（今の体の状態）は本人と管理者・マネージャーだけ
                 showBodyState={isStaffRole(viewer.role) || viewer.id === member.id}
               />
             )}

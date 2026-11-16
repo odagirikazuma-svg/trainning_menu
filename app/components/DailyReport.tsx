@@ -1826,7 +1826,8 @@ export default function DailyReport({
         </div>
       )}
 
-      {!isPopup && (
+      {/* OBは休みの申請をしないので出さない */}
+      {!isPopup && profile.role !== "ob" && (
         <AbsenceRequestPanel
           profile={profile}
           memberId={profile.id}

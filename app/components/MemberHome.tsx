@@ -351,7 +351,8 @@ export default function MemberHome({
 
   // 未提出の日報（マット練習・ラン／ウェイトのセクション・代替メニュー）。直近1か月分
   async function loadTodo() {
-    if (!effectiveHomeLocation) {
+    // OBは日報の提出義務がないので、未提出のタスクは出さない
+    if (!effectiveHomeLocation || isOb) {
       setTodoMenus([]);
       setSelfTrainingPending([]);
       return;

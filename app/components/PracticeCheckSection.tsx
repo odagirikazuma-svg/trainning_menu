@@ -539,7 +539,7 @@ export default function PracticeCheckSection({
             {estimate.unreported === 0 && Object.keys(estimate.excluded).length === 0 && estimate.noClass === 0 && estimate.unanswered === 0 && <li>・なし</li>}
           </ul>
 
-          <p className={small}>係数と残る割合は「設定 › 管理設定 › 疲労度の係数」で変えられます。</p>
+          <p className={small}>係数と残る割合は、管理者が「設定 › 管理設定 › 疲労度の係数」で変えられます。</p>
         </section>
       )}
     </div>
