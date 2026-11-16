@@ -20,6 +20,7 @@ import { isExemptOn, loadExemptions, type ExemptionRow } from "../lib/exemptions
 import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
+import { TeamTermsSection } from "./ClassScheduleSection";
 import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
 import TemplatePicker from "./board/TemplatePicker";
@@ -95,6 +96,8 @@ export default function TrainingBoardSupabase({
   // 時間割（セクション）の登録・編集ができるのは管理者だけ。
   const isCoachView = isStaffRole(profile.role);
   const canEditSchedule = isAdminEditor(profile.role);
+  // 授業の期間（前期・後期・長期休み）の編集欄を開いているか
+  const [showTermsForm, setShowTermsForm] = useState(false);
   // 部員（コーチ以外）が閲覧できる拠点。マネージャーは多摩所属として扱う。
   const memberHomeLocation: Location =
     profile.role === "manager" ? "tama" : (profile.home_location ?? "tama");
@@ -747,6 +750,7 @@ export default function TrainingBoardSupabase({
                 type="button"
                 onClick={() => {
                   setShowBulkScheduleForm(false);
+                  setShowTermsForm(false);
                   setEditingViewDateSchedule((v) => !v);
                 }}
                 className="shrink-0 text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-700 dark:text-neutral-300 underline"
@@ -784,6 +788,7 @@ export default function TrainingBoardSupabase({
               type="button"
               onClick={() => {
                 setEditingViewDateSchedule(false);
+                setShowTermsForm(false);
                 setShowBulkScheduleForm((v) => !v);
               }}
               className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 underline"
@@ -806,6 +811,24 @@ export default function TrainingBoardSupabase({
                   setScheduleRefreshKey((k) => k + 1);
                 }}
               />
+            )}
+            {canEditSchedule && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingViewDateSchedule(false);
+                  setShowBulkScheduleForm(false);
+                  setShowTermsForm((v) => !v);
+                }}
+                className="self-start text-[length:calc(11px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400 underline"
+              >
+                {showTermsForm ? "授業の期間を閉じる" : "授業の期間を編集する（前期・後期・長期休み）"}
+              </button>
+            )}
+            {canEditSchedule && showTermsForm && (
+              <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                <TeamTermsSection />
+              </div>
             )}
           </section>
         )}

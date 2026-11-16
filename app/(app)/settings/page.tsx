@@ -5,7 +5,7 @@ import { useProfile } from "../../components/shell/AppShell";
 import GoalsSettingsSection from "../../components/GoalsSettingsSection";
 import WeightClassSection from "../../components/WeightClassSection";
 import NextMatchSection from "../../components/NextMatchSection";
-import ClassScheduleSection, { TeamTermsSection } from "../../components/ClassScheduleSection";
+import ClassScheduleSection from "../../components/ClassScheduleSection";
 import { useClassScheduleMissing } from "../../components/shell/useClassScheduleTask";
 import LineSummarySection from "../../components/LineSummarySection";
 import LineLinkSection from "../../components/LineLinkSection";
@@ -660,11 +660,6 @@ export default function SettingsPage() {
             <CollapsibleSection title="LINEのまとめ通知">
               <LineSummarySection />
             </CollapsibleSection>
-            {profile.role === "coach" && (
-              <CollapsibleSection title="授業の期間（前期・後期・長期休み）">
-                <TeamTermsSection />
-              </CollapsibleSection>
-            )}
             {profile.role === "coach" && (
               <CollapsibleSection title="疲労度の係数">
                 <LoadSettingsSection />
