@@ -10,6 +10,8 @@ import {
   Location,
   locationLabel,
   SessionType,
+  isStaffRole,
+  type Role,
 } from "../lib/types";
 import type { Profile } from "./AuthGate";
 import { isExemptOn, loadExemptions } from "../lib/exemptions";
@@ -31,19 +33,18 @@ const adminSubTabItems: { value: AdminSubTab; label: string }[] = [
   { value: "condition", label: "体調" },
 ];
 
-type MemberRoleForEdit = "coach" | "captain" | "vice_captain" | "leader" | "vice_leader" | "manager" | "member" | "ob";
 
 type MemberRow = {
   id: string;
   display_name: string;
   home_location: Location | null;
   entry_year: number | null;
-  role: MemberRoleForEdit;
+  role: Role;
   isPending?: boolean;
 };
 
 // member_rosterテーブルのroleカラムに入り得る値
-type RosterRoleForMember = "captain" | "vice_captain" | "coach" | "member";
+type RosterRoleForMember = Role;
 
 type InjuryRow = {
   id: string;
@@ -493,7 +494,7 @@ export default function CoachAdminPage({
     ).map((r) => ({
       id: `pending:${r.id}`,
       display_name: r.display_name,
-      role: (r.role === "vice_captain" ? "vice_leader" : r.role) as MemberRoleForEdit,
+      role: r.role as Role,
       home_location: r.home_location,
       entry_year: r.entry_year,
       isPending: true,
@@ -1129,7 +1130,8 @@ export default function CoachAdminPage({
 
         {adminSubTab === "condition" && (
         <>
-        {profile.role === "coach" && (
+        {/* 疲労度は管理者とマネージャーが見られる */}
+        {isStaffRole(profile.role) && (
           <div className="mb-6">
             <PracticeCheckSection teamId={profile.team_id} coachId={profile.id} part="load" />
           </div>

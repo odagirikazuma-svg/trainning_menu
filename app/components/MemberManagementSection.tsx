@@ -2,64 +2,57 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, Location, locationLabel, locations } from "../lib/types";
+import {
+  currentGrade,
+  Location,
+  locationLabel,
+  locations,
+  memberRoleText,
+  type Role,
+  roleLabel,
+  type TeamPosition,
+  teamPositionLabel,
+} from "../lib/types";
 import type { Profile } from "./AuthGate";
 import JoinLinkCard from "./JoinLinkCard";
 
-type RosterRoleChoice =
-  | "coach"
-  | "captain"
-  | "vice_captain"
-  | "manager"
-  | "member";
-
-const rosterRoleLabel: Record<RosterRoleChoice, string> = {
-  coach: "管理者（コーチ）",
-  captain: "主将",
-  vice_captain: "副主将",
+const roleChoiceLabel: Record<Role, string> = {
+  coach: "管理者（監督・コーチ）",
   manager: "マネージャー",
-  member: "役職なし",
+  member: "部員",
+  ob: "OB（引退）",
 };
-
-type MemberRoleForEdit =
-  | "coach"
-  | "captain"
-  | "vice_captain"
-  | "leader"
-  | "vice_leader"
-  | "manager"
-  | "member"
-  | "ob";
-
-const memberRoleEditLabel: Record<MemberRoleForEdit, string> = {
-  coach: "管理者（コーチ）",
-  captain: "主将",
-  vice_captain: "副主将",
-  leader: "役職なし",
-  vice_leader: "副主将",
-  manager: "マネージャー",
-  member: "役職なし",
-  ob: "OB(引退)",
-};
+// 選べる役割：マネージャーは管理者を選べない
+const roleChoices = (me: Role): Role[] =>
+  me === "coach" ? ["coach", "manager", "member", "ob"] : ["manager", "member", "ob"];
 
 type MemberRow = {
   id: string;
   display_name: string;
   home_location: Location | null;
   entry_year: number | null;
-  role: MemberRoleForEdit;
+  role: Role;
+  team_position: TeamPosition | null;
 };
 
 type RosterRow = {
   id: string;
   display_name: string;
   email: string | null;
-  role: RosterRoleChoice;
+  role: Role;
+  team_position: TeamPosition | null;
   home_location: Location | null;
   entry_year: number | null;
   claimed_by: string | null;
   token: string;
 };
+
+type Draft = { role: Role; team_position: TeamPosition | null; home_location: Location };
+
+// 役割＋役職の表示（例：部員・主将）
+function roleBadge(role: Role, position: TeamPosition | null) {
+  return role === "member" && position ? `部員・${teamPositionLabel[position]}` : roleChoiceLabel[role] ?? memberRoleText(role);
+}
 
 // 「メンバー情報の編集」「新規メンバー登録」の両方で使うデータ読み込み・保存ロジックをまとめたフック。
 // 設定ページ側で2つの独立した折りたたみセクションとして表示できるよう、
@@ -74,7 +67,7 @@ function useMemberManagement(profile: Profile) {
   const [showRoleLocationEdit, setShowRoleLocationEdit] = useState(false);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
   const [draftEdits, setDraftEdits] = useState<
-    Record<string, { role: MemberRoleForEdit; home_location: Location }>
+    Record<string, Draft>
   >({});
 
   const [roster, setRoster] = useState<RosterRow[]>([]);
@@ -83,7 +76,10 @@ function useMemberManagement(profile: Profile) {
   const [rosterEmail, setRosterEmail] = useState("");
   const [rosterLocation, setRosterLocation] = useState<Location>("tama");
   const [rosterEntryYear, setRosterEntryYear] = useState("");
-  const [rosterRole, setRosterRole] = useState<RosterRoleChoice>("member");
+  const [rosterRole, setRosterRole] = useState<Role>("member");
+  const [rosterPosition, setRosterPosition] = useState<TeamPosition | "">("");
+  // 管理者でない（マネージャー）は、管理者の行を変更・削除できない
+  const canTouch = (role: Role) => profile.role === "coach" || role !== "coach";
   const [savingRoster, setSavingRoster] = useState(false);
 
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
@@ -111,7 +107,7 @@ function useMemberManagement(profile: Profile) {
     setLoadingMembers(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, home_location, entry_year, role")
+      .select("id, display_name, home_location, entry_year, role, team_position")
       .eq("team_id", profile.team_id)
       .order("display_name", { ascending: true });
     if (error) {
@@ -128,7 +124,11 @@ function useMemberManagement(profile: Profile) {
     setSavingRoleId(memberId);
     const { error } = await supabase
       .from("profiles")
-      .update({ role: draft.role, home_location: draft.home_location })
+      .update({
+        role: draft.role,
+        team_position: draft.role === "member" ? draft.team_position : null,
+        home_location: draft.home_location,
+      })
       .eq("id", memberId);
 
     if (error) {
@@ -137,7 +137,12 @@ function useMemberManagement(profile: Profile) {
       setMembers((prev) =>
         prev.map((m) =>
           m.id === memberId
-            ? { ...m, role: draft.role, home_location: draft.home_location }
+            ? {
+                ...m,
+                role: draft.role,
+                team_position: draft.role === "member" ? draft.team_position : null,
+                home_location: draft.home_location,
+              }
             : m
         )
       );
@@ -203,7 +208,7 @@ function useMemberManagement(profile: Profile) {
     const { data, error } = await supabase
       .from("member_roster")
       .select(
-        "id, display_name, email, role, home_location, entry_year, claimed_by, token"
+        "id, display_name, email, role, team_position, home_location, entry_year, claimed_by, token"
       )
       .eq("team_id", profile.team_id)
       .is("claimed_by", null)
@@ -226,6 +231,7 @@ function useMemberManagement(profile: Profile) {
       display_name: rosterName.trim(),
       email: rosterEmail.trim() || null,
       role: rosterRole,
+      team_position: rosterRole === "member" && rosterPosition ? rosterPosition : null,
       home_location:
         rosterRole === "coach" || rosterRole === "manager"
           ? null
@@ -244,6 +250,7 @@ function useMemberManagement(profile: Profile) {
       setRosterEmail("");
       setRosterEntryYear("");
       setRosterRole("member");
+      setRosterPosition("");
       setRosterLocation("tama");
       await loadRoster();
     }
@@ -334,6 +341,9 @@ function useMemberManagement(profile: Profile) {
     setRosterEntryYear,
     rosterRole,
     setRosterRole,
+    rosterPosition,
+    setRosterPosition,
+    canTouch,
     rosterEntryYearOptions,
     savingRoster,
     handleAddRoster,
@@ -364,8 +374,8 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
       <div className="flex items-center justify-between gap-2">
         <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
           {s.showRoleLocationEdit
-            ? "役職は主将・副主将・役職なし、拠点は多摩・大塚から選べます。変更したら部員ごとに「保存する」を押してください。"
-            : "部員の役職・所属拠点を確認・編集できます。"}
+            ? "役割（管理者・マネージャー・部員・OB）と、部員なら役職（主将・副主将）、拠点を選べます。変更したら人ごとに「保存する」を押してください。"
+            : "メンバーの役割・役職・所属拠点を確認・編集できます。"}
         </p>
         <button
           onClick={() => {
@@ -401,7 +411,7 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                       : "拠点未設定"}
                   </span>
                   <span className="rounded bg-surface-2 px-2 py-1">
-                    {memberRoleEditLabel[m.role]}
+                    {roleBadge(m.role, m.team_position)}
                   </span>
                 </div>
               </li>
@@ -413,10 +423,24 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
           <ul className="divide-y divide-border-color">
             {s.members.map((m) => {
               const draft = s.draftEdits[m.id];
-              const currentRole = draft?.role ?? m.role;
-              const currentLocation =
-                draft?.home_location ?? m.home_location ?? "tama";
+              const cur: Draft = draft ?? {
+                role: m.role,
+                team_position: m.team_position,
+                home_location: m.home_location ?? "tama",
+              };
               const isDirty = !!draft;
+              const set = (patch: Partial<Draft>) =>
+                s.setDraftEdits((prev) => ({ ...prev, [m.id]: { ...cur, ...patch } }));
+              if (!s.canTouch(m.role)) {
+                return (
+                  <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs">
+                    <span className="font-medium text-foreground">{m.display_name}</span>
+                    <span className="text-neutral-500">{roleBadge(m.role, m.team_position)}（管理者だけが変更できます）</span>
+                  </li>
+                );
+              }
+              const sel =
+                "rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground";
               return (
                 <li
                   key={m.id}
@@ -425,20 +449,13 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                   <span className="font-medium text-foreground">
                     {m.display_name}
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <select
-                      value={currentLocation}
+                      value={cur.home_location}
                       disabled={s.savingRoleId === m.id}
-                      onChange={(e) =>
-                        s.setDraftEdits((prev) => ({
-                          ...prev,
-                          [m.id]: {
-                            role: prev[m.id]?.role ?? m.role,
-                            home_location: e.target.value as Location,
-                          },
-                        }))
-                      }
-                      className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
+                      onChange={(e) => set({ home_location: e.target.value as Location })}
+                      className={sel}
+                      aria-label="拠点"
                     >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
@@ -447,38 +464,34 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                       ))}
                     </select>
                     <select
-                      value={currentRole}
-                      disabled={s.savingRoleId === m.id}
-                      onChange={(e) =>
-                        s.setDraftEdits((prev) => ({
-                          ...prev,
-                          [m.id]: {
-                            role: e.target.value as MemberRoleForEdit,
-                            home_location:
-                              prev[m.id]?.home_location ??
-                              m.home_location ??
-                              "tama",
-                          },
-                        }))
-                      }
-                      className="rounded border border-border-color bg-background px-2 py-1 text-xs text-foreground"
+                      value={cur.role}
+                      disabled={s.savingRoleId === m.id || m.id === profile.id}
+                      onChange={(e) => {
+                        const role = e.target.value as Role;
+                        set({ role, team_position: role === "member" ? cur.team_position : null });
+                      }}
+                      className={sel}
+                      aria-label="役割"
                     >
-                      {(
-                        Object.keys(memberRoleEditLabel) as MemberRoleForEdit[]
-                      )
-                        // リーダーは廃止。副主将は vice_captain に一本化して表示する
-                        // （今その役職の人だけは選択肢に残す）
-                        .filter(
-                          (r) =>
-                            (r !== "leader" && r !== "vice_leader") ||
-                            r === m.role
-                        )
-                        .map((r) => (
+                      {roleChoices(profile.role).map((r) => (
                         <option key={r} value={r}>
-                          {memberRoleEditLabel[r]}
+                          {roleLabel[r]}
                         </option>
                       ))}
                     </select>
+                    {cur.role === "member" && (
+                      <select
+                        value={cur.team_position ?? ""}
+                        disabled={s.savingRoleId === m.id}
+                        onChange={(e) => set({ team_position: (e.target.value || null) as TeamPosition | null })}
+                        className={sel}
+                        aria-label="役職"
+                      >
+                        <option value="">役職なし</option>
+                        <option value="captain">主将</option>
+                        <option value="vice_captain">副主将</option>
+                      </select>
+                    )}
                     <button
                       onClick={() => s.handleSaveMemberEdit(m.id)}
                       disabled={!isDirty || s.savingRoleId === m.id}
@@ -486,13 +499,15 @@ export function MemberRoleEditSection({ profile }: { profile: Profile }) {
                     >
                       保存する
                     </button>
-                    <button
-                      onClick={() => s.handleDeleteMember(m.id, m.display_name)}
-                      disabled={s.savingRoleId === m.id}
-                      className="rounded border border-red-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
-                    >
-                      削除
-                    </button>
+                    {m.id !== profile.id && (
+                      <button
+                        onClick={() => s.handleDeleteMember(m.id, m.display_name)}
+                        disabled={s.savingRoleId === m.id}
+                        className="rounded border border-red-700 px-2.5 py-1 text-[length:calc(11px+var(--fs-add))] font-medium text-red-600 active:bg-red-100 disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:active:bg-red-950/40"
+                      >
+                        削除
+                      </button>
+                    )}
                   </div>
                 </li>
               );
@@ -517,7 +532,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
       )}
       <JoinLinkCard />
       <p className="text-[length:calc(11px+var(--fs-add))] text-neutral-500 dark:text-neutral-400">
-        名簿（部員・管理者・マネージャー）。ここに登録した人だけが、参加リンクから自分の名前を選んで登録できます。
+        名簿（管理者・マネージャー・部員・OB）。ここに登録した人だけが、参加リンクから自分の名前を選んで登録できます。
       </p>
 
       {s.loadingRoster ? (
@@ -537,7 +552,7 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                       {r.display_name}
                     </span>
                     <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
-                      {rosterRoleLabel[r.role]}
+                      {roleBadge(r.role, r.team_position)}
                     </span>
                     {r.home_location && (
                       <span className="rounded bg-surface-2 px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400">
@@ -560,12 +575,14 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
                   <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[length:calc(10px+var(--fs-add))] font-medium text-neutral-600 dark:text-neutral-400">
                     未登録
                   </span>
-                  <button
-                    onClick={() => s.handleDeleteRoster(r.id)}
-                    className="text-red-600 dark:text-red-500"
-                  >
-                    削除
-                  </button>
+                  {s.canTouch(r.role) && (
+                    <button
+                      onClick={() => s.handleDeleteRoster(r.id)}
+                      className="text-red-600 dark:text-red-500"
+                    >
+                      削除
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -595,15 +612,31 @@ export function NewMemberRegistrationSection({ profile }: { profile: Profile }) 
         <div className="grid grid-cols-2 gap-2">
           <select
             value={s.rosterRole}
-            onChange={(e) => s.setRosterRole(e.target.value as RosterRoleChoice)}
+            onChange={(e) => {
+              s.setRosterRole(e.target.value as Role);
+              s.setRosterPosition("");
+            }}
             className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+            aria-label="役割"
           >
-            {(Object.keys(rosterRoleLabel) as RosterRoleChoice[]).map((r) => (
+            {roleChoices(profile.role).map((r) => (
               <option key={r} value={r}>
-                {rosterRoleLabel[r]}
+                {roleChoiceLabel[r]}
               </option>
             ))}
           </select>
+          {s.rosterRole === "member" && (
+            <select
+              value={s.rosterPosition}
+              onChange={(e) => s.setRosterPosition(e.target.value as TeamPosition | "")}
+              className="rounded border border-border-color bg-background px-2 py-1.5 text-xs text-foreground"
+              aria-label="役職"
+            >
+              <option value="">役職なし</option>
+              <option value="captain">主将</option>
+              <option value="vice_captain">副主将</option>
+            </select>
+          )}
           {s.rosterRole !== "coach" && s.rosterRole !== "manager" && (
             <select
               value={s.rosterLocation}

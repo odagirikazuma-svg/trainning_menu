@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/client";
-import { currentGrade, Location, locationLabel, locations, Role } from "../lib/types";
+import { currentGrade, Location, locationLabel, locations, memberRoleText, Role, TeamPosition } from "../lib/types";
 
 export type Profile = {
   id: string;
   team_id: string;
   display_name: string;
   role: Role;
+  // 部員の中の役職（主将・副主将）。表示だけに使う
+  team_position: TeamPosition | null;
   home_location: Location | null;
   entry_year: number | null;
   show_task_list: boolean;
@@ -26,15 +28,6 @@ const roleChoiceLabel: Record<SignupRoleChoice, string> = {
   member: "役職なし",
 };
 
-// member_rosterテーブルのroleカラムの値を表示用に変換する
-const rosterRoleDisplayLabel: Record<string, string> = {
-  coach: "管理者（コーチ）",
-  captain: "主将",
-  vice_captain: "副主将",
-  leader: "役職なし",
-  manager: "マネージャー",
-  member: "役職なし",
-};
 
 // 直近4年分を入学年の候補にする
 const entryYearOptions: number[] = (() => {
@@ -74,6 +67,7 @@ export default function AuthGate({
     | {
         display_name: string;
         role: string;
+        team_position: string | null;
         home_location: Location | null;
         entry_year: number | null;
       }
@@ -96,7 +90,7 @@ export default function AuthGate({
     (async () => {
       const { data } = await supabase
         .from("member_roster")
-        .select("display_name, role, home_location, entry_year")
+        .select("display_name, role, team_position, home_location, entry_year")
         .eq("token", inviteToken)
         .is("claimed_by", null)
         .maybeSingle();
@@ -130,7 +124,7 @@ export default function AuthGate({
     if (!session) return;
     const { data: existing, error: existingError } = await supabase
       .from("profiles")
-      .select("id, team_id, display_name, role, home_location, entry_year, show_task_list, icon_url, created_at")
+      .select("id, team_id, display_name, role, team_position, home_location, entry_year, show_task_list, icon_url, created_at")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -154,7 +148,8 @@ export default function AuthGate({
       id: string;
       team_id: string;
       display_name: string;
-      role: SignupRoleChoice | "coach" | "manager";
+      role: Role;
+      team_position: TeamPosition | null;
       home_location: Location | null;
       entry_year: number | null;
     };
@@ -163,7 +158,7 @@ export default function AuthGate({
     if (inviteToken) {
       const { data: rosterRow } = await supabase
         .from("member_roster")
-        .select("id, team_id, display_name, role, home_location, entry_year")
+        .select("id, team_id, display_name, role, team_position, home_location, entry_year")
         .eq("token", inviteToken)
         .is("claimed_by", null)
         .maybeSingle();
@@ -175,7 +170,7 @@ export default function AuthGate({
     if (!rosterMatch && userEmail) {
       const { data: rosterRow } = await supabase
         .from("member_roster")
-        .select("id, team_id, display_name, role, home_location, entry_year")
+        .select("id, team_id, display_name, role, team_position, home_location, entry_year")
         .ilike("email", userEmail)
         .is("claimed_by", null)
         .maybeSingle();
@@ -212,14 +207,15 @@ export default function AuthGate({
 
     const meta = session.user.user_metadata as Record<string, unknown>;
     const metaCategory = meta?.category as SignupCategory | undefined;
-    const metaRole =
-      metaCategory === "coach"
-        ? "coach"
-        : metaCategory === "manager"
-          ? "manager"
-          : meta?.role_choice === "captain" || meta?.role_choice === "vice_leader"
-            ? (meta.role_choice as SignupRoleChoice)
-            : "member";
+    const metaRole: Role =
+      metaCategory === "coach" ? "coach" : metaCategory === "manager" ? "manager" : "member";
+    // 部員登録で選んだ役職（主将・副主将）は、役割ではなく役職として持つ
+    const metaPosition: TeamPosition | null =
+      metaCategory === "member" && meta?.role_choice === "captain"
+        ? "captain"
+        : metaCategory === "member" && meta?.role_choice === "vice_leader"
+          ? "vice_captain"
+          : null;
     const metaLocation =
       metaCategory === "member"
         ? ((meta?.home_location as Location | undefined) ?? null)
@@ -240,12 +236,13 @@ export default function AuthGate({
           session.user.email?.split("@")[0] ||
           "名無し",
         role: rosterMatch?.role ?? metaRole,
+        team_position: rosterMatch ? rosterMatch.team_position : metaPosition,
         home_location: rosterMatch
           ? rosterMatch.home_location
           : metaLocation,
         entry_year: rosterMatch ? rosterMatch.entry_year : metaEntryYear,
       })
-      .select("id, team_id, display_name, role, home_location, entry_year, show_task_list, icon_url, created_at")
+      .select("id, team_id, display_name, role, team_position, home_location, entry_year, show_task_list, icon_url, created_at")
       .single();
 
     if (error) {
@@ -428,7 +425,9 @@ export default function AuthGate({
               <p>
                 区分:{" "}
                 <span className="font-medium">
-                  {rosterRoleDisplayLabel[rosterPreview.role] ?? "部員"}
+                  {rosterPreview.role === "coach"
+                    ? "管理者（監督・コーチ）"
+                    : memberRoleText(rosterPreview.role, rosterPreview.team_position)}
                 </span>
               </p>
               {rosterPreview.home_location && (
@@ -449,9 +448,11 @@ export default function AuthGate({
                 </p>
               )}
               <p>
-                役職:{" "}
+                役割:{" "}
                 <span className="font-medium">
-                  {rosterRoleDisplayLabel[rosterPreview.role] ?? "役職なし"}
+                  {rosterPreview.role === "coach"
+                    ? "管理者（監督・コーチ）"
+                    : memberRoleText(rosterPreview.role, rosterPreview.team_position)}
                 </span>
               </p>
             </div>

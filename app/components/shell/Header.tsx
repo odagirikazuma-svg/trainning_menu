@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
-import { isStaffRole, Location, locationLabel, locations } from "../../lib/types";
+import { isStaffRole, Location, locationLabel, locations, type Role } from "../../lib/types";
 import { GOALS_CHANGED_EVENT, goalTerms, type GoalTerm } from "../../lib/goals";
 import type { Profile } from "../AuthGate";
 import { loadObligations } from "../../lib/obligations";
@@ -29,7 +29,7 @@ function formatMonthDay(dateStr: string) {
 type MemberRow = { id: string; role: string; home_location: Location | null };
 
 // member_rosterテーブルのroleカラムに入り得る値（coach/manager/obは除外対象なので合わせて絞る）
-type RosterRoleForHeader = "captain" | "vice_captain" | "coach" | "member";
+type RosterRoleForHeader = Role;
 
 type DayCount = { submitted: number; total: number } | null;
 
@@ -237,7 +237,7 @@ function CoachHeaderInfo({ profile }: { profile: Profile }) {
         }[]
       ).map((r) => ({
         id: `pending:${r.id}`,
-        role: r.role === "vice_captain" ? "vice_leader" : r.role,
+        role: r.role,
         home_location: r.home_location,
       }));
 

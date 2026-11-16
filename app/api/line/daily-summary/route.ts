@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     .select("role, team_id")
     .eq("id", userData.user.id)
     .maybeSingle();
-  if (!me || me.role !== "coach") {
+  if (!me || (me.role !== "coach" && me.role !== "manager")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

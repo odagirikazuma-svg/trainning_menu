@@ -42,7 +42,7 @@ type MemberRow = {
 };
 
 // member_rosterテーブルのroleカラムに入り得る値
-type RosterRoleForMember = "captain" | "vice_captain" | "coach" | "member";
+type RosterRoleForMember = Role;
 
 type ScheduleSessionRow = {
   id: string;
@@ -254,7 +254,7 @@ export default function TeamPage({
     ).map((r) => ({
       id: `pending:${r.id}`,
       display_name: r.display_name,
-      role: (r.role === "vice_captain" ? "vice_leader" : r.role) as Role,
+      role: r.role as Role,
       home_location: r.home_location,
       entry_year: r.entry_year,
       isPending: true,

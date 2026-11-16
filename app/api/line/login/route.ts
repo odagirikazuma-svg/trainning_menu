@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       if (!body.rosterId) return NextResponse.json({ error: "名前を選んでください" }, { status: 400 });
       const { data: r } = await admin
         .from("member_roster")
-        .select("id, team_id, display_name, role, home_location, entry_year, claimed_by")
+        .select("id, team_id, display_name, role, team_position, home_location, entry_year, claimed_by")
         .eq("id", body.rosterId)
         .maybeSingle();
       const roster = r as {
@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
         team_id: string;
         display_name: string;
         role: string;
+        team_position: string | null;
         home_location: string | null;
         entry_year: number | null;
         claimed_by: string | null;
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
         team_id: roster.team_id,
         display_name: roster.display_name,
         role,
+        team_position: roster.team_position,
         home_location: roster.home_location,
         entry_year: roster.entry_year,
         line_user_id: line.userId,

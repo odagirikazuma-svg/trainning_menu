@@ -1,4 +1,7 @@
-export type Role = "leader" | "vice_leader" | "captain" | "coach" | "manager" | "member" | "ob";
+// 役割（権限）：管理者（監督・コーチ）・マネージャー・部員・OB の4つ
+export type Role = "coach" | "manager" | "member" | "ob";
+// 部員の中の役職（表示だけ。できることは部員と同じ）
+export type TeamPosition = "captain" | "vice_captain";
 
 export type Location = "tama" | "otsuka";
 
@@ -71,18 +74,24 @@ export function currentGrade(entryYear: number): number {
 }
 
 export const roleLabel: Record<Role, string> = {
-  leader: "部員",
-  vice_leader: "副主将",
-  captain: "主将",
   coach: "管理者",
   manager: "マネージャー",
   member: "部員",
   ob: "OB",
 };
+export const teamPositionLabel: Record<TeamPosition, string> = {
+  captain: "主将",
+  vice_captain: "副主将",
+};
+// 表示用：部員で役職があれば役職名（主将・副主将）、それ以外は役割名
+export function memberRoleText(role: Role | string, position?: TeamPosition | string | null) {
+  if (position === "captain" || position === "vice_captain") return teamPositionLabel[position];
+  return (roleLabel as Record<string, string>)[role] ?? "部員";
+}
 
 // 管理者と同じ画面レイアウト（管理ページ・練習予定表・イベント・設定）を使うロール。
-// マネージャーは管理者と同じ画面を見られるが、セクション登録・イベント作成などの編集はできない
-// （編集できるのは管理者＝coach のみ。isAdminEditor で判定する）。
+// マネージャーは管理者と同じ画面を見られ、メンバー管理・疲労度も扱えるが、セクション登録・
+// イベント作成・係数などの編集はできない（編集できるのは管理者＝coach のみ。isAdminEditor で判定する）。
 export const isStaffRole = (role: Role) => role === "coach" || role === "manager";
 export const isAdminEditor = (role: Role) => role === "coach";
 

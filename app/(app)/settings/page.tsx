@@ -645,7 +645,8 @@ export default function SettingsPage() {
             {/* 管理者・マネージャーはプロフィールアイコンを使わないため、アイコン設定は出さない */}
           </SettingsGroup>
 
-          {canEdit && (
+          {/* 管理設定：メンバー管理・免除・LINEのまとめ通知はマネージャーも。係数・代表種目は管理者だけ */}
+          {isStaff && (
           <>
           <SettingsGroup icon="/icons/nav-admin.png" iconAlt="管理設定" title="管理設定">
             <CollapsibleSection title="メンバー情報の編集">

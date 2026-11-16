@@ -12,7 +12,7 @@ import {
   currentGrade,
   isStaffRole,
   locationLabel,
-  roleLabel,
+  memberRoleText,
   TitleColor,
   TrainingType,
 } from "../../../lib/types";
@@ -85,7 +85,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
         supabase
           .from("profiles")
           .select(
-            "id, team_id, display_name, role, home_location, entry_year, show_task_list, icon_url, created_at"
+            "id, team_id, display_name, role, team_position, home_location, entry_year, show_task_list, icon_url, created_at"
           )
           .eq("id", memberId)
           .maybeSingle(),
@@ -183,7 +183,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
         {/* 基本情報・目標・怪我 */}
         <div className="flex flex-col gap-2 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/70">
           <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
-            <span className="rounded bg-surface-2 px-2 py-1">{roleLabel[member.role]}</span>
+            <span className="rounded bg-surface-2 px-2 py-1">{memberRoleText(member.role, member.team_position)}</span>
             {member.home_location && (
               <span className="rounded bg-surface-2 px-2 py-1">{locationLabel[member.home_location]}</span>
             )}
@@ -289,7 +289,7 @@ function MemberView({ memberId, initialDate }: { memberId: string; initialDate: 
                 profile={member}
                 viewerId={viewer.id}
                 // 疲労度（今の体の状態）は本人と監督・コーチだけ
-                showBodyState={viewer.role === "coach" || viewer.id === member.id}
+                showBodyState={isStaffRole(viewer.role) || viewer.id === member.id}
               />
             )}
           </>

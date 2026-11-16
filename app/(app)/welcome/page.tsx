@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "../../components/shell/AppShell";
 import { createClient } from "../../lib/supabase/client";
-import { currentGrade, locationLabel, roleLabel } from "../../lib/types";
+import { currentGrade, locationLabel, memberRoleText } from "../../lib/types";
 import WeightClassSection from "../../components/WeightClassSection";
 import NextMatchSection from "../../components/NextMatchSection";
 import ClassScheduleSection from "../../components/ClassScheduleSection";
@@ -81,7 +81,7 @@ export default function WelcomePage() {
             <dd className="text-foreground">{profile.entry_year ? `${currentGrade(profile.entry_year)}年` : "未設定"}</dd>
             <dt className="text-neutral-500">役割</dt>
             <dd className="text-foreground">
-              {(roleLabel as Record<string, string>)[profile.role] ?? ((profile.role as string) === "vice_captain" ? "副主将" : "部員")}
+              {memberRoleText(profile.role, profile.team_position)}
             </dd>
           </dl>
           {wrongInfo ? (

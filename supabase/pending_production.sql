@@ -1254,3 +1254,147 @@ alter table class_schedules
   add column if not exists attendance_required boolean not null default true;
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 28. 2026-11-16 役割の整理
+--     役割（権限）は 管理者(coach)・マネージャー(manager)・部員(member)・OB(ob) の4つ。
+--     主将・副主将は「部員の中の役職」（team_position）として表示だけに使う。
+--     ・既存の captain / vice_captain / vice_leader / leader は member＋役職 に移す（データは消さない）
+--     ・マネージャーもメンバー管理（メンバー情報の編集・名簿・免除）ができる。ただし管理者の行は触れない
+--     ・自分で自分の役割・チーム・役職を変えられないようにする
+-- ############################################################
+
+-- 1) 役職の列
+alter table profiles add column if not exists team_position text
+  check (team_position in ('captain', 'vice_captain'));
+alter table member_roster add column if not exists team_position text
+  check (team_position in ('captain', 'vice_captain'));
+
+-- 2) 既存の役割を「部員＋役職」に移す
+update profiles set team_position = 'captain', role = 'member' where role = 'captain';
+update profiles set team_position = 'vice_captain', role = 'member' where role in ('vice_captain', 'vice_leader');
+update profiles set role = 'member' where role = 'leader';
+
+alter table member_roster drop constraint if exists member_roster_role_check;
+update member_roster set team_position = 'captain', role = 'member' where role = 'captain';
+update member_roster set team_position = 'vice_captain', role = 'member' where role in ('vice_captain', 'vice_leader');
+update member_roster set role = 'member' where role = 'leader';
+alter table member_roster add constraint member_roster_role_check
+  check (role in ('coach', 'manager', 'member', 'ob'));
+
+-- 3) 管理者かマネージャーか
+create or replace function is_my_role_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from profiles where id = auth.uid() and role in ('coach', 'manager'))
+$$;
+
+-- 4) メンバー情報の編集：管理者は全員、マネージャーは管理者以外
+drop policy if exists "profiles_update_coach" on profiles;
+drop policy if exists "profiles_update_staff" on profiles;
+create policy "profiles_update_staff" on profiles
+  for update
+  using (team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach')))
+  with check (team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach')));
+
+-- 5) 自分で自分の役割・チーム・役職を変えられないようにする
+--    （サーバー側の処理＝auth.uid() が無いときは対象外）
+create or replace function guard_profile_privileged_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  if new.role is distinct from old.role
+     or new.team_id is distinct from old.team_id
+     or new.team_position is distinct from old.team_position then
+    if is_my_role_coach() then
+      return new;
+    end if;
+    if is_my_role_staff() and old.id <> auth.uid() and old.role <> 'coach' and new.role <> 'coach'
+       and new.team_id = old.team_id then
+      return new;
+    end if;
+    raise exception '役割・役職・チームは管理者（マネージャー）しか変更できません';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_profile_privileged_columns on profiles;
+create trigger guard_profile_privileged_columns
+  before update on profiles
+  for each row execute function guard_profile_privileged_columns();
+
+-- 6) 名簿（事前登録）：管理者とマネージャー（マネージャーは管理者の行を除く）
+drop policy if exists "member_roster_insert_coach" on member_roster;
+drop policy if exists "member_roster_insert_staff" on member_roster;
+create policy "member_roster_insert_staff" on member_roster
+  for insert with check (
+    team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach'))
+  );
+drop policy if exists "member_roster_update_coach" on member_roster;
+drop policy if exists "member_roster_update_staff" on member_roster;
+create policy "member_roster_update_staff" on member_roster
+  for update
+  using (team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach')))
+  with check (team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach')));
+drop policy if exists "member_roster_delete_coach" on member_roster;
+drop policy if exists "member_roster_delete_staff" on member_roster;
+create policy "member_roster_delete_staff" on member_roster
+  for delete using (
+    team_id = get_my_team_id() and (is_my_role_coach() or (is_my_role_staff() and role <> 'coach'))
+  );
+
+-- 7) 免除：チーム内は見られる（日報の義務の判定に使う）。登録・取り消しは管理者とマネージャー
+--    理由メモは管理者とマネージャーだけ
+do $$
+declare r record;
+begin
+  for r in select policyname, tablename from pg_policies
+           where schemaname = 'public' and tablename in ('member_exemptions', 'member_exemption_reasons') loop
+    execute format('drop policy %I on %I', r.policyname, r.tablename);
+  end loop;
+end $$;
+alter table member_exemptions enable row level security;
+alter table member_exemption_reasons enable row level security;
+create policy "member_exemptions_select" on member_exemptions
+  for select using (team_id = get_my_team_id());
+create policy "member_exemptions_write_staff" on member_exemptions
+  for all
+  using (team_id = get_my_team_id() and is_my_role_staff())
+  with check (team_id = get_my_team_id() and is_my_role_staff());
+create policy "member_exemption_reasons_staff" on member_exemption_reasons
+  for all
+  using (
+    is_my_role_staff()
+    and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
+  )
+  with check (
+    is_my_role_staff()
+    and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
+  );
+
+-- 8) チーム全体の試合（今は使っていない）：主将の扱いをやめ、管理者とマネージャーに
+drop policy if exists "matches_insert" on matches;
+create policy "matches_insert" on matches
+  for insert with check (
+    team_id = get_my_team_id()
+    and (member_id = auth.uid() or (member_id is null and is_my_role_staff()))
+  );
+drop policy if exists "matches_delete" on matches;
+create policy "matches_delete" on matches
+  for delete using (
+    member_id = auth.uid()
+    or (member_id is null and team_id = get_my_team_id() and is_my_role_staff())
+  );
+
+notify pgrst, 'reload schema';

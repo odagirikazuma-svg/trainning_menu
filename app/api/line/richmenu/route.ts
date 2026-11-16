@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const { data: userData } = await supabase.auth.getUser(token);
   if (!userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { data: me } = await supabase.from("profiles").select("role").eq("id", userData.user.id).maybeSingle();
-  if (!me || me.role !== "coach") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!me || (me.role !== "coach" && me.role !== "manager")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!lineConfigured()) return NextResponse.json({ error: "LINEの鍵が設定されていません" }, { status: 500 });
 
   // LINEの中でアプリを開き、LINEでログインしてから各ページへ移動する

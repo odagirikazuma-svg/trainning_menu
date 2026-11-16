@@ -34,20 +34,24 @@ export async function POST(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // 呼び出し元がコーチであることを確認する
+  // 呼び出し元が管理者かマネージャーであることを確認する（マネージャーは管理者を削除できない）
   const { data: callerProfile, error: callerError } = await adminClient
     .from("profiles")
     .select("role, team_id")
     .eq("id", userData.user.id)
     .maybeSingle();
-  if (callerError || !callerProfile || callerProfile.role !== "coach") {
+  if (
+    callerError ||
+    !callerProfile ||
+    (callerProfile.role !== "coach" && callerProfile.role !== "manager")
+  ) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   // 削除対象が同じチームであることを確認する
   const { data: targetProfile, error: targetError } = await adminClient
     .from("profiles")
-    .select("team_id")
+    .select("team_id, role")
     .eq("id", memberId)
     .maybeSingle();
   if (
@@ -56,6 +60,9 @@ export async function POST(request: NextRequest) {
     targetProfile.team_id !== callerProfile.team_id
   ) {
     return NextResponse.json({ error: "member not found" }, { status: 404 });
+  }
+  if (callerProfile.role !== "coach" && targetProfile.role === "coach") {
+    return NextResponse.json({ error: "管理者を削除できるのは管理者だけです" }, { status: 403 });
   }
 
   // auth.usersを削除すると、profilesほか関連テーブルもcascadeで削除される

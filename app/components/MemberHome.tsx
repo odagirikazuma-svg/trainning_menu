@@ -289,8 +289,8 @@ export default function MemberHome({
     if (typeof window === "undefined") return "daily";
     const tab = new URLSearchParams(window.location.search).get("tab");
     const q = new URLSearchParams(window.location.search);
-    if (q.get("absence") === "1") return "request";
-    return tab === "review" ? "training" : tab === "injury" || tab === "request" ? "request" : "daily";
+    if (q.get("absence") === "1" && !isOb) return "request";
+    return tab === "review" ? "training" : (tab === "injury" || tab === "request") && !isOb ? "request" : "daily";
   });
   // 「申請」タブで休みを申請・確認する日（LINEの「休み申請」からは明日）
   const [requestDate, setRequestDate] = useState<string>(() => {
@@ -939,13 +939,14 @@ export default function MemberHome({
           items={[
             { value: "daily", label: "日報", badge: pendingDailyCount },
             { value: "training", label: "振り返り" },
-            { value: "request", label: "申請" },
+            // OBは休みの申請・怪我の記録をしないので「申請」タブを出さない
+            ...(isOb ? [] : [{ value: "request" as const, label: "申請" }]),
           ]}
           active={homeSubTab}
           onChange={setHomeSubTab}
         />
       ) : null,
-    [isManager, homeSubTab, pendingDailyCount]
+    [isManager, isOb, homeSubTab, pendingDailyCount]
   );
   useSubNav(homeSubNav);
 
@@ -1226,12 +1227,12 @@ export default function MemberHome({
             titleColors={titleColorByType}
             onSubmitted={handleDailySubmitted}
             onTitlesChanged={loadTitleOptions}
-            onOpenRequest={openRequest}
+            onOpenRequest={isOb ? undefined : openRequest}
           />
         </section>
       )}
 
-      {homeSubTab === "request" && (
+      {homeSubTab === "request" && !isOb && (
         <AbsenceRequestTab
           profile={profile}
           date={requestDate}
@@ -1241,7 +1242,7 @@ export default function MemberHome({
         />
       )}
 
-      {homeSubTab === "request" && (
+      {homeSubTab === "request" && !isOb && (
       <section className="flex flex-col gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
