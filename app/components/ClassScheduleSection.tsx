@@ -160,10 +160,10 @@ export default function ClassScheduleSection() {
         </p>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-center text-xs">
+        <table className="w-full table-fixed border-collapse text-center text-xs">
           <thead>
             <tr>
-              <th className="w-16" />
+              <th className="w-14" />
               {WEEKDAYS.map((w) => (
                 <th key={w.no} className="py-1 font-semibold">
                   {w.label}
