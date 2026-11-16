@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { jstDate } from "../lib/obligations";
-import { PERIODS, WEEKDAYS, type TeamTerm } from "../lib/classSchedule";
+import { PERIODS, WEEKDAYS, type ClassMode, type TeamTerm } from "../lib/classSchedule";
 import { useProfile } from "./shell/AppShell";
 import { CLASS_SCHEDULE_CHANGED_EVENT } from "./shell/useClassScheduleTask";
 
@@ -28,8 +28,9 @@ export default function ClassScheduleSection() {
   const supabase = createClient();
   const [terms, setTerms] = useState<TeamTerm[] | null>(null);
   const [termId, setTermId] = useState<string | null>(null);
-  const [cells, setCells] = useState<Set<string>>(new Set());
-  const [saved, setSaved] = useState<Set<string>>(new Set());
+  // "曜日-時限" → live（出席必須：練習に出られない）／vod（オンデマンド等：練習に出られる）
+  const [cells, setCells] = useState<Map<string, ClassMode>>(new Map());
+  const [saved, setSaved] = useState<Map<string, ClassMode>>(new Map());
   const [registered, setRegistered] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -60,15 +61,19 @@ export default function ClassScheduleSection() {
   useEffect(() => {
     if (!termId) return;
     setMsg(null);
-    supabase
-      .from("class_schedules")
-      .select("weekday, period")
-      .eq("author_id", profile.id)
-      .eq("term_id", termId)
+    const q = (cols: string) =>
+      supabase.from("class_schedules").select(cols).eq("author_id", profile.id).eq("term_id", termId);
+    // mode 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
+    q("weekday, period, mode")
+      .then((r) => (r.error ? q("weekday, period") : r))
       .then(({ data }) => {
-        const s = new Set(((data ?? []) as { weekday: number; period: number }[]).map((r) => `${r.weekday}-${r.period}`));
+        const s = new Map(
+          ((data ?? []) as unknown as { weekday: number; period: number; mode?: ClassMode }[]).map(
+            (r) => [`${r.weekday}-${r.period}`, r.mode ?? "live"] as [string, ClassMode]
+          )
+        );
         setCells(s);
-        setSaved(new Set(s));
+        setSaved(new Map(s));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termId]);
@@ -83,13 +88,18 @@ export default function ClassScheduleSection() {
     );
   const term = termList.find((x) => x.id === termId) ?? termList[0];
   const breaks = terms.filter((x) => x.kind === "break" && x.start_date <= term.end_date && x.end_date >= term.start_date);
-  const dirty = cells.size !== saved.size || [...cells].some((c) => !saved.has(c));
+  const dirty = cells.size !== saved.size || [...cells].some(([k, v]) => saved.get(k) !== v);
+  const liveCount = [...cells.values()].filter((v) => v === "live").length;
+  const vodCount = cells.size - liveCount;
 
+  // タップするたびに 空き → 授業（出席必須）→ オンデマンド（練習OK）→ 空き
   function toggle(k: string) {
     setCells((prev) => {
-      const n = new Set(prev);
-      if (n.has(k)) n.delete(k);
-      else n.add(k);
+      const n = new Map(prev);
+      const cur = n.get(k);
+      if (!cur) n.set(k, "live");
+      else if (cur === "live") n.set(k, "vod");
+      else n.delete(k);
       return n;
     });
   }
@@ -100,9 +110,9 @@ export default function ClassScheduleSection() {
     const del = await supabase.from("class_schedules").delete().eq("author_id", profile.id).eq("term_id", term.id);
     let error = del.error;
     if (!error && cells.size > 0) {
-      const rows = [...cells].map((k) => {
+      const rows = [...cells].map(([k, mode]) => {
         const [w, p] = k.split("-").map(Number);
-        return { team_id: profile.team_id, author_id: profile.id, term_id: term.id, weekday: w, period: p };
+        return { team_id: profile.team_id, author_id: profile.id, term_id: term.id, weekday: w, period: p, mode };
       });
       error = (await supabase.from("class_schedules").insert(rows)).error;
     }
@@ -117,19 +127,22 @@ export default function ClassScheduleSection() {
       setMsg({ ok: false, text: `保存できませんでした：${error.message}` });
       return;
     }
-    setSaved(new Set(cells));
+    setSaved(new Map(cells));
     setRegistered((prev) => new Set(prev).add(term.id));
     window.dispatchEvent(new Event(CLASS_SCHEDULE_CHANGED_EVENT));
     setMsg({
       ok: true,
-      text: cells.size === 0 ? `${term.name}は「授業なし」で登録しました。` : `${term.name}の時間割（${cells.size}コマ）を保存しました。`,
+      text:
+        cells.size === 0
+          ? `${term.name}は「授業なし」で登録しました。`
+          : `${term.name}の時間割（出席必須${liveCount}コマ${vodCount > 0 ? `・オンデマンド${vodCount}コマ` : ""}）を保存しました。`,
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-neutral-600 dark:text-neutral-400">
-        授業のあるコマをタップしてください。授業と重なる練習は、休みの申請なしで自動で欠席（代替メニューの記録が必要）・遅れて参加・早めに抜けるになります。休講・補講・試験など時間割どおりでない日は、ふだんの休みの申請で対応してください。
+        授業のあるコマをタップしてください。タップするたびに「授業（出席必須）」→「オンデマンド」→「空き」と切り替わります。出席必須の授業と重なる練習は、休みの申請なしで自動で欠席（代替メニューの記録が必要）・遅れて参加・早めに抜けるになります。オンデマンド（VOD）など、その時間に練習に出られる授業は練習には影響しません。休講・補講・試験など時間割どおりでない日は、ふだんの休みの申請で対応してください。
       </p>
       {termList.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
@@ -182,7 +195,8 @@ export default function ClassScheduleSection() {
                 </th>
                 {WEEKDAYS.map((w) => {
                   const k = `${w.no}-${p.no}`;
-                  const on = cells.has(k);
+                  const mode = cells.get(k);
+                  const on = !!mode;
                   return (
                     <td key={k} className="p-0.5">
                       <button
@@ -190,13 +204,15 @@ export default function ClassScheduleSection() {
                         onClick={() => toggle(k)}
                         aria-pressed={on}
                         aria-label={`${w.label}曜${p.no}限`}
-                        className={`h-10 w-full rounded-md border text-[length:calc(10px+var(--fs-add))] font-bold ${
-                          on
+                        className={`h-10 w-full whitespace-pre-line rounded-md border text-[length:calc(10px+var(--fs-add))] font-bold leading-tight ${
+                          mode === "live"
                             ? "border-sky-600 bg-sky-600 text-white"
-                            : "border-neutral-200 bg-white text-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-600"
+                            : mode === "vod"
+                              ? "border-dashed border-sky-500 bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                              : "border-neutral-200 bg-white text-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-600"
                         }`}
                       >
-                        {on ? "授業" : "—"}
+                        {mode === "live" ? "授業" : mode === "vod" ? "オンデ\nマンド" : "—"}
                       </button>
                     </td>
                   );
@@ -206,6 +222,16 @@ export default function ClassScheduleSection() {
           </tbody>
         </table>
       </div>
+      <p className="flex flex-wrap gap-x-3 gap-y-1 text-[length:calc(10px+var(--fs-add))] text-neutral-600 dark:text-neutral-400">
+        <span>
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sky-600 align-middle" />
+          授業＝出席必須（練習に出られない）
+        </span>
+        <span>
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-sky-500 bg-sky-50 align-middle" />
+          オンデマンド＝その時間も練習に出られる
+        </span>
+      </p>
       <button
         type="button"
         disabled={busy || (!dirty && registered.has(term.id))}

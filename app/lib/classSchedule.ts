@@ -25,6 +25,8 @@ export const WEEKDAYS: { no: number; label: string }[] = [
 // 練習の長さ（分）。終わりの時刻がないので、種類ごとの標準の長さで重なりを見る
 export const PRACTICE_MINUTES: Record<string, number> = { mat: 120, running: 60, weight: 90 };
 
+// live：出席必須（練習に出られない）／vod：オンデマンドなど、その時間に練習に出られる
+export type ClassMode = "live" | "vod";
 export type TeamTerm = { id: string; kind: "term" | "break"; name: string; start_date: string; end_date: string };
 export type ClassImpact = { status: "absent" | "late" | "early" | "late_early"; periods: number[] };
 
@@ -110,14 +112,23 @@ export async function loadClassLookup(
   const terms = termRows as TeamTerm[];
   const termIds = terms.filter((t) => t.kind === "term").map((t) => t.id);
   if (termIds.length === 0) return none;
-  const rows: { author_id: string; term_id: string; weekday: number; period: number }[] = [];
+  const rows: { author_id: string; term_id: string; weekday: number; period: number; mode?: ClassMode }[] = [];
   for (let i = 0; i < memberIds.length; i += 150) {
-    const { data } = await supabase
+    // オンデマンド（mode=vod）の授業は練習に影響しないので除く
+    const ids = memberIds.slice(i, i + 150);
+    let { data, error }: { data: unknown[] | null; error: unknown } = await supabase
       .from("class_schedules")
-      .select("author_id, term_id, weekday, period")
+      .select("author_id, term_id, weekday, period, mode")
       .in("term_id", termIds)
-      .in("author_id", memberIds.slice(i, i + 150));
-    rows.push(...((data ?? []) as typeof rows));
+      .in("author_id", ids);
+    // mode 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
+    if (error)
+      ({ data, error } = await supabase
+        .from("class_schedules")
+        .select("author_id, term_id, weekday, period")
+        .in("term_id", termIds)
+        .in("author_id", ids));
+    rows.push(...((data ?? []) as typeof rows).filter((r) => (r.mode ?? "live") === "live"));
   }
   const map = new Map<string, number[]>();
   for (const r of rows) {

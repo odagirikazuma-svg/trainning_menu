@@ -2162,3 +2162,14 @@ create policy "class_term_registrations_write_self" on class_term_registrations
   with check (author_id = auth.uid() and team_id = get_my_team_id());
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 27. 2026-11-16 授業の時間割：出席必須かどうか
+--     live＝出席必須（練習に出られない）／vod＝オンデマンドなど（練習に出られる・練習に影響しない）
+-- ############################################################
+alter table class_schedules
+  add column if not exists mode text not null default 'live'
+  check (mode in ('live', 'vod'));
+
+notify pgrst, 'reload schema';
