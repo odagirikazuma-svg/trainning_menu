@@ -79,7 +79,9 @@ export default function WelcomePage() {
             <dt className="text-neutral-500">学年</dt>
             <dd className="text-foreground">{profile.entry_year ? `${currentGrade(profile.entry_year)}年` : "未設定"}</dd>
             <dt className="text-neutral-500">役割</dt>
-            <dd className="text-foreground">{roleLabel[profile.role]}</dd>
+            <dd className="text-foreground">
+              {(roleLabel as Record<string, string>)[profile.role] ?? (profile.role === "vice_captain" ? "副主将" : "部員")}
+            </dd>
           </dl>
           {wrongInfo ? (
             <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
