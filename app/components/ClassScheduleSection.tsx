@@ -63,13 +63,13 @@ export default function ClassScheduleSection() {
     setMsg(null);
     const q = (cols: string) =>
       supabase.from("class_schedules").select(cols).eq("author_id", profile.id).eq("term_id", termId);
-    // mode 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
-    q("weekday, period, mode")
+    // attendance_required 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
+    q("weekday, period, attendance_required")
       .then((r) => (r.error ? q("weekday, period") : r))
       .then(({ data }) => {
         const s = new Map(
-          ((data ?? []) as unknown as { weekday: number; period: number; mode?: ClassMode }[]).map(
-            (r) => [`${r.weekday}-${r.period}`, r.mode ?? "live"] as [string, ClassMode]
+          ((data ?? []) as unknown as { weekday: number; period: number; attendance_required?: boolean }[]).map(
+            (r) => [`${r.weekday}-${r.period}`, r.attendance_required === false ? "vod" : "live"] as [string, ClassMode]
           )
         );
         setCells(s);
@@ -115,7 +115,14 @@ export default function ClassScheduleSection() {
     if (!error && cells.size > 0) {
       const rows = [...cells].map(([k, mode]) => {
         const [w, p] = k.split("-").map(Number);
-        return { team_id: profile.team_id, author_id: profile.id, term_id: term.id, weekday: w, period: p, mode };
+        return {
+          team_id: profile.team_id,
+          author_id: profile.id,
+          term_id: term.id,
+          weekday: w,
+          period: p,
+          attendance_required: mode === "live",
+        };
       });
       error = (await supabase.from("class_schedules").insert(rows)).error;
     }

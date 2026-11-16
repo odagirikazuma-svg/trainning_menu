@@ -112,23 +112,23 @@ export async function loadClassLookup(
   const terms = termRows as TeamTerm[];
   const termIds = terms.filter((t) => t.kind === "term").map((t) => t.id);
   if (termIds.length === 0) return none;
-  const rows: { author_id: string; term_id: string; weekday: number; period: number; mode?: ClassMode }[] = [];
+  const rows: { author_id: string; term_id: string; weekday: number; period: number; attendance_required?: boolean }[] = [];
   for (let i = 0; i < memberIds.length; i += 150) {
-    // オンデマンド（mode=vod）の授業は練習に影響しないので除く
+    // 出席必須でない授業（オンデマンドなど）は練習に影響しないので除く
     const ids = memberIds.slice(i, i + 150);
     let { data, error }: { data: unknown[] | null; error: unknown } = await supabase
       .from("class_schedules")
-      .select("author_id, term_id, weekday, period, mode")
+      .select("author_id, term_id, weekday, period, attendance_required")
       .in("term_id", termIds)
       .in("author_id", ids);
-    // mode 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
+    // attendance_required 列がまだ無いDB（SQL 27 の実行前）は、全部「出席必須」として読む
     if (error)
       ({ data, error } = await supabase
         .from("class_schedules")
         .select("author_id, term_id, weekday, period")
         .in("term_id", termIds)
         .in("author_id", ids));
-    rows.push(...((data ?? []) as typeof rows).filter((r) => (r.mode ?? "live") === "live"));
+    rows.push(...((data ?? []) as typeof rows).filter((r) => r.attendance_required !== false));
   }
   const map = new Map<string, number[]>();
   for (const r of rows) {

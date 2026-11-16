@@ -2166,10 +2166,9 @@ notify pgrst, 'reload schema';
 
 -- ############################################################
 -- 27. 2026-11-16 授業の時間割：出席必須かどうか
---     live＝出席必須（練習に出られない）／vod＝出席必須でない（オンデマンドなど。練習に参加・練習に影響しない）
+--     true＝出席必須（練習に出られない）／false＝出席必須でない授業（オンデマンドなど。その時間も練習に参加）
 -- ############################################################
 alter table class_schedules
-  add column if not exists mode text not null default 'live'
-  check (mode in ('live', 'vod'));
+  add column if not exists attendance_required boolean not null default true;
 
 notify pgrst, 'reload schema';
