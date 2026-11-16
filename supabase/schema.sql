@@ -2190,14 +2190,14 @@ alter table member_roster add column if not exists team_position text
   check (team_position in ('captain', 'vice_captain'));
 
 -- 2) 既存の役割を「部員＋役職」に移す
-update profiles set team_position = 'captain', role = 'member' where role = 'captain';
-update profiles set team_position = 'vice_captain', role = 'member' where role in ('vice_captain', 'vice_leader');
-update profiles set role = 'member' where role = 'leader';
+update profiles set team_position = 'captain', role = 'member' where role::text = 'captain';
+update profiles set team_position = 'vice_captain', role = 'member' where role::text in ('vice_captain', 'vice_leader');
+update profiles set role = 'member' where role::text = 'leader';
 
 alter table member_roster drop constraint if exists member_roster_role_check;
-update member_roster set team_position = 'captain', role = 'member' where role = 'captain';
-update member_roster set team_position = 'vice_captain', role = 'member' where role in ('vice_captain', 'vice_leader');
-update member_roster set role = 'member' where role = 'leader';
+update member_roster set team_position = 'captain', role = 'member' where role::text = 'captain';
+update member_roster set team_position = 'vice_captain', role = 'member' where role::text in ('vice_captain', 'vice_leader');
+update member_roster set role = 'member' where role::text = 'leader';
 alter table member_roster add constraint member_roster_role_check
   check (role in ('coach', 'manager', 'member', 'ob'));
 
@@ -2277,29 +2277,34 @@ create policy "member_roster_delete_staff" on member_roster
 do $$
 declare r record;
 begin
+  -- 免除の表が無いDBでは何もしない
+  if to_regclass('public.member_exemptions') is null or to_regclass('public.member_exemption_reasons') is null then
+    raise notice 'member_exemptions が無いので免除の権限はスキップ';
+    return;
+  end if;
   for r in select policyname, tablename from pg_policies
            where schemaname = 'public' and tablename in ('member_exemptions', 'member_exemption_reasons') loop
     execute format('drop policy %I on %I', r.policyname, r.tablename);
   end loop;
+  execute 'alter table member_exemptions enable row level security';
+  execute 'alter table member_exemption_reasons enable row level security';
+  execute 'create policy "member_exemptions_select" on member_exemptions
+    for select using (team_id = get_my_team_id())';
+  execute 'create policy "member_exemptions_write_staff" on member_exemptions
+    for all
+    using (team_id = get_my_team_id() and is_my_role_staff())
+    with check (team_id = get_my_team_id() and is_my_role_staff())';
+  execute 'create policy "member_exemption_reasons_staff" on member_exemption_reasons
+    for all
+    using (
+      is_my_role_staff()
+      and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
+    )
+    with check (
+      is_my_role_staff()
+      and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
+    )';
 end $$;
-alter table member_exemptions enable row level security;
-alter table member_exemption_reasons enable row level security;
-create policy "member_exemptions_select" on member_exemptions
-  for select using (team_id = get_my_team_id());
-create policy "member_exemptions_write_staff" on member_exemptions
-  for all
-  using (team_id = get_my_team_id() and is_my_role_staff())
-  with check (team_id = get_my_team_id() and is_my_role_staff());
-create policy "member_exemption_reasons_staff" on member_exemption_reasons
-  for all
-  using (
-    is_my_role_staff()
-    and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
-  )
-  with check (
-    is_my_role_staff()
-    and exists (select 1 from member_exemptions e where e.id = exemption_id and e.team_id = get_my_team_id())
-  );
 
 -- 8) チーム全体の試合（今は使っていない）：主将の扱いをやめ、管理者とマネージャーに
 drop policy if exists "matches_insert" on matches;
