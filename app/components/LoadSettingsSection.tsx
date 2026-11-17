@@ -87,6 +87,7 @@ export default function LoadSettingsSection() {
         管理ページ「体調」と、部員本人の振り返りの疲労度に使います。0＝疲れなしで、練習するほど積み上がります。
         {updatedAt && `（最終更新 ${new Date(updatedAt).toLocaleDateString("ja-JP")}）`}
         <span className="ml-1">計算式 {CALC_VERSION}</span>
+        <span className="ml-1">（スパー・打ち込み・ランの距離・ウェイト以外の係数は 11/17 の仮の値）</span>
       </p>
       <button
         type="button"
@@ -105,21 +106,25 @@ export default function LoadSettingsSection() {
           </div>
           {g === "ラン" && (
             <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">
-              階級（kg級）で軽量級・中量級・重量級を分けます。階級が未登録の人は中量級で計算します。
+              階級（kg級）で軽量級・中量級・重量級を分けます。階級が未登録の人は中量級で計算します。強度はメニューで選んだもの（トレ報はタイムから出したペース）で倍率を掛けます。
             </span>
           )}
           {g === "ウェイト" && (
-            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">アップのセットは0です。</span>
+            <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">
+              種目名で分けます。下半身・全身の多関節＝スクワット・デッドリフト・クリーン・ランジなど、補助・単関節＝カール・エクステンション・レイズ・腹筋など。アップのセットは0です。
+            </span>
           )}
         </div>
       ))}
-      <div className="flex flex-col gap-1.5">
-        <span className={groupTitle}>まだ決まっていない種類（1分あたり）</span>
-        <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">空欄のあいだは計算に入れません。決まったら数字を入れてください。</span>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {pendingCategories.map((c) => field(c.key, c.label, "1分あたり", "未定"))}
+      {pendingCategories.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className={groupTitle}>まだ決まっていない種類（1分あたり）</span>
+          <span className="text-[length:calc(10px+var(--fs-add))] text-neutral-400">空欄のあいだは計算に入れません。決まったら数字を入れてください。</span>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {pendingCategories.map((c) => field(c.key, c.label, "1分あたり", "未定"))}
+          </div>
         </div>
-      </div>
+      )}
       <label className="flex items-center justify-between gap-2 border-t border-neutral-200 pt-2 text-xs text-neutral-700 dark:border-neutral-800 dark:text-neutral-300">
         <span>
           前日までの蓄積が翌日に残る割合

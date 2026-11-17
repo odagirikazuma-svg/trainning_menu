@@ -17,6 +17,13 @@ export type MenuFormat = "all" | "rotation" | "free";
 export type AmountType = "timed" | "total" | "reps" | "distance";
 export type SetsBasis = "total" | "per_person" | "unknown";
 export type TargetGroup = "all" | "regular" | "heavy";
+// ラン・ダッシュの強度（疲労度の計算で係数に掛ける。空欄はふつう）
+export type RunIntensity = "easy" | "moderate" | "hard";
+export const runIntensityLabel: Record<RunIntensity, string> = {
+  easy: "ジョグ",
+  moderate: "ふつう",
+  hard: "高強度",
+};
 
 export const targetGroupLabel: Record<TargetGroup, string> = {
   all: "全員",
@@ -41,6 +48,8 @@ export type MenuItemDraft = {
   group_size: number | null;
   active_per_group: number | null;
   rest_seconds: number | null;
+  // ラン・ダッシュの強度（null＝ふつう）
+  intensity: RunIntensity | null;
   note: string;
 };
 
@@ -123,6 +132,7 @@ export function emptyItem(category: MenuCategory = "other"): MenuItemDraft {
     group_size: null,
     active_per_group: null,
     rest_seconds: null,
+    intensity: null,
     note: "",
   };
 }
@@ -142,6 +152,7 @@ const ITEM_COLUMNS = [
   "group_size",
   "active_per_group",
   "rest_seconds",
+  "intensity",
   "note",
 ] as const;
 
@@ -188,6 +199,7 @@ export function toRow(d: MenuItemDraft, withKey = false) {
     r.group_size = null;
     r.active_per_group = null;
   }
+  if (d.category !== "run" && d.category !== "sprint") r.intensity = null;
   return r;
 }
 
@@ -224,7 +236,12 @@ export function describeAmount(d: MenuItemDraft, showUnconfirmed = false) {
       ? `${d.group_size}人組${d.active_per_group ? `・${d.active_per_group}人ずつ実施` : ""}`
       : "";
   const target = d.target_group !== "all" ? `［${targetGroupLabel[d.target_group]}］` : "";
-  return [target, group, main].filter(Boolean).join(" ");
+  // ラン・ダッシュの強度は、ふつう以外のときだけ書く
+  const pace =
+    (d.category === "run" || d.category === "sprint") && d.intensity && d.intensity !== "moderate"
+      ? `（${runIntensityLabel[d.intensity]}）`
+      : "";
+  return [target, group, main + pace].filter(Boolean).join(" ");
 }
 
 // 計算の前に確認が必要な点（本数の数え方が未確認など）

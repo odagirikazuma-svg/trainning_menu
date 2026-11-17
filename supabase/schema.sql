@@ -2321,3 +2321,12 @@ create policy "matches_delete" on matches
   );
 
 notify pgrst, 'reload schema';
+
+
+-- ############################################################
+-- 29. 2026-11-17 疲労度：ラン・ダッシュの強度（ジョグ・ふつう・高強度）
+-- ############################################################
+alter table menu_items add column if not exists intensity text
+  check (intensity in ('easy', 'moderate', 'hard'));
+
+notify pgrst, 'reload schema';

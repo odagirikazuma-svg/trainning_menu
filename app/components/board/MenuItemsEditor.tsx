@@ -17,6 +17,8 @@ import {
   type MenuCategory,
   type MenuFormat,
   type MenuItemDraft,
+  runIntensityLabel,
+  type RunIntensity,
 } from "../../lib/menuItems";
 
 // メニュー項目の入力欄。項目は親が持ち、変更は onChange で返す。
@@ -300,6 +302,27 @@ export default function MenuItemsEditor({
                     </>
                   )}
                 </div>
+                {(it.category === "run" || it.category === "sprint") && (
+                  <div className="flex flex-col gap-1">
+                    <span className={smallLabel}>強度（ペース）</span>
+                    <div className="flex gap-1 rounded-lg bg-neutral-100 p-1 text-xs dark:bg-neutral-800">
+                      {(Object.keys(runIntensityLabel) as RunIntensity[]).map((x) => (
+                        <button
+                          key={x}
+                          type="button"
+                          onClick={() => update(it.key, { intensity: x })}
+                          className={`flex-1 rounded-md py-1.5 font-medium ${
+                            (it.intensity ?? "moderate") === x
+                              ? "bg-white text-neutral-900 shadow dark:bg-neutral-950 dark:text-neutral-100"
+                              : "text-neutral-500"
+                          }`}
+                        >
+                          {runIntensityLabel[x]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {it.amount_type === "timed" && (
                   <span className={smallLabel}>
                     例：「3分スパー10本」は 1本3分×10本。「3分×2×10」とは数えません。
