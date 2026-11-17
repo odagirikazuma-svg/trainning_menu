@@ -22,7 +22,6 @@ import { fatigueColor } from "./FatigueSelector";
 import AbsenceReviewSection from "./AbsenceReviewSection";
 import PracticeCheckSection from "./PracticeCheckSection";
 import { loadObligations } from "../lib/obligations";
-import SessionAttendanceCard from "./SessionAttendanceCard";
 
 // 日報／報告（休みの報告・練習の確認事項）／体調（疲労度・怪我の管理）
 // 練習の確認事項と疲労度（負荷の試算）は監督（coach）だけに出す
@@ -909,12 +908,6 @@ export default function CoachAdminPage({
           <p className="rounded bg-red-950/40 p-2 text-xs text-red-400">
             {errorMsg}
           </p>
-        )}
-
-        {adminSubTab === "reports" && (
-          <div className="mb-6">
-            <SessionAttendanceCard teamId={profile.team_id} />
-          </div>
         )}
 
         {adminSubTab === "reports" && (

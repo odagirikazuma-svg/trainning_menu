@@ -21,6 +21,7 @@ import { useSubNav } from "./shell/AppShell";
 import SubTabBar from "./shell/SubTabBar";
 import ScheduleEditForm, { type ScheduleDayPrefill } from "./ScheduleEditForm";
 import { TeamTermsSection } from "./ClassScheduleSection";
+import SessionAttendanceCard from "./SessionAttendanceCard";
 import ParticipantsPanel from "./board/ParticipantsPanel";
 import StructuredMenuCard from "./board/StructuredMenuCard";
 import TemplatePicker from "./board/TemplatePicker";
@@ -832,6 +833,10 @@ export default function TrainingBoardSupabase({
             )}
           </section>
         )}
+        {/* セクションごとの参加人数（休みの申請・授業の時間割から）。全員が見られる */}
+        <div className="mb-3">
+          <SessionAttendanceCard teamId={profile.team_id} date={viewDate} location={activeLocation} />
+        </div>
         {/* メニュー一覧（横スクロール、スマホ向け） */}
         <div className="flex flex-col gap-2">
           {showNewForm && canCreateMenu(profile.role) && (

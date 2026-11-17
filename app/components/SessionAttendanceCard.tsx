@@ -1,14 +1,14 @@
 "use client";
 
-// 管理ページ：日ごと・セクションごとの参加人数
+// 練習予定表：表示中の日・拠点の、セクションごとの参加人数
 // 休みの申請（申請中・報告済み）と、授業の時間割（授業で休み／遅れて参加／早めに抜ける）から数える
+// 休みの申請は理由を伏せた team_absences 関数で読む（部員が見ても同じ人数になる）
 
 import { useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { absenceCoversMat, sessionKey } from "../lib/absence";
 import { classImpact, impactShort, loadClassLookup, periodsText, type ClassImpact } from "../lib/classSchedule";
 import { currentGrade, locationLabel, type Location } from "../lib/types";
-import { jstDate } from "../lib/obligations";
 
 type Member = { id: string; display_name: string; home_location: Location | null; entry_year: number | null };
 type Session = {
@@ -28,14 +28,18 @@ type Row = {
 
 const typeLabel = { mat: "マット", running: "ラン", weight: "ウェイト" } as const;
 
-function shift(d: string, n: number) {
-  const [y, m, dd] = d.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10);
-}
 
-export default function SessionAttendanceCard({ teamId }: { teamId: string }) {
+export default function SessionAttendanceCard({
+  teamId,
+  date,
+  location,
+}: {
+  teamId: string;
+  date: string;
+  // 表示中の拠点（合同練習はどちらの拠点でも出す）
+  location: Location;
+}) {
   const supabase = createClient();
-  const [date, setDate] = useState(() => jstDate(new Date()));
   const [rows, setRows] = useState<Row[] | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -54,19 +58,17 @@ export default function SessionAttendanceCard({ teamId }: { teamId: string }) {
           .select("location, is_off, sessions:schedule_sessions(session_no, session_type, start_time, is_joint, joint_location)")
           .eq("team_id", teamId)
           .eq("date", date),
-        supabase
-          .from("absence_requests")
-          .select("author_id, session_keys")
-          .eq("team_id", teamId)
-          .eq("date", date)
-          .in("status", ["pending", "approved"]),
+        supabase.rpc("team_absences", { p_date: date }),
       ]);
       const members = ((mRes.data ?? []) as Member[]).sort(
         (a, b) => (a.entry_year ?? 9999) - (b.entry_year ?? 9999) || a.display_name.localeCompare(b.display_name, "ja")
       );
       const lookup = await loadClassLookup(supabase, teamId, members.map((m) => m.id), date, date);
       const absences = new Map(
-        ((aRes.data ?? []) as { author_id: string; session_keys: string[] | null }[]).map((a) => [a.author_id, a.session_keys])
+        ((aRes.error ? [] : aRes.data ?? []) as { author_id: string; session_keys: string[] | null }[]).map((a) => [
+          a.author_id,
+          a.session_keys,
+        ])
       );
       const out: Row[] = [];
       const jointSeen = new Set<string>();
@@ -100,45 +102,31 @@ export default function SessionAttendanceCard({ teamId }: { teamId: string }) {
           out.push(row);
         }
       }
-      out.sort((a, b) => a.loc.localeCompare(b.loc) || (a.s.start_time ?? "").localeCompare(b.s.start_time ?? ""));
-      if (!cancelled) setRows(out);
+      out.sort((a, b) => (a.s.start_time ?? "").localeCompare(b.s.start_time ?? ""));
+      // 表示中の拠点の練習と、合同練習だけ
+      if (!cancelled) setRows(out.filter((r) => r.s.is_joint || r.loc === location));
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, date]);
+  }, [teamId, date, location]);
 
-  const [, mo, da] = date.split("-").map(Number);
-  const wd = "日月火水木金土"[new Date(`${date}T00:00:00+09:00`).getDay()];
   const grade = (m: Member) => (m.entry_year ? `${currentGrade(m.entry_year)}年` : "");
   const chip = "rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200";
-  const navBtn =
-    "rounded-full border border-neutral-300 px-2.5 py-0.5 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300";
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border-color bg-surface p-3 sm:p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="inline-block h-3.5 w-1 rounded-full bg-red-600" />
           セクションごとの参加人数
         </h2>
-        <div className="flex items-center gap-1.5">
-          <button type="button" className={navBtn} onClick={() => setDate(shift(date, -1))} aria-label="前の日">
-            ‹
-          </button>
-          <span className="text-xs font-semibold">
-            {mo}/{da}（{wd}）
-          </span>
-          <button type="button" className={navBtn} onClick={() => setDate(shift(date, 1))} aria-label="次の日">
-            ›
-          </button>
-        </div>
       </div>
       {!rows ? (
         <p className="text-xs text-neutral-500">集計中…</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-neutral-500">この日の練習（時間割）はありません。</p>
+        <p className="text-xs text-neutral-500">この日の時間割（セクション）はありません。</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((r) => {
