@@ -4,14 +4,12 @@
 // ■ 0 ＝ 疲労なし。練習するほど積み上がる
 // ■ 日付が変わると ×残る割合（標準70%）。練習のない日（オフ）は、さらに −オフの回復（標準100）。0未満は0
 // ■ マット練習：項目ごとに「1人あたりの実施量（分）」× 係数
-//    - スパー 1分1、攻防 0.6、ダッシュ 0.8、補強 0.5（回数×セットは1セット0.5）、打ち込み 0.2、その他 0.2、技術 0.1、アップ・ダウンは0
-//      （スパー・打ち込み以外は 2026-11-17 の仮の値）
+//    - スパー 1分1、打ち込み 1分0.2、アップ・ダウンは0。技術・攻防・補強・ダッシュ・その他は監督が係数を入れるまで計算に入れない
 //    - 交代制は「同時に実施する人数 ÷ 組の人数」を掛ける。「本数の数え方」が未確認の項目は入れない
 //    - 自由参加：本人が答えた参加量（0〜100%）を掛ける。未回答は入れない
 //    - 対象が「通常／重量級」の項目は入れない
-// ■ ラン：km × 階級ごとの係数（軽量級2・中量級3・重量級4）。時間なら1分あたり0.4・0.6・0.8。
-//    強度の倍率：ジョグ0.7・ふつう1・高強度1.5（トレ報はペースから）
-// ■ ウェイト：メインセット1セットにつき 下半身・全身の多関節1.2／上半身の多関節・そのほか1／補助・単関節0.5。アップのセットは0
+// ■ ラン：km × 階級ごとの係数（軽量級2・中量級3・重量級4）。時間・強度の倍率は監督が入れるまで空欄
+// ■ ウェイト：メインセット1セットにつき1（スクワット・デッドリフトは1.2）。種目ごとの係数を入れればそちらを使う。アップのセットは0
 //    （アップの印がない種目は、その日の最高重量の70%未満をアップとみなす）
 // ■ 1日の負荷はセクションごとに足し算
 
@@ -22,37 +20,41 @@ export const CALC_VERSION = "v2";
 export type Coefficients = Partial<Record<string, number>>;
 
 // 係数の一覧（画面の設定欄の順番）。suggested が標準値（設定がなければこれで計算する）
-export type CoefDef = { key: string; label: string; unit: string; suggested: number; group: string };
-// 2026-11-17：技術・攻防・補強・ダッシュ・時間のラン・その他・ランの強度・ウェイトの種目の重みを仮の値で追加
+// suggested が null の係数は、監督が数字を入れるまで空欄（その種類は計算に入れない／倍率は掛けない）
+export type CoefDef = { key: string; label: string; unit: string; suggested: number | null; group: string };
+// 空欄（suggested: null）の係数は、監督が1つずつ入れていく
 export const coefficientDefs: CoefDef[] = [
   { key: "spar", label: "スパー", unit: "1分あたり", suggested: 1, group: "マット" },
-  { key: "situational", label: "攻防（状況設定）", unit: "1分あたり", suggested: 0.6, group: "マット" },
-  { key: "sprint", label: "ダッシュ（時間）", unit: "1分あたり", suggested: 0.8, group: "マット" },
-  { key: "sprint_km", label: "ダッシュ（距離）", unit: "1kmあたり", suggested: 10, group: "マット" },
-  { key: "conditioning", label: "補強（時間）", unit: "1分あたり", suggested: 0.5, group: "マット" },
-  { key: "reps", label: "補強（回数×セット）", unit: "1セットあたり（MAXも1セット）", suggested: 0.5, group: "マット" },
   { key: "drill", label: "打ち込み", unit: "1分あたり", suggested: 0.2, group: "マット" },
-  { key: "other", label: "その他", unit: "1分あたり", suggested: 0.2, group: "マット" },
-  { key: "technique", label: "技術", unit: "1分あたり", suggested: 0.1, group: "マット" },
   { key: "warmup", label: "アップ", unit: "1分あたり", suggested: 0, group: "マット" },
   { key: "cooldown", label: "ダウン", unit: "1分あたり", suggested: 0, group: "マット" },
+  { key: "technique", label: "技術", unit: "1分あたり", suggested: null, group: "マット" },
+  { key: "situational", label: "攻防（状況設定）", unit: "1分あたり", suggested: null, group: "マット" },
+  { key: "conditioning", label: "補強（時間）", unit: "1分あたり", suggested: null, group: "マット" },
+  { key: "reps", label: "補強（回数×セット）", unit: "1セットあたり（MAXも1セット）", suggested: null, group: "マット" },
+  { key: "sprint", label: "ダッシュ（時間）", unit: "1分あたり", suggested: null, group: "マット" },
+  { key: "sprint_km", label: "ダッシュ（距離）", unit: "1kmあたり", suggested: null, group: "マット" },
+  { key: "other", label: "その他", unit: "1分あたり", suggested: null, group: "マット" },
   { key: "run_km_light", label: "軽量級（距離）", unit: "1kmあたり", suggested: 2, group: "ラン" },
   { key: "run_km_middle", label: "中量級（距離）", unit: "1kmあたり", suggested: 3, group: "ラン" },
   { key: "run_km_heavy", label: "重量級（距離）", unit: "1kmあたり", suggested: 4, group: "ラン" },
-  { key: "run_min_light", label: "軽量級（時間）", unit: "1分あたり", suggested: 0.4, group: "ラン" },
-  { key: "run_min_middle", label: "中量級（時間）", unit: "1分あたり", suggested: 0.6, group: "ラン" },
-  { key: "run_min_heavy", label: "重量級（時間）", unit: "1分あたり", suggested: 0.8, group: "ラン" },
-  { key: "run_easy", label: "ジョグの倍率", unit: "倍", suggested: 0.7, group: "ラン" },
-  { key: "run_hard", label: "高強度の倍率", unit: "倍", suggested: 1.5, group: "ラン" },
-  { key: "run_hard_pace", label: "高強度とみなすペース", unit: "1kmの秒数以下（4分＝240）", suggested: 240, group: "ラン" },
-  { key: "run_easy_pace", label: "ジョグとみなすペース", unit: "1kmの秒数以上（6分＝360）", suggested: 360, group: "ラン" },
+  { key: "run_min_light", label: "軽量級（時間）", unit: "1分あたり", suggested: null, group: "ラン" },
+  { key: "run_min_middle", label: "中量級（時間）", unit: "1分あたり", suggested: null, group: "ラン" },
+  { key: "run_min_heavy", label: "重量級（時間）", unit: "1分あたり", suggested: null, group: "ラン" },
+  { key: "run_easy", label: "ジョグの倍率", unit: "倍（空欄は掛けない）", suggested: null, group: "ラン" },
+  { key: "run_hard", label: "高強度の倍率", unit: "倍（空欄は掛けない）", suggested: null, group: "ラン" },
+  { key: "run_hard_pace", label: "トレ報で高強度とみなすペース", unit: "1kmの秒数以下（4分＝240）", suggested: null, group: "ラン" },
+  { key: "run_easy_pace", label: "トレ報でジョグとみなすペース", unit: "1kmの秒数以上（6分＝360）", suggested: null, group: "ラン" },
   { key: "class_light_max", label: "軽量級の上限", unit: "kg級まで", suggested: 65, group: "ラン" },
   { key: "class_middle_max", label: "中量級の上限", unit: "kg級まで", suggested: 86, group: "ラン" },
-  { key: "weight_set_heavy", label: "下半身・全身の多関節", unit: "メイン1セットあたり", suggested: 1.2, group: "ウェイト" },
-  { key: "weight_set", label: "上半身の多関節・そのほか", unit: "メイン1セットあたり", suggested: 1, group: "ウェイト" },
-  { key: "weight_set_light", label: "補助・単関節", unit: "メイン1セットあたり", suggested: 0.5, group: "ウェイト" },
+  { key: "weight_set", label: "ウェイト", unit: "メイン1セットあたり", suggested: 1, group: "ウェイト" },
+  { key: "weight_set_heavy", label: "スクワット・デッドリフト", unit: "メイン1セットあたり", suggested: 1.2, group: "ウェイト" },
   { key: "off_minus", label: "オフの日の回復", unit: "1日で引く量", suggested: 100, group: "蓄積" },
 ];
+
+// 種目ごとの係数（設定の「種目ごとの係数」）は coefficients に「ex:種目名」で入れる
+export const EXERCISE_COEF_PREFIX = "ex:";
+export const exerciseCoefKey = (name: string) => `${EXERCISE_COEF_PREFIX}${name.trim()}`;
 
 // 係数が決まっていない種類（今はなし。すべて仮の値が入っている）
 export const pendingCategories: { key: string; label: string }[] = [];
@@ -63,7 +65,7 @@ export type LoadSettingsRow = { coefficients: Coefficients | null; retention: nu
 export function resolveSettings(row: LoadSettingsRow): { coef: Coefficients; retention: number } {
   const saved = row && row.calc_version === CALC_VERSION ? row.coefficients ?? {} : {};
   const coef: Coefficients = {};
-  for (const d of coefficientDefs) coef[d.key] = d.suggested;
+  for (const d of coefficientDefs) if (typeof d.suggested === "number") coef[d.key] = d.suggested;
   for (const [k, v] of Object.entries(saved)) if (typeof v === "number" && Number.isFinite(v)) coef[k] = v;
   const r = Number(row?.retention);
   return { coef, retention: Number.isFinite(r) && r > 0 && r <= 1 ? r : 0.7 };
@@ -83,29 +85,23 @@ function runCoef(weightClass: number | null, coef: Coefficients) {
 }
 function runMinCoef(weightClass: number | null, coef: Coefficients) {
   const b = classBand(weightClass, coef) ?? "middle";
-  return coef[`run_min_${b}`] ?? 0;
+  return coef[`run_min_${b}`];
 }
 // ラン・ダッシュの強度の倍率（ふつう＝1）
 function intensityFactor(intensity: string | null | undefined, coef: Coefficients) {
-  if (intensity === "easy") return coef.run_easy ?? 0.7;
-  if (intensity === "hard") return coef.run_hard ?? 1.5;
+  if (intensity === "easy") return coef.run_easy ?? 1;
+  if (intensity === "hard") return coef.run_hard ?? 1;
   return 1;
 }
 // トレ報のランのペース（1kmあたりの秒数）から強度を決める
 function intensityFromPace(secPerKm: number, coef: Coefficients) {
-  if (secPerKm <= (coef.run_hard_pace ?? 240)) return "hard";
-  if (secPerKm >= (coef.run_easy_pace ?? 360)) return "easy";
+  if (typeof coef.run_hard_pace === "number" && secPerKm <= coef.run_hard_pace) return "hard";
+  if (typeof coef.run_easy_pace === "number" && secPerKm >= coef.run_easy_pace) return "easy";
   return "moderate";
 }
 
-// ウェイトの種目の分類（種目名から）
-const HEAVY_LIFT = /(スクワット|デッド|クリーン|スナッチ|ジャーク|ランジ|レッグプレス|ブルガリアン|ヒップスラスト)/;
-const LIGHT_LIFT = /(カール|エクステンション|レイズ|フライ|クランチ|腹筋|カーフ|プランク|シュラッグ|プッシュダウン|アブ|ドローイン)/;
-export function liftClass(name: string): "heavy" | "light" | "normal" {
-  if (LIGHT_LIFT.test(name)) return "light";
-  if (HEAVY_LIFT.test(name)) return "heavy";
-  return "normal";
-}
+// スクワット・デッドリフトは「スクワット・デッドリフト」の係数（種目ごとの係数が入っていれば、そちらが優先）
+const HEAVY_SET = /(スクワット|デッド)/;
 // 時間で記録したラン（「ジョグ30分」など、距離のないラン）
 const TIMED_RUN = /(ラン|ジョグ|走|ランニング)/;
 
@@ -226,9 +222,10 @@ export type LoadSet = {
 };
 
 // トレ報1日ぶん：
+//  ・種目ごとの係数（設定）が入っている種目：メインセット × その係数
 //  ・ラン：「3km走」「400m」など距離入りの種目は km × 階級の係数。タイムがあればペースで強度の倍率を掛ける
-//         距離のないラン（「ジョグ30分」など）は時間 × 階級の「1分あたり」（ジョグはジョグの倍率）
-//  ・ウェイト：メインセットの数 × 種目の分類（下半身・全身の多関節／上半身の多関節・そのほか／補助・単関節）
+//         距離のないラン（「ジョグ30分」など）は時間 × 階級の「1分あたり」（空欄なら計算に入れない）
+//  ・ウェイト：メインセット1セットにつき「ウェイト」の係数（スクワット・デッドリフトは専用の係数）
 //    アップの印がない種目は、その日の最高重量の70%未満のセットをアップとみなす（振り返りと同じ）
 export function setsLoad(sets: LoadSet[], weightClass: number | null, coef: Coefficients): number {
   const byEx = new Map<string, LoadSet[]>();
@@ -238,7 +235,8 @@ export function setsLoad(sets: LoadSet[], weightClass: number | null, coef: Coef
   }
   let load = 0;
   for (const [name, list] of byEx) {
-    const km = distanceKmFromName(name);
+    const own = coef[exerciseCoefKey(name)];
+    const km = typeof own === "number" ? null : distanceKmFromName(name);
     if (km !== null) {
       // 記録がある（タイムや回数が入っている）セットだけ数える
       for (const s of list) {
@@ -249,16 +247,16 @@ export function setsLoad(sets: LoadSet[], weightClass: number | null, coef: Coef
       continue;
     }
     const noWeight = list.every((s) => !s.weight_kg);
-    if (noWeight && TIMED_RUN.test(name) && list.some((s) => s.seconds)) {
-      const f = /ジョグ/.test(name) ? coef.run_easy ?? 0.7 : 1;
-      for (const s of list) if (!s.is_warmup && s.seconds) load += (s.seconds / 60) * runMinCoef(weightClass, coef) * f;
+    if (typeof own !== "number" && noWeight && TIMED_RUN.test(name) && list.some((s) => s.seconds)) {
+      const c = runMinCoef(weightClass, coef);
+      if (typeof c !== "number") continue;
+      const f = /ジョグ/.test(name) ? intensityFactor("easy", coef) : 1;
+      for (const s of list) if (!s.is_warmup && s.seconds) load += (s.seconds / 60) * c * f;
       continue;
     }
     const marked = list.some((s) => s.is_warmup);
     const top = Math.max(0, ...list.map((s) => Number(s.weight_kg ?? 0)));
-    const cls = liftClass(name);
-    const per =
-      cls === "heavy" ? coef.weight_set_heavy ?? 0 : cls === "light" ? coef.weight_set_light ?? coef.weight_set ?? 0 : coef.weight_set ?? 0;
+    const per = typeof own === "number" ? own : HEAVY_SET.test(name) ? coef.weight_set_heavy ?? 0 : coef.weight_set ?? 0;
     for (const s of list) {
       if (!s.weight_kg && !s.reps && !s.seconds) continue;
       const warm = marked ? !!s.is_warmup : top > 0 && Number(s.weight_kg ?? 0) < top * 0.7;
